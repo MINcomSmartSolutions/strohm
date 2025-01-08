@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16.6
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    container_name: strohm_main_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_DEVELOPMENT_PASSWORD}
+    volumes:
+      - main_db_data:/var/lib/postgresql/data
+
+  server:
+    container_name: strohm_node
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: ${TARGET} # dev production test
+    ports:
+      - "3000:3000"
+    restart:
+      always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=${TARGET}
+      - DB_HOST=postgres
+      - DB_NAME=${STROHM_DB}
+      - DB_USER=${STROHM_DB_USER}
+      - DB_PASSWORD=${STROHM_DB_PASSWORD}
+      - DB_PORT=5432
+
+  odoo:
+    image: "ghcr.io/mincomsmartsolutions/odoo:latest"
+    container_name: strohm_odoo
+    environment:
+      LIST_DB: "true"
+      PGHOST: postgres
+      PGUSER: ${ODOO_DB_USER}
+      PGPASSWORD: ${ODOO_DB_DEVELOPMENT_PASSWORD}
+      PGDATABASE: ${ODOO_DB}
+      ADMIN_PASSWORD: ${ODOO_PASSWORD}
+      SMTP_PORT: "1025"
+      EMAIL_FROM: ${SMTP_USER}
+      PROXY_MODE: "true"
+      WITHOUT_DEMO: "${DOODBA_WITHOUT_DEMO-all}"
+    tty: true
+    volumes:
+      - filestore:/var/lib/odoo:z
+    depends_on:
+      - postgres
+    #      - proxy_cdnjs_cloudflare_com
+    #      - proxy_fonts_googleapis_com
+    #      - proxy_fonts_gstatic_com
+    #      - proxy_www_google_com
+    #      - proxy_www_googleapis_com
+    #      - proxy_www_gravatar_com
+    command:
+      - odoo
+      - --limit-memory-soft=0
+      - --limit-time-real-cron=9999999
+      - --limit-time-real=9999999
+      - --workers=0
+      - --dev=reload,qweb,werkzeug,xml
+
+volumes:
+  main_db_data:
+  filestore:

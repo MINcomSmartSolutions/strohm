@@ -8,4 +8,5 @@
 const port = 3000;
 const app = require('./src/app');
 
-app.listen(port, () => console.log(`app listening on port ${port}`));
+app.listen(port, () => console.log(`server listening on port ${port}`));
+
