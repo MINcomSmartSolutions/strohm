@@ -9,7 +9,7 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     npm ci --include=dev
 USER node
 COPY . .
-CMD npm run dev
+CMD node ./server.js
 
 FROM base as production
 RUN --mount=type=bind,source=package.json,target=package.json \
@@ -18,10 +18,9 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     npm ci --omit=dev
 USER node
 COPY . .
-CMD node server.js
+CMD node ./server.js
 
 
-#Exactly same as dev stage except start. Reason is that, it needs env files to run tests and before complete build we cannot have them.
 FROM base as test
 ENV NODE_ENV test
 RUN --mount=type=bind,source=package.json,target=package.json \
@@ -30,6 +29,6 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     npm ci --include=dev
 #USER node
 COPY . .
-CMD npm run dev
+CMD npm run start
 
 EXPOSE 3000

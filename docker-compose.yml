@@ -2,22 +2,22 @@ services:
   postgres:
     image: postgres:16.6
     healthcheck:
-      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'" ]
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d postgres'" ]
       interval: 10s
       timeout: 3s
       retries: 3
-    container_name: strohm_main_db
-    ports:
+    container_name: strohm_db
+    ports: # For development only, in production we don't need to expose the port
       - "5432:5432"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: "postgres"
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_DEVELOPMENT_PASSWORD}
     volumes:
       - main_db_data:/var/lib/postgresql/data
 
-  server:
-    container_name: strohm_node
+  node:
+    container_name: strohm_backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -52,16 +52,11 @@ services:
       PROXY_MODE: "true"
       WITHOUT_DEMO: "${DOODBA_WITHOUT_DEMO-all}"
     tty: true
-    volumes:
+    volumes: # filestore is used to store attachments, "z" is used to give the container permission to write to the volume
       - filestore:/var/lib/odoo:z
     depends_on:
-      - postgres
-    #      - proxy_cdnjs_cloudflare_com
-    #      - proxy_fonts_googleapis_com
-    #      - proxy_fonts_gstatic_com
-    #      - proxy_www_google_com
-    #      - proxy_www_googleapis_com
-    #      - proxy_www_gravatar_com
+      postgres:
+        condition: service_healthy
     command:
       - odoo
       - --limit-memory-soft=0
