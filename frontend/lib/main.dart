@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'common/services/navigator_key.dart';
+
 void main() {
   runApp(const StrohmApp());
 }
@@ -10,6 +12,7 @@ class StrohmApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Color(0xff4594c8)),
         useMaterial3: true,
