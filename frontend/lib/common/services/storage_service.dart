@@ -34,10 +34,11 @@ class StorageService {
   /// If [secure] is true and the app is in debug mode, the key and value are logged using the [talker.info] method.
   ///
   /// Throws an error if the write operation fails.
-  static Future<void> write(String key, dynamic value, {bool secure = false}) async {
+  static Future<void> write(String key, String? value, {bool secure = false}) async {
     if (kDebugMode) {
-      talker.info('Writing to  ${secure ? 'secure' : 'local'} storage');
-      talker.info('Key: $key \nValue: $value');
+      talker
+        ..info('Writing to  ${secure ? 'secure' : 'local'} storage')
+        ..info('Key: $key \nValue: $value');
     }
 
     if (secure) {
@@ -54,11 +55,11 @@ class StorageService {
   /// If [secure] is false, the value is read from regular storage using the [_getStorage] instance.
   ///
   /// Returns the value associated with the given [key].
-  static Future<dynamic> read(String key, {bool secure = false}) async {
+  static Future<String?> read(String key, {bool secure = false}) async {
     if (secure) {
-      return await _secureStorage.read(key: key);
+      return _secureStorage.read(key: key);
     } else {
-      return await _getStorage.read(key);
+      return _getStorage.read(key);
     }
   }
 
@@ -79,17 +80,17 @@ class StorageService {
   /// Throws an exception if an error occurs during the clearing process.
   ///
   /// Whatever happens in the end, the user will be navigated to the login screen.
-  static Future clearAllandLogout() async {
+  static Future<dynamic> clearAllandLogout() async {
     if (kDebugMode) {
       talker.info('Clearing all data and logging out');
     }
 
     try {
-      //TODO: Before delete all, blacklist the refresh token
+      // TODO(yunus): Before delete all blacklist the refresh token.
       await _secureStorage.deleteAll();
       await _getStorage.erase();
     } catch (e, st) {
-      customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'StorageService'));
+      await customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'StorageService'));
     } finally {
       GlobalNavigator.navigateToLogin();
     }
@@ -104,7 +105,7 @@ class StorageService {
   static Future<void> saveUserState(int id, String email) async {
     await StorageService.write(
       'id',
-      id,
+      id as String?,
     );
     await StorageService.write(
       'email',

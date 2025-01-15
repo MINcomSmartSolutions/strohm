@@ -53,8 +53,9 @@ Future<void> customErrorHandler(FlutterErrorDetails details) async {
   // Logging the error and its stack trace.
   talker.error('Error: ${details.exception}');
   if (details.stack != null) {
-    talker.error('Stack trace: ${details.stack}');
-    talker.handle(details.exception, details.stack, 'Exception in');
+    talker
+      ..error('Stack trace: ${details.stack}')
+      ..handle(details.exception, details.stack, 'Exception in');
   }
 
   // if (!kDebugMode || !Platform.environment.containsKey('FLUTTER_TEST')) {

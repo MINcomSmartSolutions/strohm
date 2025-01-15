@@ -14,14 +14,14 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
+import 'package:strohm/common/services/error_handler.dart';
+import 'package:strohm/common/services/logger_service.dart';
+import 'package:strohm/common/services/storage_service.dart';
+import 'package:strohm/common/utils/utils.dart';
+import 'package:strohm/common/widgets/snackbar_global.dart';
+import 'package:strohm/constants/global_variables.dart';
 import 'package:talker_dio_logger/talker_dio_logger_interceptor.dart';
 import 'package:talker_dio_logger/talker_dio_logger_settings.dart';
-
-import '../../constants/global_variables.dart';
-import '../widgets/snackbar_global.dart';
-import 'error_handler.dart';
-import 'logger_service.dart';
-import 'storage_service.dart';
 
 class DioSingleton {
   static final DioSingleton _instance = DioSingleton._internal();
@@ -125,15 +125,22 @@ class AppInterceptors extends Interceptor {
   /// Returns a [Future] that resolves to a dynamic result based on the response handling actions.
   @override
   Future<dynamic> onResponse(Response response, ResponseInterceptorHandler handler) async {
-    int statusCode = response.statusCode ?? 0;
+    final int statusCode = response.statusCode ?? 0;
 
-    talker.info('onResponse interceptor');
-    talker.info('Status Code: $statusCode');
+    talker
+      ..info('onResponse interceptor')
+      ..info('Status Code: $statusCode');
 
-    if (statusCode == 200) {
-      dynamic data = response.data;
-      bool success = data['success'] ?? false;
-      String msg = data['msg'] ?? 'Something went wrong';
+    final data = response.data as Map<String, dynamic>?;
+
+    if (statusCode == 200 || data != null || data!.isNotEmpty) {
+      final transformedData = transformResultData(response.data as Map<String, dynamic>, {
+        'success': false,
+        'msg': 'Something went wrong',
+      });
+
+      final bool success = transformedData['success'] as bool;
+      final String msg = transformedData['msg'] as String;
 
       if (data != null) {
         talker.info('There is a response and statusCode is 200 and data is not null');
@@ -158,12 +165,22 @@ class AppInterceptors extends Interceptor {
         handler.reject(DioException(
           requestOptions: response.requestOptions,
           response: response,
-        ));
+          ),
+        );
         return GlobalSnackBar.show(msg: 'Etwas ist schief gelaufen', type: SnackBarType.error);
       }
     } else if (statusCode == 304) {
       talker.info('Cache hit');
       return handler.next(response);
+    } else if (data.isEmpty) {
+      // TODO: Where is this in exception chain?
+      talker.error('There is a response but data is empty');
+      handler.reject(
+        DioException(
+          requestOptions: response.requestOptions,
+          response: response,
+        ),
+      );
     } else {
       /// It should'nt have been reached here at all since we have validateStatus in DioSingleton
       talker.error('There is a response but not 200');
@@ -273,8 +290,8 @@ class NetworkService {
   /// path, data, method, and headers as the original request.
   ///
   /// Possible use case is sending request that failed in token authentication after refreshing tokens.
-  Future<Response> retry(RequestOptions requestOptions) async {
-    return await dio.request(
+  Future<Response<dynamic>> retry(RequestOptions requestOptions) {
+    return dio.request(
       requestOptions.path,
       data: requestOptions.data,
       options: Options(
@@ -291,7 +308,7 @@ class NetworkService {
   ///
   /// Throws a [DioException] if the request fails due to a network error.
   /// Throws an [Exception] for any other type of error.
-  Future get(String url, {Map<String, dynamic>? parameters, bool cacheDisable = false}) async {
+  Future<Response<dynamic>> get(String url, {Map<String, dynamic>? parameters, bool cacheDisable = false}) async {
     talker.info('GET request to $url');
     try {
       return await dio.get(
@@ -300,10 +317,24 @@ class NetworkService {
         // options: cacheDisable ? options.copyWith(policy: CachePolicy.refresh).toOptions() : null,
       );
     } on DioException catch (e) {
-      customDioErrorHandler(e);
+      await customDioErrorHandler(e);
+      return Response(
+        requestOptions: RequestOptions(path: url),
+        statusCode: 200,
+        data: {
+          'success': false,
+        },
+      );
     } on Exception catch (e, st) {
       talker.error(e, st);
-      customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'NetworkService GET'));
+      await customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'NetworkService GET'));
+      return Response(
+        requestOptions: RequestOptions(path: url),
+        statusCode: 200,
+        data: {
+          'success': false,
+        },
+      );
     }
   }
 
@@ -312,7 +343,7 @@ class NetworkService {
   /// If [specialHeaders] is not null, it adds the headers to the request headers.
   ///
   /// Returns a [Response] object containing the response data.
-  Future post(String url, dynamic data, {Map<String, String>? specialHeaders}) async {
+  Future<Response<dynamic>> post(String url, dynamic data, {Map<String, String>? specialHeaders}) async {
     try {
       return await dio.post(
         url,
@@ -324,10 +355,24 @@ class NetworkService {
               ),
       );
     } on DioException catch (e) {
-      customDioErrorHandler(e);
+      await customDioErrorHandler(e);
+      return Response(
+        requestOptions: RequestOptions(path: url),
+        statusCode: 200,
+        data: {
+          'success': false,
+        },
+      );
     } on Exception catch (e, st) {
       talker.error(e, st);
-      customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'NetworkService POST'));
+      await customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'NetworkService POST'));
+      return Response(
+        requestOptions: RequestOptions(path: url),
+        statusCode: 200,
+        data: {
+          'success': false,
+        },
+      );
     }
   }
 
@@ -335,23 +380,34 @@ class NetworkService {
   /// If the request is successful, the new access and refresh tokens are stored in the secure storage.
   /// If the request fails, the user is logged out and all tokens are cleared from the secure storage.
   /// Returns a [Response] object with a boolean [success] value indicating whether the request was successful or not.
-  Future refreshTokens() async {
-    String refreshToken = await StorageService.read(StorageAliases.refreshToken, secure: true);
+  Future<void> refreshTokens() async {
     try {
-      Response result = await dio.post(
+      final String? storageRefreshToken = await StorageService.read(StorageAliases.refreshToken, secure: true);
+
+      final Response<dynamic> result = await dio.post(
         GlobalVariables.refreshTokenUri,
         data: {
-          'refreshToken': refreshToken,
+          'refreshToken': storageRefreshToken,
         },
       );
 
-      bool? success = result.data['success'] ?? false;
+      final transformedData = transformResultData(result.data as Map<String, dynamic>, {
+        'success': false,
+        'msg': 'Something went wrong',
+        RemoteAliases.accessToken: null,
+        RemoteAliases.refreshToken: null,
+      });
+
+      final bool success = transformedData['success'] as bool;
+      final String msg = transformedData['msg'] as String;
+      final String? accessToken = transformedData[RemoteAliases.accessToken] as String?;
+      final String? refreshToken = transformedData[RemoteAliases.refreshToken] as String?;
 
       if (success == true) {
         await StorageService.delete(StorageAliases.accessToken, secure: true);
         await StorageService.delete(StorageAliases.refreshToken, secure: true);
-        await StorageService.write(StorageAliases.accessToken, result.data[RemoteAliases.accessToken], secure: true);
-        await StorageService.write(StorageAliases.refreshToken, result.data[RemoteAliases.refreshToken], secure: true);
+        await StorageService.write(StorageAliases.accessToken, accessToken, secure: true);
+        await StorageService.write(StorageAliases.refreshToken, refreshToken, secure: true);
       } else {
         talker.error('Refreshing tokens response success != true, logging out');
         GlobalSnackBar.show(msg: 'Bitte melde dich erneut an', type: SnackBarType.warning);
@@ -365,7 +421,7 @@ class NetworkService {
       customDioErrorHandler(e);
     } on Exception catch (e, st) {
       talker.error('Exception at refreshTokens', st);
-      customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'NetworkService refreshTokens'));
+      await customErrorHandler(FlutterErrorDetails(exception: e, stack: st, library: 'NetworkService refreshTokens'));
     }
   }
 }

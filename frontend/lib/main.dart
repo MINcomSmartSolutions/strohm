@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:strohm/router.dart';
 
 import 'common/services/navigator_key.dart';
 
@@ -13,6 +14,7 @@ class StrohmApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
+      onGenerateRoute: generateRoute,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Color(0xff4594c8)),
         useMaterial3: true,
