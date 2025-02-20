@@ -19,5 +19,10 @@ app.use(express.json());
 app.use(hpp());
 app.use(helmet());
 
+// Return 200 on root path
+app.get('/', (req, res) => {
+    res.status(200).json({success: true, msg: 'OK'});
+});
+
 
 module.exports = app;
