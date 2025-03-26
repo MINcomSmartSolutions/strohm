@@ -17,25 +17,31 @@ services:
       - main_db_data:/var/lib/postgresql/data
 
   node:
+    image: node:lts-bookworm-slim
     container_name: strohm_backend
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: ${TARGET} # dev production test
+    working_dir: /usr/src/app
     ports:
       - "3000:3000"
     restart:
-      always
+      unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./backend:/usr/src/app
     environment:
-      - NODE_ENV=${TARGET}
+      - NODE_ENV=dev
+      - SERVER_OIDC_SECRET=${SERVER_DEVELOPMENT_OIDC_SECRET}
+      - ODOO_ADMIN_API=${ODOO_ADMIN_DEVELOPMENT_API}
+      - SERVER_CLIENT_SECRET=${SERVER_DEVELOPMENT_CLIENT_SECRET}
+      - ODOO_API_SECRET='anothersecret'
       - DB_HOST=postgres
       - DB_NAME=${STROHM_DB}
       - DB_USER=${STROHM_DB_USER}
       - DB_PASSWORD=${STROHM_DB_PASSWORD}
       - DB_PORT=5432
+    command: npx nodemon server.js
+
 
   odoo:
     container_name: strohm_odoo
@@ -43,6 +49,9 @@ services:
     ports:
       - "8069:8069"
     environment:
+      DOODBA_ENVIRONMENT: "${DOODBA_ENVIRONMENT-devel}"
+      ODOO_API_SECRET: "anothersecret" #secret shared with node instance to allow decrypt of userapi keys
+      INITIAL_LANG: "de_DE"
       LIST_DB: "true"
       PGHOST: postgres
       PGUSER: ${ODOO_DB_USER}
@@ -51,21 +60,16 @@ services:
       ADMIN_PASSWORD: ${ODOO_PASSWORD}
       SMTP_PORT: "1025"
       EMAIL_FROM: ${SMTP_USER}
-      PROXY_MODE: "true"
       WITHOUT_DEMO: "${DOODBA_WITHOUT_DEMO-all}"
     tty: true
-    volumes: # filestore is used to store attachments, "z" is used to give the container permission to write to the volume
+    volumes:
       - odoo-strohm-web-data:/var/lib/odoo
     depends_on:
       postgres:
         condition: service_healthy
     command:
       - odoo
-      - --limit-memory-soft=0
-      - --limit-time-real-cron=9999999
-      - --limit-time-real=9999999
-      - --workers=0
-      - --dev=reload,qweb,werkzeug,xml
+      - --load-language=de_DE
 
 volumes:
   main_db_data:
