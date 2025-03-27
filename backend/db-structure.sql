@@ -388,7 +388,7 @@ ALTER SEQUENCE public.tokens_id_seq OWNED BY public.oauth_tokens.id;
 
 CREATE TABLE public.users (
     user_id integer NOT NULL,
-    first_name character varying(255) NOT NULL,
+    first_name character varying(255),
     email character varying(255) NOT NULL,
     rfid character varying(255) NOT NULL,
     active boolean DEFAULT true,
@@ -401,7 +401,8 @@ CREATE TABLE public.users (
     oauth_id character varying(255),
     postal_code integer,
     address character varying(255),
-    odoo_partner_id integer
+    odoo_partner_id integer,
+    name character varying
 );
 
 
@@ -567,7 +568,7 @@ COPY public.sessions (user_id, id, odoo_session_id, created_at) FROM stdin;
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.users (user_id, first_name, email, rfid, active, created_at, updated_at, deleted_at, odoo_user_id, last_name, lastlogin_at, oauth_id, postal_code, address, odoo_partner_id) FROM stdin;
+COPY public.users (user_id, first_name, email, rfid, active, created_at, updated_at, deleted_at, odoo_user_id, last_name, lastlogin_at, oauth_id, postal_code, address, odoo_partner_id, name) FROM stdin;
 \.
 
 
