@@ -15,7 +15,7 @@ const ExceptionCodes = Object.freeze({
         USER_INACTIVE: {code: 1010, status: 200, message: 'Benutzer ist nicht aktiv'},
         USER_INVALID: {code: 1011, status: 200, message: 'ungültiger Benutzer'},
         USER_DELETED: {code: 1012, status: 200, message: 'ungültiger Benutzer'},
-        USER_MISMATCH: {code: 1013, status: 401, message: 'ungültiger Benutzer'}
+        USER_MISMATCH: {code: 1013, status: 401, message: 'ungültiger Benutzer'},
     }),
 
     // Validation errors (2000-2099)
@@ -25,8 +25,8 @@ const ExceptionCodes = Object.freeze({
         INVALID_EMAIL: {code: 2002, status: 400, message: 'Invalid email format'},
         INVALID_PASSWORD: {code: 2003, status: 400, message: 'Invalid password format'},
         // Asked for one return, but received two, not asked for one return, but received none
-        ASK_RETURN_DISCRAPENCY: {code: 2004, status: 400, message: 'Ask return discrepancy'},
-        MISSING_PARAMETERS:{code : 2005, status: 400, message: 'Missing parameters'},
+        ASK_RETURN_DISCREPANCY: {code: 2004, status: 400, message: 'Ask return discrepancy'},
+        MISSING_PARAMETERS: {code: 2005, status: 400, message: 'Missing parameters'},
     }),
 
     // Database errors (3000-3099)
@@ -34,7 +34,7 @@ const ExceptionCodes = Object.freeze({
         CONNECTION_ERROR: {code: 3000, status: 500, message: 'Database connection error'},
         QUERY_ERROR: {code: 3001, status: 500, message: 'Database query error'},
         RECORD_NOT_FOUND: {code: 3002, status: 404, message: 'Record not found'},
-        DUPLICATE_ENTRY: {code: 3003, status: 409, message: 'Record already exists'}
+        DUPLICATE_ENTRY: {code: 3003, status: 409, message: 'Record already exists'},
     }),
 
     // OAuth errors (4000-4099)
@@ -49,7 +49,7 @@ const ExceptionCodes = Object.freeze({
     SYSTEM: Object.freeze({
         UNKNOWN_ERROR: {code: 5000, status: 500, message: 'An unknown error occurred'},
         NOT_IMPLEMENTED: {code: 5001, status: 501, message: 'Feature not implemented'},
-        SERVICE_UNAVAILABLE: {code: 5002, status: 503, message: 'Service temporarily unavailable'}
+        SERVICE_UNAVAILABLE: {code: 5002, status: 503, message: 'Service temporarily unavailable'},
     }),
 
     USER: Object.freeze({
@@ -65,7 +65,7 @@ const ExceptionCodes = Object.freeze({
         ODOO_ALREADY_EXISTS: {code: 6008, message: 'User already exists in Odoo'},
         ODOO_NOT_FOUND: {code: 6009, message: 'User\'s  Odoo ID is not found'},
         RFID_NOT_FOUND: {code: 6010, message: 'User\'s RFID is not found'},
-    })
+    }),
 });
 
 
@@ -82,7 +82,7 @@ const createError = (errorDef, customMessage = null, originalError = null) => {
         success: false,
         code: errorDef.code,
         msg: customMessage || errorDef.message,
-        details: originalError ? (originalError.message || String(originalError)) : undefined
+        details: originalError ? (originalError.message || String(originalError)) : undefined,
     };
 };
 
@@ -147,5 +147,5 @@ module.exports = {
     DatabaseError,
     OAuthError,
     SystemError,
-    appErrorHandler
+    appErrorHandler,
 };

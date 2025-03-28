@@ -5,6 +5,16 @@ const {DatabaseError, ErrorCodes, ValidationError} = require('./errors.js');
 // TODO: Create a JOI scheme for validation
 
 /**
+ * @typedef {Object} User
+ * @property {string} user_id - The user's ID
+ * @property {string} name - The user's name
+ * @property {string} email - The user's email
+ * @property {string|null} odoo_user_id - The user's Odoo ID
+ * @property {string} oauth_id - The OAuth ID
+ */
+
+
+/**
  * Handles query errors.
  *
  * @param {Error} error - The error object.
@@ -16,7 +26,7 @@ const handleQueryError = (error, operation) => {
     throw new DatabaseError(
         ErrorCodes.DATABASE.QUERY_ERROR,
         `Error during ${operation} operation.`,
-        error
+        error,
     );
 };
 
@@ -132,8 +142,8 @@ const getUserUnique = async (filters) => {
 
         if (users.length > 1) {
             throw new ValidationError(
-                ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY, // Fixed typo in DISCREPANCY
-                `Multiple users match the criteria, expected unique result.`
+                ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY,
+                `Multiple users match the criteria, expected unique result.`,
             );
         }
         if (users.length === 0) {
@@ -150,17 +160,10 @@ const getUserUnique = async (filters) => {
 const setUserOdooCredentials = async (user_id, credentials) => {
     const {odoo_user_id, encrypted_key, salt, partner_id} = credentials;
 
-    if (!user_id || !odoo_user_id || !partner_id) {
+    if (!user_id || !odoo_user_id || !partner_id || !encrypted_key || !salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`
-        );
-    }
-
-    if (!encrypted_key || !salt) {
-        throw new ValidationError(
-            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`
+            `Missing required parameters.`,
         );
     }
 
@@ -169,29 +172,61 @@ const setUserOdooCredentials = async (user_id, credentials) => {
     if (!user) {
         throw new ValidationError(
             ErrorCodes.USER.NOT_FOUND,
-            `User with ID ${user_id} not found.`
+            `User with ID ${user_id} not found.`,
         );
     }
 
     const userTableQuery = `
         UPDATE users
-        SET odoo_user_id = $2::integer, odoo_partner_id = $3::integer
+        SET odoo_user_id    = $2::integer,
+            odoo_partner_id = $3::integer
         WHERE user_id = $1::integer
     `;
 
     const odooTokensQuery = `
-          INSERT INTO odoo_tokens (user_id, token, salt)
-          VALUES  ($1::integer, $2, $3)
-    `
+        INSERT INTO odoo_tokens (user_id, token, salt)
+        VALUES ($1::integer, $2, $3)
+    `;
 
     try {
-         await pool.query(userTableQuery, [user_id, odoo_user_id, partner_id]);
-         await pool.query(odooTokensQuery, [user_id, encrypted_key, salt])
+        await pool.query(userTableQuery, [user_id, odoo_user_id, partner_id]);
+        await pool.query(odooTokensQuery, [user_id, encrypted_key, salt]);
     } catch (error) {
         handleQueryError(error, 'setUserOdooCredentials');
     }
+};
 
-}
+
+const getUserOdooCredentials = async (user_id) => {
+    if (!user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const query = `
+        SELECT token, salt
+        FROM users
+                 JOIN odoo_tokens ON users.user_id = odoo_tokens.user_id
+        WHERE users.user_id = $1::integer
+          AND revoked_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+    `;
+
+    try {
+        const result = await pool.query(query, [user_id]);
+
+        if (result.rows.length === 0) {
+            return null; // No valid credentials found
+        }
+
+        return result.rows[0];
+    } catch (error) {
+        handleQueryError(error, 'getUserOdooCredentials');
+    }
+};
 
 module.exports = {
     createDBUser,
