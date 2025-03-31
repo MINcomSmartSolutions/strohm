@@ -42,7 +42,7 @@ const ExceptionCodes = Object.freeze({
         TOKEN_INVALID: {code: 4000, status: 401, message: 'Invalid OAuth token'},
         VERIFICATION_FAILED: {code: 4001, status: 401, message: 'OAuth verification failed'},
         SCOPE_INVALID: {code: 4002, status: 403, message: 'Invalid OAuth scope'},
-        RFID_NOT_FOUND: {code: 4010, message: 'User\'s RFID is not found on returned data'},
+        RFID_NOT_FOUND: {code: 4020, message: 'User\'s RFID is not found on returned data'},
     }),
 
     // General application errors (5000-5099)
@@ -62,9 +62,12 @@ const ExceptionCodes = Object.freeze({
         ODOO_UPDATE_FAILED: {code: 6006, message: 'User update in Odoo failed'},
         ODOO_DELETE_FAILED: {code: 6007, message: 'User delete in Odoo failed'},
         ODOO_ALREADY_EXISTS_DB: {code: 6008, message: 'User already exists in our DB'},
-        ODOO_ALREADY_EXISTS: {code: 6008, message: 'User already exists in Odoo'},
-        ODOO_NOT_FOUND: {code: 6009, message: 'User\'s  Odoo ID is not found'},
-        RFID_NOT_FOUND: {code: 6010, message: 'User\'s RFID is not found'},
+        ODOO_ALREADY_EXISTS: {code: 6009, message: 'User already exists in Odoo'},
+        ODOO_NOT_FOUND: {code: 6010, message: 'User\'s  Odoo ID is not found'},
+        ODOO_PARTNER_ID_NOT_FOUND: {code: 6011, message: 'User\'s Odoo partner ID is not found'},
+        ODOO_NO_CREDENTIALS: {code: 6012, message: 'User does not have valid odoo credentials'},
+        RFID_NOT_FOUND: {code: 6020, message: 'User\'s RFID is not found'},
+
     }),
 });
 

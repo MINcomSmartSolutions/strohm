@@ -59,7 +59,7 @@ const createDBUser = async (userData) => {
         const result = await pool.query(query, values);
         return result.rows[0];
     } catch (error) {
-        handleQueryError(error, 'createUser');
+        handleQueryError(error, 'createDBUser');
     }
 };
 
@@ -211,7 +211,7 @@ const getUserOdooCredentials = async (user_id) => {
                  JOIN odoo_tokens ON users.user_id = odoo_tokens.user_id
         WHERE users.user_id = $1::integer
           AND revoked_at IS NULL
-        ORDER BY created_at DESC
+        ORDER BY odoo_tokens.created_at DESC
         LIMIT 1
     `;
 
@@ -233,4 +233,5 @@ module.exports = {
     getUsers,
     getUserUnique,
     setUserOdooCredentials,
+    getUserOdooCredentials,
 };

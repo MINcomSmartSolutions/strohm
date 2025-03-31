@@ -69,7 +69,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: access_logs; Type: TABLE; Schema: public; Owner: postgres
+-- Name: access_logs; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.access_logs (
@@ -85,10 +85,11 @@ CREATE TABLE public.access_logs (
 );
 
 
-ALTER TABLE public.access_logs OWNER TO postgres;
+ALTER TABLE public.access_logs
+    OWNER TO strohm_admin;
 
 --
--- Name: access_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: access_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.access_logs_id_seq
@@ -100,10 +101,10 @@ CREATE SEQUENCE public.access_logs_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.access_logs_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.access_logs_id_seq OWNER TO strohm_admin;
 
 --
--- Name: access_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: access_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.access_logs_id_seq OWNED BY public.access_logs.id;
@@ -145,7 +146,7 @@ ALTER SEQUENCE public.blacklisted_tokens_id_seq OWNED BY public.blacklisted_oath
 
 
 --
--- Name: charging_events; Type: TABLE; Schema: public; Owner: postgres
+-- Name: charging_events; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.charging_events (
@@ -159,10 +160,11 @@ CREATE TABLE public.charging_events (
 );
 
 
-ALTER TABLE public.charging_events OWNER TO postgres;
+ALTER TABLE public.charging_events
+    OWNER TO strohm_admin;
 
 --
--- Name: charging_events_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: charging_events_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.charging_events_id_seq
@@ -174,17 +176,17 @@ CREATE SEQUENCE public.charging_events_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.charging_events_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.charging_events_id_seq OWNER TO strohm_admin;
 
 --
--- Name: charging_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: charging_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.charging_events_id_seq OWNED BY public.charging_events.id;
 
 
 --
--- Name: charging_requests; Type: TABLE; Schema: public; Owner: postgres
+-- Name: charging_requests; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.charging_requests (
@@ -200,17 +202,18 @@ CREATE TABLE public.charging_requests (
 );
 
 
-ALTER TABLE public.charging_requests OWNER TO postgres;
+ALTER TABLE public.charging_requests
+    OWNER TO strohm_admin;
 
 --
--- Name: COLUMN charging_requests.price_offered_ref; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN charging_requests.price_offered_ref; Type: COMMENT; Schema: public; Owner: strohm_admin
 --
 
 COMMENT ON COLUMN public.charging_requests.price_offered_ref IS 'Initially offered price from exchange_prices table';
 
 
 --
--- Name: charging_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: charging_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.charging_requests_id_seq
@@ -222,17 +225,17 @@ CREATE SEQUENCE public.charging_requests_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.charging_requests_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.charging_requests_id_seq OWNER TO strohm_admin;
 
 --
--- Name: charging_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: charging_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.charging_requests_id_seq OWNED BY public.charging_requests.id;
 
 
 --
--- Name: exchange_prices; Type: TABLE; Schema: public; Owner: postgres
+-- Name: exchange_prices; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.exchange_prices (
@@ -243,10 +246,11 @@ CREATE TABLE public.exchange_prices (
 );
 
 
-ALTER TABLE public.exchange_prices OWNER TO postgres;
+ALTER TABLE public.exchange_prices
+    OWNER TO strohm_admin;
 
 --
--- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.exchange_prices_exchange_id_seq
@@ -258,10 +262,10 @@ CREATE SEQUENCE public.exchange_prices_exchange_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNER TO strohm_admin;
 
 --
--- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNED BY public.exchange_prices.id;
@@ -286,24 +290,31 @@ CREATE TABLE public.oauth_tokens (
 ALTER TABLE public.oauth_tokens OWNER TO postgres;
 
 --
--- Name: odoo_tokens; Type: TABLE; Schema: public; Owner: postgres
+-- Name: odoo_tokens; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.odoo_tokens (
     id integer NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_DATE NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     token character varying NOT NULL,
     user_id integer,
-    revoked boolean DEFAULT false NOT NULL,
     revoked_at timestamp without time zone,
     salt character varying NOT NULL
 );
 
 
-ALTER TABLE public.odoo_tokens OWNER TO postgres;
+ALTER TABLE public.odoo_tokens
+    OWNER TO strohm_admin;
 
 --
--- Name: odoo_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: COLUMN odoo_tokens.token; Type: COMMENT; Schema: public; Owner: strohm_admin
+--
+
+COMMENT ON COLUMN public.odoo_tokens.token IS 'Encrypted key';
+
+
+--
+-- Name: odoo_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.odoo_tokens_id_seq
@@ -315,17 +326,17 @@ CREATE SEQUENCE public.odoo_tokens_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.odoo_tokens_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.odoo_tokens_id_seq OWNER TO strohm_admin;
 
 --
--- Name: odoo_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: odoo_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.odoo_tokens_id_seq OWNED BY public.odoo_tokens.id;
 
 
 --
--- Name: sessions; Type: TABLE; Schema: public; Owner: postgres
+-- Name: sessions; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.sessions (
@@ -336,10 +347,11 @@ CREATE TABLE public.sessions (
 );
 
 
-ALTER TABLE public.sessions OWNER TO postgres;
+ALTER TABLE public.sessions
+    OWNER TO strohm_admin;
 
 --
--- Name: sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.sessions_id_seq
@@ -351,10 +363,10 @@ CREATE SEQUENCE public.sessions_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.sessions_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.sessions_id_seq OWNER TO strohm_admin;
 
 --
--- Name: sessions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: sessions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.sessions_id_seq OWNED BY public.sessions.id;
@@ -383,14 +395,14 @@ ALTER SEQUENCE public.tokens_id_seq OWNED BY public.oauth_tokens.id;
 
 
 --
--- Name: users; Type: TABLE; Schema: public; Owner: postgres
+-- Name: users; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
 CREATE TABLE public.users (
     user_id integer NOT NULL,
     first_name character varying(255),
     email character varying(255) NOT NULL,
-    rfid character varying(255) NOT NULL,
+    rfid character varying(255),
     active boolean DEFAULT true,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -406,17 +418,18 @@ CREATE TABLE public.users (
 );
 
 
-ALTER TABLE public.users OWNER TO postgres;
+ALTER TABLE public.users
+    OWNER TO strohm_admin;
 
 --
--- Name: COLUMN users.oauth_id; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN users.oauth_id; Type: COMMENT; Schema: public; Owner: strohm_admin
 --
 
 COMMENT ON COLUMN public.users.oauth_id IS 'Subject Identifier';
 
 
 --
--- Name: users_user_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: users_user_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
 --
 
 CREATE SEQUENCE public.users_user_id_seq
@@ -428,17 +441,17 @@ CREATE SEQUENCE public.users_user_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.users_user_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.users_user_id_seq OWNER TO strohm_admin;
 
 --
--- Name: users_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: users_user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
 ALTER SEQUENCE public.users_user_id_seq OWNED BY public.users.user_id;
 
 
 --
--- Name: access_logs id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: access_logs id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.access_logs ALTER COLUMN id SET DEFAULT nextval('public.access_logs_id_seq'::regclass);
@@ -452,21 +465,21 @@ ALTER TABLE ONLY public.blacklisted_oath_tokens ALTER COLUMN id SET DEFAULT next
 
 
 --
--- Name: charging_events id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: charging_events id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_events ALTER COLUMN id SET DEFAULT nextval('public.charging_events_id_seq'::regclass);
 
 
 --
--- Name: charging_requests id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: charging_requests id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_requests ALTER COLUMN id SET DEFAULT nextval('public.charging_requests_id_seq'::regclass);
 
 
 --
--- Name: exchange_prices id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: exchange_prices id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.exchange_prices ALTER COLUMN id SET DEFAULT nextval('public.exchange_prices_exchange_id_seq'::regclass);
@@ -480,28 +493,28 @@ ALTER TABLE ONLY public.oauth_tokens ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
--- Name: odoo_tokens id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: odoo_tokens id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.odoo_tokens ALTER COLUMN id SET DEFAULT nextval('public.odoo_tokens_id_seq'::regclass);
 
 
 --
--- Name: sessions id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: sessions id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.sessions ALTER COLUMN id SET DEFAULT nextval('public.sessions_id_seq'::regclass);
 
 
 --
--- Name: users user_id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: users user_id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN user_id SET DEFAULT nextval('public.users_user_id_seq'::regclass);
 
 
 --
--- Data for Name: access_logs; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: access_logs; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
 COPY public.access_logs (id, user_id, ip, method, path, status_code, returned_success, response_time, created_at) FROM stdin;
@@ -517,7 +530,7 @@ COPY public.blacklisted_oath_tokens (token, created_at, id) FROM stdin;
 
 
 --
--- Data for Name: charging_events; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: charging_events; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
 COPY public.charging_events (id, start_datetime, end_datetime, energy_kwh, created_at, request_ref, price_total) FROM stdin;
@@ -525,7 +538,7 @@ COPY public.charging_events (id, start_datetime, end_datetime, energy_kwh, creat
 
 
 --
--- Data for Name: charging_requests; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: charging_requests; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
 COPY public.charging_requests (id, start_datetime, end_datetime, station_id, created_at, updated_at, user_id, success, price_offered_ref) FROM stdin;
@@ -533,7 +546,7 @@ COPY public.charging_requests (id, start_datetime, end_datetime, station_id, cre
 
 
 --
--- Data for Name: exchange_prices; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: exchange_prices; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
 COPY public.exchange_prices (id, price, "timestamp", created_at) FROM stdin;
@@ -549,15 +562,15 @@ COPY public.oauth_tokens (exp, token, type, id, revoked, revoked_at, created_at,
 
 
 --
--- Data for Name: odoo_tokens; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: odoo_tokens; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
-COPY public.odoo_tokens (id, created_at, token, user_id, revoked, revoked_at, salt) FROM stdin;
+COPY public.odoo_tokens (id, created_at, token, user_id, revoked_at, salt) FROM stdin;
 \.
 
 
 --
--- Data for Name: sessions; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: sessions; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
 COPY public.sessions (user_id, id, odoo_session_id, created_at) FROM stdin;
@@ -565,7 +578,7 @@ COPY public.sessions (user_id, id, odoo_session_id, created_at) FROM stdin;
 
 
 --
--- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
 COPY public.users (user_id, first_name, email, rfid, active, created_at, updated_at, deleted_at, odoo_user_id, last_name, lastlogin_at, oauth_id, postal_code, address, odoo_partner_id, name) FROM stdin;
@@ -573,7 +586,7 @@ COPY public.users (user_id, first_name, email, rfid, active, created_at, updated
 
 
 --
--- Name: access_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: access_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
 SELECT pg_catalog.setval('public.access_logs_id_seq', 1, false);
@@ -587,35 +600,35 @@ SELECT pg_catalog.setval('public.blacklisted_tokens_id_seq', 1, false);
 
 
 --
--- Name: charging_events_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: charging_events_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
 SELECT pg_catalog.setval('public.charging_events_id_seq', 1, false);
 
 
 --
--- Name: charging_requests_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: charging_requests_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
 SELECT pg_catalog.setval('public.charging_requests_id_seq', 1, false);
 
 
 --
--- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
 SELECT pg_catalog.setval('public.exchange_prices_exchange_id_seq', 1, false);
 
 
 --
--- Name: odoo_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: odoo_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
-SELECT pg_catalog.setval('public.odoo_tokens_id_seq', 1, false);
+SELECT pg_catalog.setval('public.odoo_tokens_id_seq', 10, true);
 
 
 --
--- Name: sessions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: sessions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
 SELECT pg_catalog.setval('public.sessions_id_seq', 1, false);
@@ -629,14 +642,14 @@ SELECT pg_catalog.setval('public.tokens_id_seq', 1, false);
 
 
 --
--- Name: users_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: users_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
-SELECT pg_catalog.setval('public.users_user_id_seq', 1, false);
+SELECT pg_catalog.setval('public.users_user_id_seq', 11, true);
 
 
 --
--- Name: access_logs access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: access_logs access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.access_logs
@@ -652,7 +665,7 @@ ALTER TABLE ONLY public.blacklisted_oath_tokens
 
 
 --
--- Name: charging_events charging_events_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: charging_events charging_events_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_events
@@ -660,7 +673,7 @@ ALTER TABLE ONLY public.charging_events
 
 
 --
--- Name: charging_requests charging_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: charging_requests charging_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_requests
@@ -668,7 +681,7 @@ ALTER TABLE ONLY public.charging_requests
 
 
 --
--- Name: exchange_prices exchange_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: exchange_prices exchange_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.exchange_prices
@@ -684,7 +697,7 @@ ALTER TABLE ONLY public.oauth_tokens
 
 
 --
--- Name: sessions sessions_pk; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: sessions sessions_pk; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.sessions
@@ -692,7 +705,7 @@ ALTER TABLE ONLY public.sessions
 
 
 --
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.users
@@ -700,7 +713,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: users users_rfid_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: users users_rfid_key; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.users
@@ -708,56 +721,56 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: idx_charging_events_request_ref; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_charging_events_request_ref; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
 CREATE INDEX idx_charging_events_request_ref ON public.charging_events USING btree (request_ref);
 
 
 --
--- Name: idx_charging_requests_station_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_charging_requests_station_id; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
 CREATE INDEX idx_charging_requests_station_id ON public.charging_requests USING btree (station_id);
 
 
 --
--- Name: odoo_tokens_id_uindex; Type: INDEX; Schema: public; Owner: postgres
+-- Name: odoo_tokens_id_uindex; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
 CREATE UNIQUE INDEX odoo_tokens_id_uindex ON public.odoo_tokens USING btree (id);
 
 
 --
--- Name: sessions_id_uindex; Type: INDEX; Schema: public; Owner: postgres
+-- Name: sessions_id_uindex; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
 CREATE UNIQUE INDEX sessions_id_uindex ON public.sessions USING btree (id);
 
 
 --
--- Name: users_oauth_id_index; Type: INDEX; Schema: public; Owner: postgres
+-- Name: users_oauth_id_index; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
 CREATE UNIQUE INDEX users_oauth_id_index ON public.users USING btree (oauth_id);
 
 
 --
--- Name: users_odoo_user_id_uindex; Type: INDEX; Schema: public; Owner: postgres
+-- Name: users_odoo_user_id_uindex; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
 CREATE UNIQUE INDEX users_odoo_user_id_uindex ON public.users USING btree (odoo_user_id);
 
 
 --
--- Name: charging_requests update_charging_requests_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
+-- Name: charging_requests update_charging_requests_timestamp; Type: TRIGGER; Schema: public; Owner: strohm_admin
 --
 
 CREATE TRIGGER update_charging_requests_timestamp BEFORE UPDATE ON public.charging_requests FOR EACH ROW EXECUTE FUNCTION public.update_timestamp();
 
 
 --
--- Name: access_logs access_logs_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: access_logs access_logs_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.access_logs
@@ -765,7 +778,7 @@ ALTER TABLE ONLY public.access_logs
 
 
 --
--- Name: charging_events charging_events_request_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: charging_events charging_events_request_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_events
@@ -773,7 +786,7 @@ ALTER TABLE ONLY public.charging_events
 
 
 --
--- Name: charging_requests charging_requests_exchange_prices_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: charging_requests charging_requests_exchange_prices_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_requests
@@ -781,7 +794,7 @@ ALTER TABLE ONLY public.charging_requests
 
 
 --
--- Name: charging_requests charging_requests_user_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: charging_requests charging_requests_user_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.charging_requests
@@ -797,15 +810,15 @@ ALTER TABLE ONLY public.oauth_tokens
 
 
 --
--- Name: odoo_tokens odoo_tokens_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: odoo_tokens odoo_tokens_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.odoo_tokens
-    ADD CONSTRAINT odoo_tokens_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users(user_id);
+    ADD CONSTRAINT odoo_tokens_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users (user_id) ON DELETE CASCADE;
 
 
 --
--- Name: sessions sessions_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: sessions sessions_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
 ALTER TABLE ONLY public.sessions
@@ -817,6 +830,20 @@ ALTER TABLE ONLY public.sessions
 --
 
 GRANT ALL ON SCHEMA public TO strohm_admin;
+
+
+--
+-- Name: TABLE blacklisted_oath_tokens; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT, INSERT, REFERENCES, DELETE, TRIGGER, TRUNCATE, UPDATE ON TABLE public.blacklisted_oath_tokens TO strohm_admin;
+
+
+--
+-- Name: TABLE oauth_tokens; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT, INSERT, REFERENCES, DELETE, TRIGGER, TRUNCATE, UPDATE ON TABLE public.oauth_tokens TO strohm_admin;
 
 
 --

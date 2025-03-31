@@ -1,4 +1,4 @@
-const {getUserUnique, createDBUser, setUserOdooCredentials} = require('../utils/queries');
+const {getUserUnique, createDBUser, setUserOdooCredentials, getUserOdooCredentials} = require('../utils/queries');
 const {ErrorCodes, SystemError, ValidationError} = require('../utils/errors');
 const axios = require('axios');
 
@@ -8,7 +8,7 @@ const axios = require('axios');
  * @property {string} name - The user's name
  * @property {string} email - The user's email
  * @property {string|null} odoo_user_id - The user's Odoo ID
- * @property {string} oauth_id - The OAuth ID
+ * @property {string} oauth_id - The Subject Identifier
  */
 
 
@@ -24,14 +24,19 @@ const userOperations = async (oidc_user) => {
             // rfid: oidc_user.rfid,
         });
 
-        await createOdooUser(await createdUser.user_id);
-        return true;
+        return await createOdooUser(await createdUser.user_id);
+    } else if (user && !user.odoo_user_id) {
+        return await createOdooUser(user.user_id);
+    } else {
+        // User already exists and has an Odoo ID
+        return user;
     }
 
-    if (user && !user.odoo_user_id) {
-        await createOdooUser(user.user_id);
-        return true;
-    }
+
+    // return true;
+
+    // TODO: Check valid payment method
+    // TODO: Check for fraud
 
     //TODO: Check remote and local updated_at date
     // and update the user if needed
@@ -44,7 +49,6 @@ const userOperations = async (oidc_user) => {
     //     }
 
 
-    return true;
 };
 
 
@@ -81,15 +85,14 @@ const createOdooUser = async (user_id) => {
         const encrypted_key = data['encrypted_key'];
         const salt = data['salt'];
 
-
-        return await setUserOdooCredentials(user.user_id, {
+        await setUserOdooCredentials(user.user_id, {
             odoo_user_id: odoo_user_id,
             partner_id: odoo_partner_id,
             encrypted_key: encrypted_key,
             salt: salt,
         });
 
-
+        return getUserUnique({user_id: user.user_id});
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.USER.ODOO_ALREADY_EXISTS);
     } else {
@@ -99,7 +102,35 @@ const createOdooUser = async (user_id) => {
 };
 
 
+const getOdooPortalLogin = async (user_id) => {
+    //TODO: Redirecting internally or externally?
+    const user = await getUserUnique({user_id: user_id});
+
+    if (!user) {
+        throw new ValidationError(ErrorCodes.USER.NOT_FOUND);
+    }
+
+    if (!user.odoo_user_id) {
+        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
+    }
+
+    const odoo_credentials = await getUserOdooCredentials(user_id);
+    const {token, salt} = odoo_credentials;
+    if (!odoo_credentials || !token || !salt) {
+        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
+        //TODO: Instead of throwing an error, ask for a token rotation
+    }
+
+    const url = process.env.ODOO_HOST + '/portal_login';
+
+    // Redirect with the token and the salt in parameters
+    const redirect_url = `${url}?api_key=${token}&salt=${salt}`;
+    return redirect_url;
+};
+
+
 module.exports = {
     userOperations,
     createOdooUser,
+    getOdooPortalLogin,
 };
