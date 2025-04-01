@@ -60,7 +60,7 @@ const createOdooUser = async (user_id) => {
     }
 
     if (user.odoo_user_id !== null) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_ALREADY_EXISTS_DB);
+        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
     }
 
     // const url = process.env.ODOO_HOST + '/portal/internal/create';
@@ -94,10 +94,10 @@ const createOdooUser = async (user_id) => {
 
         return getUserUnique({user_id: user.user_id});
     } else if (response.status === 409) {
-        throw new SystemError(ErrorCodes.USER.ODOO_ALREADY_EXISTS);
+        throw new SystemError(ErrorCodes.ODOO.USER_ALREADY_EXISTS);
     } else {
         const errorMSG = response.data['error'];
-        throw new SystemError(ErrorCodes.USER.ODOO_CREATE_FAILED, errorMSG);
+        throw new SystemError(ErrorCodes.ODOO.USER_CREATE_FAILED, errorMSG);
     }
 };
 
