@@ -1,6 +1,6 @@
-const logger = require('./logger.js');
-const pool = require('./db_conn.js');
-const {DatabaseError, ErrorCodes, ValidationError} = require('./errors.js');
+const logger = require('./logger');
+const pool = require('./db_conn');
+const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 
 // TODO: Create a JOI scheme for validation
 
