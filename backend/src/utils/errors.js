@@ -4,6 +4,7 @@
  * This module defines standardized error codes and messages for the application.
  * Errors are grouped by category and include codes, HTTP status codes, and messages.
  */
+const logger = require('./logger');
 
 const ExceptionCodes = Object.freeze({
     // Authentication errors (1000-1099)
@@ -58,16 +59,20 @@ const ExceptionCodes = Object.freeze({
         UPDATE_FAILED: {code: 6002, message: 'User update failed'},
         DELETE_FAILED: {code: 6003, message: 'User delete failed'},
         CREATE_FAILED: {code: 6004, message: 'User create failed'},
-        ODOO_CREATE_FAILED: {code: 6005, message: 'User create in Odoo failed'},
-        ODOO_UPDATE_FAILED: {code: 6006, message: 'User update in Odoo failed'},
-        ODOO_DELETE_FAILED: {code: 6007, message: 'User delete in Odoo failed'},
-        ODOO_ALREADY_EXISTS_DB: {code: 6008, message: 'User already exists in our DB'},
-        ODOO_ALREADY_EXISTS: {code: 6009, message: 'User already exists in Odoo'},
         ODOO_NOT_FOUND: {code: 6010, message: 'User\'s  Odoo ID is not found'},
         ODOO_PARTNER_ID_NOT_FOUND: {code: 6011, message: 'User\'s Odoo partner ID is not found'},
-        ODOO_NO_CREDENTIALS: {code: 6012, message: 'User does not have valid odoo credentials'},
+        ODOO_NO_CREDENTIALS: {code: 6012, message: 'User does not have valid Odoo credentials'},
         RFID_NOT_FOUND: {code: 6020, message: 'User\'s RFID is not found'},
+    }),
 
+    ODOO: Object.freeze({
+        USER_NOT_FOUND: {code: 7001, message: 'User not found in Odoo'},
+        USER_ALREADY_EXISTS: {code: 7000, message: 'User already exists in Odoo'},
+        USER_CREATE_FAILED: {code: 7002, message: 'User creation in Odoo failed'},
+        USER_UPDATE_FAILED: {code: 7003, message: 'User update in Odoo failed'},
+        USER_DELETE_FAILED: {code: 7004, message: 'User deletion in Odoo failed'},
+        USER_NOT_AUTHORIZED: {code: 7005, message: 'User is not authorized to perform this action in Odoo'},
+        USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
     }),
 });
 
@@ -132,6 +137,11 @@ class SystemError extends AppError {
  * Express error handler for AppErrors
  */
 const appErrorHandler = (err, res) => {
+
+    if (err.stack) {
+        logger.error(err.stack);
+    }
+
     if (err instanceof AppError) {
         return res.status(err.getStatusCode()).json(err.toResponse());
     }
