@@ -13,8 +13,16 @@ const {auth} = require('express-openid-connect');
 const oidc_config = require('./oidc/oidc_config');
 const {userOperations, getOdooPortalLogin} = require('./services/user_operations');
 const {appErrorHandler} = require('./utils/errors');
+const axios = require('axios');
 
-app.set('trust proxy', 1 /* number of proxies between user and server */);
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1 /* number of proxies between user and server */);
+}
+
+// Handling response status codes where the respected function is called instead of axios throwing an error
+axios.defaults.validateStatus = function () {
+    return true;
+};
 
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
@@ -43,9 +51,17 @@ app.get('/', async (req, res) => {
 
             return res.redirect(redirectUrl);
         } else {
-            // Render button to login
-            return res.send('<a href="/login">Login</a>');
+            return res.redirect('/welcome');
         }
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+});
+
+app.get('/welcome', async (req, res) => {
+    try {
+        // TODO: Company banners, logos, etc.
+        return res.send('<a href="/login">Login</a>');
     } catch (error) {
         appErrorHandler(error, res);
     }

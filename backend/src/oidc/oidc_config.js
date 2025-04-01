@@ -12,6 +12,9 @@ const oidc_config = {
 		// audience: 'https://api.example.com/products',
 		// scope: 'openid profile email read:products',
 	},
+	routes: {
+		postLogoutRedirect: '/welcome',
+	},
 };
 
 module.exports = oidc_config;
