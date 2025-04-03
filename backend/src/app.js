@@ -46,10 +46,11 @@ app.get('/', async (req, res) => {
             const user = await userOperations(req.oidc.user);
             console.log('User check passed');
 
-            const redirectUrl = await getOdooPortalLogin(user.user_id);
-            console.log('Redirect URL:', redirectUrl);
+            const redirect_url = await getOdooPortalLogin(user.user_id);
+            console.log('Redirect URL:', redirect_url);
 
-            return res.redirect(redirectUrl);
+            //TODO: Redirecting internally or externally?
+            return res.redirect(redirect_url);
         } else {
             return res.redirect('/welcome');
         }

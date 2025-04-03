@@ -49,10 +49,11 @@ const ExceptionCodes = Object.freeze({
     // General application errors (5000-5099)
     SYSTEM: Object.freeze({
         UNKNOWN_ERROR: {code: 5000, status: 500, message: 'An unknown error occurred'},
-        NOT_IMPLEMENTED: {code: 5001, status: 501, message: 'Feature not implemented'},
-        SERVICE_UNAVAILABLE: {code: 5002, status: 503, message: 'Service temporarily unavailable'},
+        NOT_IMPLEMENTED: {code: 5001, status: 500, message: 'Feature not implemented'},
+        SERVICE_UNAVAILABLE: {code: 5002, status: 500, message: 'Service temporarily unavailable'},
     }),
 
+    // Related to user operation errors in backend (6000-6099)
     USER: Object.freeze({
         NOT_FOUND: {code: 6000, message: 'User not found'},
         ALREADY_EXISTS: {code: 6001, message: 'User already exists'},
@@ -62,17 +63,22 @@ const ExceptionCodes = Object.freeze({
         ODOO_NOT_FOUND: {code: 6010, message: 'User\'s  Odoo ID is not found'},
         ODOO_PARTNER_ID_NOT_FOUND: {code: 6011, message: 'User\'s Odoo partner ID is not found'},
         ODOO_NO_CREDENTIALS: {code: 6012, message: 'User does not have valid Odoo credentials'},
+        ODOO_ID_MISMATCH: {code: 6013, message: 'User Odoo ID mismatch'},
+        ODOO_EXISTS: {code: 6014, message: 'User already exists in Odoo'},
+        TOKEN_ROTATION_FAILED: {code: 6015, message: 'User token rotation failed'},
         RFID_NOT_FOUND: {code: 6020, message: 'User\'s RFID is not found'},
     }),
 
+    // Related to Odoo errors (7000-7099)
     ODOO: Object.freeze({
         USER_NOT_FOUND: {code: 7001, message: 'User not found in Odoo'},
-        USER_ALREADY_EXISTS: {code: 7000, message: 'User already exists in Odoo'},
+        USER_EXISTS: {code: 7000, message: 'User already exists in Odoo'},
         USER_CREATE_FAILED: {code: 7002, message: 'User creation in Odoo failed'},
         USER_UPDATE_FAILED: {code: 7003, message: 'User update in Odoo failed'},
         USER_DELETE_FAILED: {code: 7004, message: 'User deletion in Odoo failed'},
         USER_NOT_AUTHORIZED: {code: 7005, message: 'User is not authorized to perform this action in Odoo'},
         USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
+        TOKEN_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
     }),
 });
 

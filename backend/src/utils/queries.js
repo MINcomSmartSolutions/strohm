@@ -157,6 +157,7 @@ const getUserUnique = async (filters) => {
     }
 };
 
+
 const setUserOdooCredentials = async (user_id, credentials) => {
     const {odoo_user_id, encrypted_key, salt, partner_id} = credentials;
 
@@ -206,7 +207,7 @@ const getUserOdooCredentials = async (user_id) => {
     }
 
     const query = `
-        SELECT token, salt
+        SELECT id as token_id, token, salt
         FROM users
                  JOIN odoo_tokens ON users.user_id = odoo_tokens.user_id
         WHERE users.user_id = $1::integer
@@ -228,10 +229,59 @@ const getUserOdooCredentials = async (user_id) => {
     }
 };
 
+
+const rotateOdooUserCredentials = async (user_id, old_token_id, new_token, new_salt) => {
+    if (!user_id || !old_token_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const query = `
+        UPDATE odoo_tokens
+        SET revoked_at = NOW()
+        WHERE user_id = $1::integer
+          AND id = $2::integer
+          AND revoked_at IS NULL
+    `;
+
+    const insertQuery = `
+        INSERT INTO odoo_tokens (user_id, token, salt)
+        VALUES ($1::integer, $2, $3)
+    `;
+
+
+    try {
+        const result = await pool.query(query, [user_id, old_token_id]);
+        if (result.rowCount === 0) {
+            throw new ValidationError(
+                ErrorCodes.USER.ODOO_NO_CREDENTIALS,
+                `No valid token found for user ID ${user_id} and token ID ${old_token_id}.`,
+            );
+        }
+
+        const insertResult = await pool.query(insertQuery, [user_id, new_token, new_salt]);
+        if (insertResult.rowCount === 0) {
+            throw new ValidationError(
+                ErrorCodes.USER.ODOO_NO_CREDENTIALS,
+                `Failed to insert new token for user ID ${user_id}.`,
+            );
+        }
+
+        return true; // Token rotation successful
+    } catch (error) {
+        handleQueryError(error, 'rotateOdooUserCredentials');
+    }
+};
+
+
+
 module.exports = {
     createDBUser,
     getUsers,
     getUserUnique,
     setUserOdooCredentials,
     getUserOdooCredentials,
+    rotateOdooUserCredentials,
 };

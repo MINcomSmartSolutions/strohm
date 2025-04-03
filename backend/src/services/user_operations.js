@@ -1,6 +1,12 @@
-const {getUserUnique, createDBUser, setUserOdooCredentials, getUserOdooCredentials} = require('../utils/queries');
 const {ErrorCodes, SystemError, ValidationError} = require('../utils/errors');
 const axios = require('axios');
+const {
+    getUserUnique,
+    createDBUser,
+    setUserOdooCredentials,
+    getUserOdooCredentials,
+    rotateOdooUserCredentials,
+} = require('../utils/queries');
 
 /**
  * @typedef {Object} user
@@ -11,6 +17,11 @@ const axios = require('axios');
  * @property {string} oauth_id - The Subject Identifier
  */
 
+
+const getHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.ODOO_ADMIN_API_KEY}`,
+});
 
 
 const userOperations = async (oidc_user) => {
@@ -48,38 +59,26 @@ const userOperations = async (oidc_user) => {
     //         throw new ValidationError(ErrorCodes.USER.RFID_NOT_FOUND);
     //     }
 
-
 };
 
 
-const createOdooUser = async (user_id) => {
-    const user = await getUserUnique({user_id: user_id});
-
-    if (!user || user.length === 0) {
-        throw new ValidationError(ErrorCodes.USER.NOT_FOUND);
-    }
+const createOdooUser = async (identifier) => {
+    const user = await identifyUser(identifier);
 
     if (user.odoo_user_id !== null) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
+        throw new ValidationError(ErrorCodes.USER.ODOO_EXISTS);
     }
 
-    // const url = process.env.ODOO_HOST + '/portal/internal/create';
     const url = process.env.ODOO_HOST + '/internal/create';
     const data = {
         name: user.name,
         email: user.email,
     };
-
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.ODOO_ADMIN_API_KEY}`,
-    };
-
-    const response = await axios.post(url, data, {headers: headers});
+    const response = await axios.post(url, data, {headers: getHeaders()});
 
     if (response.status === 201) {
         const data = response.data;
-        const success = data['success'];
+        // const success = data['success'];
         const odoo_user_id = data['user_id'];
         const odoo_partner_id = data['partner_id'];
         const encrypted_key = data['encrypted_key'];
@@ -94,7 +93,7 @@ const createOdooUser = async (user_id) => {
 
         return getUserUnique({user_id: user.user_id});
     } else if (response.status === 409) {
-        throw new SystemError(ErrorCodes.ODOO.USER_ALREADY_EXISTS);
+        throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {
         const errorMSG = response.data['error'];
         throw new SystemError(ErrorCodes.ODOO.USER_CREATE_FAILED, errorMSG);
@@ -102,19 +101,10 @@ const createOdooUser = async (user_id) => {
 };
 
 
-const getOdooPortalLogin = async (user_id) => {
-    //TODO: Redirecting internally or externally?
-    const user = await getUserUnique({user_id: user_id});
+const getOdooPortalLogin = async (identifier) => {
+    const user = await identifyUser(identifier, {requireOdooUser: true});
 
-    if (!user) {
-        throw new ValidationError(ErrorCodes.USER.NOT_FOUND);
-    }
-
-    if (!user.odoo_user_id) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
-    }
-
-    const odoo_credentials = await getUserOdooCredentials(user_id);
+    const odoo_credentials = await getUserOdooCredentials(user.user_id);
     const {token, salt} = odoo_credentials;
     if (!odoo_credentials || !token || !salt) {
         throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
@@ -123,9 +113,75 @@ const getOdooPortalLogin = async (user_id) => {
 
     const url = process.env.ODOO_HOST + '/portal_login';
 
-    // Redirect with the token and the salt in parameters
-    const redirect_url = `${url}?api_key=${token}&salt=${salt}`;
-    return redirect_url;
+    // Return full url with the token and the salt in parameters
+    return `${url}?api_key=${token}&salt=${salt}`;
+};
+
+
+const rotateOdooUserToken = async (identifier) => {
+    const user = await identifyUser(identifier, {requireOdooUser: true});
+
+    const odoo_credentials = await getUserOdooCredentials(user.user_id);
+    const {token_id, token, salt} = odoo_credentials;
+    const data = {
+        user_id: user.odoo_user_id,
+        api_key: token,
+        salt: salt,
+    };
+
+    const url = process.env.ODOO_HOST + '/internal/rotate_api_key';
+
+    const response = await axios.post(url, data, {headers: getHeaders()});
+
+    if (response.status === 200) {
+        const data = response.data;
+        const odoo_user_id = data['user_id'];
+        const new_token = data['encrypted_key'];
+        const new_salt = data['salt'];
+
+        if (odoo_user_id !== user.odoo_user_id) {
+            throw new SystemError(ErrorCodes.User.ODOO_ID_MISMATCH);
+        }
+
+        const db_query = rotateOdooUserCredentials(user.user_id, token_id, new_token, new_salt);
+        if (!db_query) {
+            throw new SystemError(ErrorCodes.USER.TOKEN_ROTATION_FAILED);
+        }
+        return getUserOdooCredentials(user.user_id);
+
+    } else {
+        const errorMSG = response.data['error'];
+        throw new SystemError(ErrorCodes.ODOO.TOKEN_ROTATION_FAILED, errorMSG);
+    }
+};
+
+/**
+ * Gets a user by either user_id or oauth_id
+ *
+ * @param {number|string} identifier - Either user_id or oauth_id
+ * @param {Object} options - Additional options
+ * @param {boolean} options.requireOdooUser - If true, verify user has an Odoo ID
+ * @returns {Promise<Object>} - User object
+ * @throws {ValidationError} - If user not found or doesn't meet requirements
+ */
+const identifyUser = async (identifier, options = {}) => {
+    let user;
+
+    if (typeof identifier === 'number' || !isNaN(parseInt(identifier))) {
+        user = await getUserUnique({user_id: parseInt(identifier)});
+    } else {
+        user = await getUserUnique({oauth_id: identifier});
+    }
+
+    if (!user) {
+        throw new ValidationError(ErrorCodes.USER.NOT_FOUND);
+    }
+
+    if (options.requireOdooUser && !user.odoo_user_id) {
+        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
+    }
+
+    return user;
 };
 
 
@@ -133,4 +189,6 @@ module.exports = {
     userOperations,
     createOdooUser,
     getOdooPortalLogin,
+    rotateOdooUserToken,
+    identifyUser,
 };
