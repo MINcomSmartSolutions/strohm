@@ -11,9 +11,21 @@ const helmet = require('helmet');
 // const swaggerSpec = require('./utils/swaggerConfig');
 const {auth} = require('express-openid-connect');
 const oidc_config = require('./oidc/oidc_config');
-const {userOperations, getOdooPortalLogin} = require('./services/user_operations');
 const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
+const {getOdooPortalLogin} = require('./services/odoo');
+const session = require('express-session');
+
+// Session configuration
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'a-very-secret-key',
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
+}));
 
 if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1 /* number of proxies between user and server */);
@@ -36,24 +48,23 @@ app.use(auth(oidc_config));
 app.use(hpp());
 app.use(helmet());
 
-app.get('/server_health', (req, res) => {
+app.get('/health', (req, res) => {
     res.status(200).json({success: true, msg: 'OK'});
 });
 
 app.get('/', async (req, res) => {
     try {
+        // console.log('Session user before login:', req.session.user);
+        // console.log('OIDC session', req.oidc.user);
         if (req.oidc.isAuthenticated()) {
-            const user = await userOperations(req.oidc.user);
-            console.log('User check passed');
-
-            const redirect_url = await getOdooPortalLogin(user.user_id);
-            console.log('Redirect URL:', redirect_url);
-
-            //TODO: Redirecting internally or externally?
-            return res.redirect(redirect_url);
-        } else {
-            return res.redirect('/welcome');
+            if (req.session.user) {
+                // User exists in session, redirect to Odoo portal
+                const redirect_url = await getOdooPortalLogin(req.session.user.user_id);
+                return res.redirect(redirect_url);
+            }
         }
+
+        return res.redirect('/welcome');
     } catch (error) {
         appErrorHandler(error, res);
     }
@@ -66,6 +77,16 @@ app.get('/welcome', async (req, res) => {
     } catch (error) {
         appErrorHandler(error, res);
     }
+});
+
+app.get('/logout', async (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('Error destroying session:', err);
+        }
+    });
+
+    res.oidc.logout({returnTo: '/welcome'});
 });
 
 
