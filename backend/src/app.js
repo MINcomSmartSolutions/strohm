@@ -15,6 +15,7 @@ const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
 const session = require('express-session');
+const verifyApiKey = require('./middlewares/auth');
 
 // Session configuration
 app.use(session({
@@ -72,6 +73,9 @@ app.get('/', async (req, res) => {
 
 app.get('/welcome', async (req, res) => {
     try {
+        if (req.session.user) {
+            res.redirect('/');
+        }
         // TODO: Company banners, logos, etc.
         return res.send('<a href="/login">Login</a>');
     } catch (error) {
@@ -87,6 +91,22 @@ app.get('/logout', async (req, res) => {
     });
 
     res.oidc.logout({returnTo: '/welcome'});
+});
+
+
+// ODOO INCOMING WEBHOOKS
+app.get('/internal/update_user', verifyApiKey, async (req, res) => {
+    try {
+        const {operation, record_id, old_data, new_data} = req.body;
+
+        // Process the data based on operation (update/delete)
+        console.log(`Portal user ${operation} - ID: ${record_id}`);
+
+        // TODO: Handle the update or delete operation
+        res.status(200).json({success: true});
+    } catch (e) {
+        appErrorHandler(e, res);
+    }
 });
 
 
