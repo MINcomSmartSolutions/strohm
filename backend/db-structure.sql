@@ -111,41 +111,6 @@ ALTER SEQUENCE public.access_logs_id_seq OWNED BY public.access_logs.id;
 
 
 --
--- Name: blacklisted_oath_tokens; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.blacklisted_oath_tokens (
-    token character varying(255) NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    id integer NOT NULL
-);
-
-
-ALTER TABLE public.blacklisted_oath_tokens OWNER TO postgres;
-
---
--- Name: blacklisted_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.blacklisted_tokens_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.blacklisted_tokens_id_seq OWNER TO postgres;
-
---
--- Name: blacklisted_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.blacklisted_tokens_id_seq OWNED BY public.blacklisted_oath_tokens.id;
-
-
---
 -- Name: charging_events; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
@@ -272,45 +237,28 @@ ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNED BY public.exchange_p
 
 
 --
--- Name: oauth_tokens; Type: TABLE; Schema: public; Owner: postgres
+-- Name: odoo_apikeys; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
-CREATE TABLE public.oauth_tokens (
-    exp timestamp without time zone,
-    token character varying(255),
-    type character varying(20),
-    id integer NOT NULL,
-    revoked boolean DEFAULT false NOT NULL,
-    revoked_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    user_id integer
-);
-
-
-ALTER TABLE public.oauth_tokens OWNER TO postgres;
-
---
--- Name: odoo_tokens; Type: TABLE; Schema: public; Owner: strohm_admin
---
-
-CREATE TABLE public.odoo_tokens (
+CREATE TABLE public.odoo_apikeys
+(
     id integer NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    token character varying NOT NULL,
+    key character varying NOT NULL,
     user_id integer,
     revoked_at timestamp without time zone,
     salt character varying NOT NULL
 );
 
 
-ALTER TABLE public.odoo_tokens
+ALTER TABLE public.odoo_apikeys
     OWNER TO strohm_admin;
 
 --
--- Name: COLUMN odoo_tokens.token; Type: COMMENT; Schema: public; Owner: strohm_admin
+-- Name: COLUMN odoo_apikeys.key; Type: COMMENT; Schema: public; Owner: strohm_admin
 --
 
-COMMENT ON COLUMN public.odoo_tokens.token IS 'Encrypted key';
+COMMENT ON COLUMN public.odoo_apikeys.key IS 'Encrypted key';
 
 
 --
@@ -332,7 +280,7 @@ ALTER SEQUENCE public.odoo_tokens_id_seq OWNER TO strohm_admin;
 -- Name: odoo_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
-ALTER SEQUENCE public.odoo_tokens_id_seq OWNED BY public.odoo_tokens.id;
+ALTER SEQUENCE public.odoo_tokens_id_seq OWNED BY public.odoo_apikeys.id;
 
 
 --
@@ -370,28 +318,6 @@ ALTER SEQUENCE public.sessions_id_seq OWNER TO strohm_admin;
 --
 
 ALTER SEQUENCE public.sessions_id_seq OWNED BY public.sessions.id;
-
-
---
--- Name: tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.tokens_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.tokens_id_seq OWNER TO postgres;
-
---
--- Name: tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.tokens_id_seq OWNED BY public.oauth_tokens.id;
 
 
 --
@@ -458,13 +384,6 @@ ALTER TABLE ONLY public.access_logs ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
--- Name: blacklisted_oath_tokens id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.blacklisted_oath_tokens ALTER COLUMN id SET DEFAULT nextval('public.blacklisted_tokens_id_seq'::regclass);
-
-
---
 -- Name: charging_events id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
@@ -486,17 +405,11 @@ ALTER TABLE ONLY public.exchange_prices ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- Name: oauth_tokens id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: odoo_apikeys id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
-ALTER TABLE ONLY public.oauth_tokens ALTER COLUMN id SET DEFAULT nextval('public.tokens_id_seq'::regclass);
-
-
---
--- Name: odoo_tokens id; Type: DEFAULT; Schema: public; Owner: strohm_admin
---
-
-ALTER TABLE ONLY public.odoo_tokens ALTER COLUMN id SET DEFAULT nextval('public.odoo_tokens_id_seq'::regclass);
+ALTER TABLE ONLY public.odoo_apikeys
+    ALTER COLUMN id SET DEFAULT nextval('public.odoo_tokens_id_seq'::regclass);
 
 
 --
@@ -518,14 +431,6 @@ ALTER TABLE ONLY public.users ALTER COLUMN user_id SET DEFAULT nextval('public.u
 --
 
 COPY public.access_logs (id, user_id, ip, method, path, status_code, returned_success, response_time, created_at) FROM stdin;
-\.
-
-
---
--- Data for Name: blacklisted_oath_tokens; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-COPY public.blacklisted_oath_tokens (token, created_at, id) FROM stdin;
 \.
 
 
@@ -554,18 +459,10 @@ COPY public.exchange_prices (id, price, "timestamp", created_at) FROM stdin;
 
 
 --
--- Data for Name: oauth_tokens; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: odoo_apikeys; Type: TABLE DATA; Schema: public; Owner: strohm_admin
 --
 
-COPY public.oauth_tokens (exp, token, type, id, revoked, revoked_at, created_at, user_id) FROM stdin;
-\.
-
-
---
--- Data for Name: odoo_tokens; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.odoo_tokens (id, created_at, token, user_id, revoked_at, salt) FROM stdin;
+COPY public.odoo_apikeys (id, created_at, key, user_id, revoked_at, salt) FROM stdin;
 \.
 
 
@@ -593,13 +490,6 @@ SELECT pg_catalog.setval('public.access_logs_id_seq', 1, false);
 
 
 --
--- Name: blacklisted_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
-SELECT pg_catalog.setval('public.blacklisted_tokens_id_seq', 1, false);
-
-
---
 -- Name: charging_events_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
@@ -624,7 +514,7 @@ SELECT pg_catalog.setval('public.exchange_prices_exchange_id_seq', 1, false);
 -- Name: odoo_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
-SELECT pg_catalog.setval('public.odoo_tokens_id_seq', 10, true);
+SELECT pg_catalog.setval('public.odoo_tokens_id_seq', 15, true);
 
 
 --
@@ -635,17 +525,10 @@ SELECT pg_catalog.setval('public.sessions_id_seq', 1, false);
 
 
 --
--- Name: tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
-SELECT pg_catalog.setval('public.tokens_id_seq', 1, false);
-
-
---
 -- Name: users_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
 --
 
-SELECT pg_catalog.setval('public.users_user_id_seq', 11, true);
+SELECT pg_catalog.setval('public.users_user_id_seq', 20, true);
 
 
 --
@@ -654,14 +537,6 @@ SELECT pg_catalog.setval('public.users_user_id_seq', 11, true);
 
 ALTER TABLE ONLY public.access_logs
     ADD CONSTRAINT access_logs_pkey PRIMARY KEY (id);
-
-
---
--- Name: blacklisted_oath_tokens blacklisted_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.blacklisted_oath_tokens
-    ADD CONSTRAINT blacklisted_tokens_pkey PRIMARY KEY (id);
 
 
 --
@@ -686,14 +561,6 @@ ALTER TABLE ONLY public.charging_requests
 
 ALTER TABLE ONLY public.exchange_prices
     ADD CONSTRAINT exchange_prices_pkey PRIMARY KEY (id);
-
-
---
--- Name: oauth_tokens oauth_tokens_pk; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.oauth_tokens
-    ADD CONSTRAINT oauth_tokens_pk PRIMARY KEY (id);
 
 
 --
@@ -735,10 +602,10 @@ CREATE INDEX idx_charging_requests_station_id ON public.charging_requests USING 
 
 
 --
--- Name: odoo_tokens_id_uindex; Type: INDEX; Schema: public; Owner: strohm_admin
+-- Name: odoo_apikeys_id_uindex; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
-CREATE UNIQUE INDEX odoo_tokens_id_uindex ON public.odoo_tokens USING btree (id);
+CREATE UNIQUE INDEX odoo_apikeys_id_uindex ON public.odoo_apikeys USING btree (id);
 
 
 --
@@ -802,19 +669,11 @@ ALTER TABLE ONLY public.charging_requests
 
 
 --
--- Name: oauth_tokens fk_tokens_users; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: odoo_apikeys odoo_apikeys_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
-ALTER TABLE ONLY public.oauth_tokens
-    ADD CONSTRAINT fk_tokens_users FOREIGN KEY (user_id) REFERENCES public.users(user_id);
-
-
---
--- Name: odoo_tokens odoo_tokens_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
---
-
-ALTER TABLE ONLY public.odoo_tokens
-    ADD CONSTRAINT odoo_tokens_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users (user_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.odoo_apikeys
+    ADD CONSTRAINT odoo_apikeys_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users (user_id) ON DELETE CASCADE;
 
 
 --
@@ -830,20 +689,6 @@ ALTER TABLE ONLY public.sessions
 --
 
 GRANT ALL ON SCHEMA public TO strohm_admin;
-
-
---
--- Name: TABLE blacklisted_oath_tokens; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT SELECT, INSERT, REFERENCES, DELETE, TRIGGER, TRUNCATE, UPDATE ON TABLE public.blacklisted_oath_tokens TO strohm_admin;
-
-
---
--- Name: TABLE oauth_tokens; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT SELECT, INSERT, REFERENCES, DELETE, TRIGGER, TRUNCATE, UPDATE ON TABLE public.oauth_tokens TO strohm_admin;
 
 
 --
