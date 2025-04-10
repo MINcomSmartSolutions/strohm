@@ -10,6 +10,7 @@ const {
 const {generateSignature} = require('../helpers/auth');
 const {identifyUser} = require('../helpers/user');
 const {getHeaders} = require('./network');
+const {DateTime} = require('luxon');
 
 
 const createOdooUser = async (identifier) => {
@@ -55,29 +56,38 @@ const getOdooPortalLogin = async (identifier) => {
     const user = await identifyUser(identifier, {requireOdooUser: true});
 
     const odoo_credentials = await getUserOdooCredentials(user.user_id);
-    const {token, salt} = odoo_credentials;
-    if (!odoo_credentials || !token || !salt) {
+    const {key, salt} = odoo_credentials;
+    if (!odoo_credentials || !key || !salt) {
         throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
-        //TODO: Instead of throwing an error, ask for a token rotation
+        //TODO: Instead of throwing an error, ask for a key rotation
     }
 
     // Construct the Odoo portal login URL
+    // Used URL constructor to ensure proper encoding instead of String concatenation
     const loginUrl = new URL('/portal_login', process.env.ODOO_HOST);
 
+    let timestamp = DateTime.now().toISO({
+        includeOffset: false,
+    });
+
+    timestamp = timestamp.replace(/-/g, '');
+    timestamp = timestamp.split('.')[0];
+
     // Create secure login parameters
-    const state = user.odoo_user_id;
-    const timestamp = Math.floor(Date.now() / 1000);
+    const state = {
+        key,
+        timestamp,
+        odoo_user_id: user.odoo_user_id,
+        salt,
+    };
     const signature = generateSignature(
         state,
-        timestamp,
         process.env.ODOO_API_SECRET,
     );
 
-    loginUrl.searchParams.append('api_key', token);
+    loginUrl.searchParams.append('api_key', key);
     loginUrl.searchParams.append('salt', salt);
-
-    loginUrl.searchParams.append('state', state);
-    loginUrl.searchParams.append('timestamp', timestamp.toString());
+    loginUrl.searchParams.append('timestamp', timestamp);
     loginUrl.searchParams.append('signature', signature);
 
     return loginUrl.toString();
