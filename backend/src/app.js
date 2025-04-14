@@ -16,6 +16,7 @@ const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
 const session = require('express-session');
 const verifyApiKey = require('./middlewares/auth');
+const logger = require('./utils/logger');
 
 // Session configuration
 app.use(session({
@@ -86,7 +87,7 @@ app.get('/welcome', async (req, res) => {
 app.get('/logout', async (req, res) => {
     req.session.destroy((err) => {
         if (err) {
-            console.error('Error destroying session:', err);
+            logger.error('Error destroying session:', err);
         }
     });
 

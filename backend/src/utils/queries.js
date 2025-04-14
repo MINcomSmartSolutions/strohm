@@ -168,12 +168,19 @@ const setUserOdooCredentials = async (user_id, credentials) => {
         );
     }
 
+    if (!Number.isInteger(user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(partner_id)) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            `Invalid parameters.`,
+        );
+    }
+
     // Check if the user exists
     const user = await getUserUnique({user_id: user_id});
     if (!user) {
         throw new ValidationError(
             ErrorCodes.USER.NOT_FOUND,
-            `User with ID ${user_id} not found.`,
+            `User with ID: ${user_id} not found.`,
         );
     }
 
@@ -184,14 +191,14 @@ const setUserOdooCredentials = async (user_id, credentials) => {
         WHERE user_id = $1::integer
     `;
 
-    const odooTokensQuery = `
-        INSERT INTO odoo_tokens (user_id, token, salt)
+    const odooUserKeyQuery = `
+        INSERT INTO odoo_apikeys (user_id, key, salt)
         VALUES ($1::integer, $2, $3)
     `;
 
     try {
         await pool.query(userTableQuery, [user_id, odoo_user_id, partner_id]);
-        await pool.query(odooTokensQuery, [user_id, encrypted_key, salt]);
+        await pool.query(odooUserKeyQuery, [user_id, encrypted_key, salt]);
     } catch (error) {
         handleQueryError(error, 'setUserOdooCredentials');
     }
@@ -207,12 +214,12 @@ const getUserOdooCredentials = async (user_id) => {
     }
 
     const query = `
-        SELECT id as token_id, token, salt
+        SELECT id as key_id, key, salt
         FROM users
-                 JOIN odoo_tokens ON users.user_id = odoo_tokens.user_id
+                 JOIN odoo_apikeys ON users.user_id = odoo_apikeys.user_id
         WHERE users.user_id = $1::integer
           AND revoked_at IS NULL
-        ORDER BY odoo_tokens.created_at DESC
+        ORDER BY odoo_apikeys.created_at DESC
         LIMIT 1
     `;
 
@@ -230,8 +237,8 @@ const getUserOdooCredentials = async (user_id) => {
 };
 
 
-const rotateOdooUserCredentials = async (user_id, old_token_id, new_token, new_salt) => {
-    if (!user_id || !old_token_id) {
+const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_salt) => {
+    if (!user_id || !old_key_id || !new_key || !new_salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
             `Missing required parameters.`,
@@ -239,7 +246,7 @@ const rotateOdooUserCredentials = async (user_id, old_token_id, new_token, new_s
     }
 
     const query = `
-        UPDATE odoo_tokens
+        UPDATE odoo_apikeys
         SET revoked_at = NOW()
         WHERE user_id = $1::integer
           AND id = $2::integer
@@ -247,34 +254,33 @@ const rotateOdooUserCredentials = async (user_id, old_token_id, new_token, new_s
     `;
 
     const insertQuery = `
-        INSERT INTO odoo_tokens (user_id, token, salt)
+        INSERT INTO odoo_apikeys (user_id, key, salt)
         VALUES ($1::integer, $2, $3)
     `;
 
 
     try {
-        const result = await pool.query(query, [user_id, old_token_id]);
+        const result = await pool.query(query, [user_id, old_key_id]);
         if (result.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
-                `No valid token found for user ID ${user_id} and token ID ${old_token_id}.`,
+                `${user_id}'s old key is already revoked or does not exist. Cannot rotate key. Request a new one.`,
             );
         }
 
-        const insertResult = await pool.query(insertQuery, [user_id, new_token, new_salt]);
+        const insertResult = await pool.query(insertQuery, [user_id, new_key, new_salt]);
         if (insertResult.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
-                `Failed to insert new token for user ID ${user_id}.`,
+                `Failed to insert new key for user ID ${user_id}.`,
             );
         }
 
-        return true; // Token rotation successful
+        return true; // Rotation successful
     } catch (error) {
         handleQueryError(error, 'rotateOdooUserCredentials');
     }
 };
-
 
 
 module.exports = {
@@ -283,5 +289,5 @@ module.exports = {
     getUserUnique,
     setUserOdooCredentials,
     getUserOdooCredentials,
-    rotateOdooUserCredentials,
+    rotateOdooUserKey,
 };

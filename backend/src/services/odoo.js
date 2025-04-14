@@ -4,7 +4,7 @@ const {
     setUserOdooCredentials,
     getUserUnique,
     getUserOdooCredentials,
-    rotateOdooUserCredentials,
+    rotateOdooUserKey,
 } = require('../utils/queries');
 
 const {generateSignature} = require('../helpers/auth');
@@ -94,14 +94,14 @@ const getOdooPortalLogin = async (identifier) => {
 };
 
 
-const rotateOdooUserToken = async (identifier) => {
+const rotateOdooUserAuth = async (identifier) => {
     const user = await identifyUser(identifier, {requireOdooUser: true});
 
     const odoo_credentials = await getUserOdooCredentials(user.user_id);
-    const {token_id, token, salt} = odoo_credentials;
+    const {key_id, key, salt} = odoo_credentials;
     const data = {
         user_id: user.odoo_user_id,
-        api_key: token,
+        api_key: key,
         salt: salt,
     };
 
@@ -111,21 +111,21 @@ const rotateOdooUserToken = async (identifier) => {
     if (response.status === 200) {
         const data = response.data;
         const odoo_user_id = data['user_id'];
-        const new_token = data['encrypted_key'];
+        const new_key = data['encrypted_key'];
         const new_salt = data['salt'];
 
         if (odoo_user_id !== user.odoo_user_id) {
             throw new SystemError(ErrorCodes.User.ODOO_ID_MISMATCH);
         }
 
-        const db_query = rotateOdooUserCredentials(user.user_id, token_id, new_token, new_salt);
+        const db_query = rotateOdooUserKey(user.user_id, key_id, new_key, new_salt);
         if (!db_query) {
-            throw new SystemError(ErrorCodes.USER.TOKEN_ROTATION_FAILED);
+            throw new SystemError(ErrorCodes.USER.KEY_ROTATION_FAILED);
         }
         return getUserOdooCredentials(user.user_id);
     } else {
         const errorMSG = response.data['error'];
-        throw new SystemError(ErrorCodes.ODOO.TOKEN_ROTATION_FAILED, errorMSG);
+        throw new SystemError(ErrorCodes.ODOO.KEY_ROTATION_FAILED, errorMSG);
     }
 };
 
@@ -133,5 +133,5 @@ const rotateOdooUserToken = async (identifier) => {
 module.exports = {
     createOdooUser,
     getOdooPortalLogin,
-    rotateOdooUserToken,
+    rotateOdooUserAuth,
 };

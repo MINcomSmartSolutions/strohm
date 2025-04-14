@@ -9,10 +9,10 @@ const logger = require('./logger');
 const ExceptionCodes = Object.freeze({
     // Authentication errors (1000-1099)
     AUTH: Object.freeze({
-        TOKEN_MISSING: {code: 1000, status: 401, message: 'Token not found'},
-        TOKEN_EXPIRED: {code: 1001, status: 401, message: 'Expired token'},
-        TOKEN_INVALID: {code: 1002, status: 401, message: 'Invalid token'},
-        TOKEN_NOT_YET_VALID: {code: 1003, status: 401, message: 'Token is not valid yet'},
+        KEY_MISSING: {code: 1000, status: 401, message: 'Token not found'},
+        KEY_EXPIRED: {code: 1001, status: 401, message: 'Expired token'},
+        KEY_INVALID: {code: 1002, status: 401, message: 'Invalid token'},
+        KEY_NOT_YET_VALID: {code: 1003, status: 401, message: 'Token is not valid yet'},
         USER_INACTIVE: {code: 1010, status: 200, message: 'Benutzer ist nicht aktiv'},
         USER_INVALID: {code: 1011, status: 200, message: 'ungültiger Benutzer'},
         USER_DELETED: {code: 1012, status: 200, message: 'ungültiger Benutzer'},
@@ -28,6 +28,7 @@ const ExceptionCodes = Object.freeze({
         // Asked for one return, but received two, not asked for one return, but received none
         ASK_RETURN_DISCREPANCY: {code: 2004, status: 400, message: 'Ask return discrepancy'},
         MISSING_PARAMETERS: {code: 2005, status: 400, message: 'Missing parameters'},
+        INVALID_PARAMETERS: {code: 2006, status: 400, message: 'Invalid parameters'},
     }),
 
     // Database errors (3000-3099)
@@ -40,7 +41,7 @@ const ExceptionCodes = Object.freeze({
 
     // OAuth errors (4000-4099)
     OAUTH: Object.freeze({
-        TOKEN_INVALID: {code: 4000, status: 401, message: 'Invalid OAuth token'},
+        KEY_INVALID: {code: 4000, status: 401, message: 'Invalid OAuth token'},
         VERIFICATION_FAILED: {code: 4001, status: 401, message: 'OAuth verification failed'},
         SCOPE_INVALID: {code: 4002, status: 403, message: 'Invalid OAuth scope'},
         RFID_NOT_FOUND: {code: 4020, message: 'User\'s RFID is not found on returned data'},
@@ -65,7 +66,7 @@ const ExceptionCodes = Object.freeze({
         ODOO_NO_CREDENTIALS: {code: 6012, message: 'User does not have valid Odoo credentials'},
         ODOO_ID_MISMATCH: {code: 6013, message: 'User Odoo ID mismatch'},
         ODOO_EXISTS: {code: 6014, message: 'User already exists in Odoo'},
-        TOKEN_ROTATION_FAILED: {code: 6015, message: 'User token rotation failed'},
+        KEY_ROTATION_FAILED: {code: 6015, message: 'User token rotation failed'},
         RFID_NOT_FOUND: {code: 6020, message: 'User\'s RFID is not found'},
     }),
 
@@ -78,7 +79,7 @@ const ExceptionCodes = Object.freeze({
         USER_DELETE_FAILED: {code: 7004, message: 'User deletion in Odoo failed'},
         USER_NOT_AUTHORIZED: {code: 7005, message: 'User is not authorized to perform this action in Odoo'},
         USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
-        TOKEN_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
+        KEY_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
     }),
 });
 
