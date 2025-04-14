@@ -80,6 +80,7 @@ const ExceptionCodes = Object.freeze({
         USER_NOT_AUTHORIZED: {code: 7005, message: 'User is not authorized to perform this action in Odoo'},
         USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
         KEY_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
+        VERIFICATION_FAILED: {code: 7008, message: 'Odoo verification failed'},
     }),
 });
 

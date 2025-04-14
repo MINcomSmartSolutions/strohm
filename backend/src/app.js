@@ -10,7 +10,7 @@ const helmet = require('helmet');
 // const swaggerUi = require('swagger-ui-express');
 // const swaggerSpec = require('./utils/swaggerConfig');
 const {auth} = require('express-openid-connect');
-const oidc_config = require('./oidc/oidc_config');
+const oidc_config = require('./utils/oidc_config');
 const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
@@ -91,7 +91,7 @@ app.get('/logout', async (req, res) => {
         }
     });
 
-    res.oidc.logout({returnTo: '/welcome'});
+    await res.oidc.logout({returnTo: '/welcome'});
 });
 
 
