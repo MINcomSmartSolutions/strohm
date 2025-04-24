@@ -8,7 +8,7 @@ const {ValidationError, ErrorCodes} = require('../utils/errors');
  * @param {string} secret - Shared secret key
  * @returns {string} - Hexadecimal signature
  */
-function generateOdooSignature(message, secret) {
+function generateOdooHash(message, secret) {
     if (!message || typeof message !== 'string' || !message.trim() ||
         !secret || typeof secret !== 'string' || !secret.trim()) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
@@ -21,14 +21,14 @@ function generateOdooSignature(message, secret) {
 
 
 // AKA: hash
-function generateEPSSignature(state, secret) {
-    if (!state || typeof state !== 'string' || !state.trim() ||
+function generateEPSHash(message, secret) {
+    if (!message || typeof message !== 'string' || !message.trim() ||
         !secret || typeof secret !== 'string' || !secret.trim()) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
     return crypto
         .createHmac('sha256', secret)
-        .update(state)
+        .update(message)
         .digest('hex');
 }
 
@@ -44,7 +44,7 @@ function generateSalt(length = 16) {
 
 
 module.exports = {
-    generateOdooSignature,
-    generateEPSSignature,
+    generateOdooHash,
+    generateEPSHash,
     generateSalt,
 };

@@ -4,7 +4,7 @@
  * This module defines standardized error codes and messages for the application.
  * Errors are grouped by category and include codes, HTTP status codes, and messages.
  */
-const logger = require('./logger');
+const logger = require('../services/logger');
 
 const ExceptionCodes = Object.freeze({
     // Authentication errors (1000-1099)
@@ -25,7 +25,7 @@ const ExceptionCodes = Object.freeze({
         INVALID_FORMAT: {code: 2001, status: 400, message: 'Invalid data format'},
         INVALID_EMAIL: {code: 2002, status: 400, message: 'Invalid email format'},
         INVALID_PASSWORD: {code: 2003, status: 400, message: 'Invalid password format'},
-        // Asked for one return, but received two, not asked for one return, but received none
+        // Asked for one return, but received two, NOT asked for one return, but received none
         ASK_RETURN_DISCREPANCY: {code: 2004, status: 400, message: 'Ask return discrepancy'},
         MISSING_PARAMETERS: {code: 2005, status: 400, message: 'Missing parameters'},
         INVALID_PARAMETERS: {code: 2006, status: 400, message: 'Invalid parameters'},
@@ -80,7 +80,11 @@ const ExceptionCodes = Object.freeze({
         USER_NOT_AUTHORIZED: {code: 7005, message: 'User is not authorized to perform this action in Odoo'},
         USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
         KEY_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
-        VERIFICATION_FAILED: {code: 7008, message: 'Odoo verification failed'},
+        HASH_VERIFICATION_FAILED: {code: 7008, message: 'Odoo hash verification failed'},
+    }),
+
+    EPS: Object.freeze({
+        CONNECTION_ERROR: {code: 8001, status: 500, message: 'SOAP could\'nt establish connection with EPS'},
     }),
 });
 

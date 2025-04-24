@@ -1,5 +1,5 @@
-const logger = require('./logger');
-const pool = require('./db_conn');
+const logger = require('../services/logger');
+const pool = require('../services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 
 // TODO: Create a JOI scheme for validation
@@ -193,7 +193,7 @@ const setUserOdooCredentials = async (user_id, credentials) => {
 
     const odooUserKeyQuery = `
         INSERT INTO odoo_apikeys (user_id, key, salt)
-        VALUES ($1::integer, $2, $3)
+        VALUES ($1::integer, $2::varchar, $3::varchar)
     `;
 
     try {
@@ -214,7 +214,7 @@ const getUserOdooCredentials = async (user_id) => {
     }
 
     const query = `
-        SELECT id as key_id, key, salt
+        SELECT id as key_id, key, salt as key_salt
         FROM users
                  JOIN odoo_apikeys ON users.user_id = odoo_apikeys.user_id
         WHERE users.user_id = $1::integer
@@ -237,8 +237,8 @@ const getUserOdooCredentials = async (user_id) => {
 };
 
 
-const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_salt) => {
-    if (!user_id || !old_key_id || !new_key || !new_salt) {
+const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => {
+    if (!user_id || !old_key_id || !new_key || !new_key_salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
             `Missing required parameters.`,
@@ -268,7 +268,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_salt) => {
             );
         }
 
-        const insertResult = await pool.query(insertQuery, [user_id, new_key, new_salt]);
+        const insertResult = await pool.query(insertQuery, [user_id, new_key, new_key_salt]);
         if (insertResult.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
