@@ -2,17 +2,6 @@ const logger = require('../services/logger');
 const pool = require('../services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 
-// TODO: Create a JOI scheme for validation
-
-/**
- * @typedef {Object} User
- * @property {string} user_id - The user's ID
- * @property {string} name - The user's name
- * @property {string} email - The user's email
- * @property {string|null} odoo_user_id - The user's Odoo ID
- * @property {string} oauth_id - The OAuth ID
- */
-
 
 /**
  * Handles query errors.
@@ -31,33 +20,23 @@ const handleQueryError = (error, operation) => {
 };
 
 
-/**
- * Creates a new user with dynamic parameters.
- *
- * @param {Object} userData - Object containing user data fields
- * @returns {Promise<Object>} - The newly created user
- * @throws {DatabaseError} - If the database operation fails
- *
- * @example
- * createDBUser({ oauth_id: 12345, name: 'John Doe', email: 'john@example.com' })
- * createDBUser({ oauth_id: 12345, name: 'John Doe', email: 'john@example.com', created_at: DateTime.now().toISO() })
- */
-const createDBUser = async (userData) => {
-    // Start building the query dynamically
-    const fields = Object.keys(userData);
-    const placeholders = fields.map((_, index) => `$${index + 1}`);
-    const values = Object.values(userData);
+const createDBUser = async (oauth_id, name, email, rfid) => {
+    if (!oauth_id || !name || !email || !rfid) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'Missing required parameters: oauth_id, name, email or rfid.');
+    }
 
-    // Construct the SQL query
     const query = `
-        INSERT INTO users (${fields.join(', ')})
-        VALUES (${placeholders.join(', ')})
+        INSERT INTO users (oauth_id, name, email, rfid)
+        VALUES ($1, $2, $3::varchar, $4)
         RETURNING *
     `;
+    const values = [oauth_id, name, email, rfid];
 
     try {
         const result = await pool.query(query, values);
-        return result.rows[0];
+        const created_user = result.rows[0];
+        recordActivityLog(created_user.user_id, 'Create', rfid, 'DB');
+        return created_user;
     } catch (error) {
         handleQueryError(error, 'createDBUser');
     }
@@ -150,6 +129,7 @@ const getUserUnique = async (filters) => {
             return null; // No user found
         }
 
+        // Return the users details
         return users[0];
 
     } catch (error) {
@@ -158,37 +138,28 @@ const getUserUnique = async (filters) => {
 };
 
 
-const setUserOdooCredentials = async (user_id, credentials) => {
-    const {odoo_user_id, encrypted_key, salt, partner_id} = credentials;
+const setUserOdooCredentials = async (user, credentials) => {
+    const {odoo_user_id, partner_id, encrypted_key, salt} = credentials;
 
-    if (!user_id || !odoo_user_id || !partner_id || !encrypted_key || !salt) {
+    if (!user || !odoo_user_id || !partner_id || !encrypted_key || !salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
             `Missing required parameters.`,
         );
     }
 
-    if (!Number.isInteger(user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(partner_id)) {
+    if (!Number.isInteger(user.user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(partner_id)) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
             `Invalid parameters.`,
         );
     }
 
-    // Check if the user exists
-    const user = await getUserUnique({user_id: user_id});
-    if (!user) {
-        throw new ValidationError(
-            ErrorCodes.USER.NOT_FOUND,
-            `User with ID: ${user_id} not found.`,
-        );
-    }
-
     const userTableQuery = `
         UPDATE users
-        SET odoo_user_id    = $2::integer,
-            odoo_partner_id = $3::integer
-        WHERE user_id = $1::integer
+        SET odoo_user_id    = $1::integer,
+            odoo_partner_id = $2::integer
+        WHERE user_id = $3::integer
     `;
 
     const odooUserKeyQuery = `
@@ -197,8 +168,8 @@ const setUserOdooCredentials = async (user_id, credentials) => {
     `;
 
     try {
-        await pool.query(userTableQuery, [user_id, odoo_user_id, partner_id]);
-        await pool.query(odooUserKeyQuery, [user_id, encrypted_key, salt]);
+        await pool.query(userTableQuery, [odoo_user_id, partner_id, user.user_id]);
+        await pool.query(odooUserKeyQuery, [user.user_id, encrypted_key, salt]);
     } catch (error) {
         handleQueryError(error, 'setUserOdooCredentials');
     }
@@ -283,6 +254,39 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
 };
 
 
+const setSteveUserParamaters = async (user, steve_id) => {
+
+    const update_query = `
+        UPDATE users
+        SET steve_id = $1::integer
+        WHERE user_id = $2::integer
+    `;
+
+    try {
+        const result = await pool.query(update_query, [steve_id, user.user_id]);
+        if (result.rowCount === 0) {
+            throw new Error('Could not set user parameters');
+        }
+        return result.rows[0];
+    } catch (error) {
+        handleQueryError(error, 'setSteveUserParamaters');
+    }
+};
+
+
+const recordActivityLog = (user_id, event_type, target, rfid) => {
+    try {
+        const activity_log_query = `
+            INSERT INTO activity_log (user_id, event_type, target, rfid)
+            VALUES ($1, $2, $3::varchar, $4)
+        `;
+        pool.query(activity_log_query, [user_id, event_type, target, rfid]);
+    } catch (error) {
+        handleQueryError(error, 'recordActivityLog');
+    }
+};
+
+
 module.exports = {
     createDBUser,
     getUsers,
@@ -290,4 +294,6 @@ module.exports = {
     setUserOdooCredentials,
     getUserOdooCredentials,
     rotateOdooUserKey,
+    setSteveUserParamaters,
+    recordActivityLog,
 };

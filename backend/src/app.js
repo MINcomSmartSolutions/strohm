@@ -2,6 +2,7 @@
  * Express app instance.
  * @module app
  */
+
 const express = require('express');
 const app = express();
 // const cors = require('cors');
@@ -16,7 +17,9 @@ const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
 const session = require('express-session');
 const verifyApiKey = require('./middlewares/auth');
-const logger = require('./utils/logger');
+const logger = require('./services/logger');
+
+
 
 // Session configuration
 app.use(session({
@@ -56,8 +59,6 @@ app.get('/health', (req, res) => {
 
 app.get('/', async (req, res) => {
     try {
-        // console.log('Session user before login:', req.session.user);
-        // console.log('OIDC session', req.oidc.user);
         if (req.oidc.isAuthenticated()) {
             if (req.session.user) {
                 // User exists in session, redirect to Odoo portal
@@ -71,6 +72,13 @@ app.get('/', async (req, res) => {
         appErrorHandler(error, res);
     }
 });
+
+app.get('/env_test', async (req, res) => {
+    console.log('Started');
+
+    return res.send('ok');
+});
+
 
 app.get('/welcome', async (req, res) => {
     try {

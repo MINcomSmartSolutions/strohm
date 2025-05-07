@@ -1,32 +1,29 @@
 const {ValidationError, ErrorCodes, SystemError} = require('../utils/errors');
-const axios = require('axios');
 const {
     setUserOdooCredentials,
-    getUserUnique,
     getUserOdooCredentials,
     rotateOdooUserKey,
 } = require('../utils/queries');
 
 const {generateOdooHash, generateSalt} = require('../helpers/auth');
 const {identifyUser} = require('../helpers/user');
-const {getHeaders} = require('./network');
+const {odooAxios} = require('./network');
 const {DateTime} = require('luxon');
 const {datetimeEPSFormat} = require('../utils/datetime_format');
 
 
-const createOdooUser = async (identifier) => {
-    const user = await identifyUser(identifier);
-
+const createOdooUser = async (user) => {
     if (user.odoo_user_id !== null) {
         throw new ValidationError(ErrorCodes.USER.ODOO_EXISTS);
     }
 
-    const url = process.env.ODOO_HOST + '/internal/user/create';
+    const user_creation_uri = '/internal/user/create';
     const data = {
         name: user.name,
         email: user.email,
     };
-    const response = await axios.post(url, data, {headers: getHeaders()});
+
+    const response = await odooAxios.post(user_creation_uri, data);
     if (response.status === 201) {
         const data = response.data;
         const timestamp = data['timestamp'];
@@ -47,14 +44,13 @@ const createOdooUser = async (identifier) => {
             throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED, 'Hash verification failed');
         }
 
-        await setUserOdooCredentials(user.user_id, {
+        await setUserOdooCredentials(user, {
             odoo_user_id: odoo_user_id,
             partner_id: odoo_partner_id,
             encrypted_key: encrypted_key,
             salt: key_salt,
         });
 
-        return getUserUnique({user_id: user.user_id});
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {
@@ -82,7 +78,7 @@ const getOdooPortalLogin = async (identifier) => {
     let timestamp = DateTime.utc().toFormat(datetimeEPSFormat);
 
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
-    const hash = generateOdooHash(
+    const _hash = generateOdooHash(
         message,
         process.env.ODOO_API_SECRET,
     );
@@ -91,7 +87,7 @@ const getOdooPortalLogin = async (identifier) => {
     loginUrl.searchParams.append('key', key);
     loginUrl.searchParams.append('key_salt', key_salt);
     loginUrl.searchParams.append('salt', _salt);
-    loginUrl.searchParams.append('hash', hash);
+    loginUrl.searchParams.append('hash', _hash);
 
     return loginUrl.toString();
 };
@@ -116,10 +112,8 @@ const rotateOdooUserAuth = async (identifier) => {
     );
 
 
-
-    const url = new URL(process.env.ODOO_HOST + '/internal/rotate_api_key');
-
-    const response = await axios.post(url.toString(), data, {headers: getHeaders()});
+    const url = '/internal/rotate_api_key';
+    const response = await odooAxios.post(url, data);
     if (response.status === 200) {
         const data = response.data;
         const timestamp = data['timestamp'];

@@ -1,38 +1,49 @@
 const {createOdooUser} = require('./odoo');
 const {getUserUnique, createDBUser} = require('../utils/queries');
+const {createSteveUser} = require('./steve');
 
 /**
- * @typedef {Object} user
+ * @typedef {Object} User
  * @property {string} user_id - The user's ID
  * @property {string} name - The user's name
  * @property {string} email - The user's email
  * @property {string|null} odoo_user_id - The user's Odoo ID
- * @property {string} oauth_id - The Subject Identifier
+ * @property {string} oauth_id - The OAuth ID
+ * @property {string} rfid - The user's RFID
+ * @property {string} steve_id - The user's OCPP tag primary key in SteVe
  */
 
 
 const userOperations = async (oidc_user) => {
-    const user = await getUserUnique({oauth_id: oidc_user.sub});
+    let user = await getUserUnique({oauth_id: oidc_user.sub});
 
     if (!user) {
-        const createdUser = await createDBUser({
-            oauth_id: oidc_user.sub,
-            name: oidc_user.name,
-            email: oidc_user.email,
-            // rfid: oidc_user.rfid,
-        });
+        // Use random RFID for development
+        const rfid = Math.random().toString(36).substring(2, 10);
+        // const rfid = oidc_user.rfid,
 
-        return await createOdooUser(await createdUser.user_id);
+        const createdUser = await createDBUser(
+            oidc_user.sub,
+            oidc_user.name,
+            oidc_user.email,
+            rfid,
+        );
+
+        await createOdooUser(createdUser);
+        // await createSteveUser(user);
+        user = await getUserUnique({user_id: createdUser.user_id});
     } else if (user && !user.odoo_user_id) {
         // User exists but doesn't have an Odoo ID
-        return await createOdooUser(user.user_id);
-    } else {
-        // User already exists and has an Odoo ID
-        return user;
+        await createOdooUser(user);
+        user = await getUserUnique({user_id: user.user_id});
+    } else if (user && user.odoo_user_id && !user.steve_id) {
+        // await createSteveUser(user);
+        user = await getUserUnique({user_id: user.user_id});
     }
 
+    // User already exists and has proper parameters
+    return user;
 
-    // return true;
 
     // TODO: Check valid payment method
     // TODO: Check for fraud

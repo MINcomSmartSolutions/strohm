@@ -36,7 +36,7 @@ function generateEPSHash(message, secret) {
 /**
  * Generate a cryptographically secure random salt
  * @param {number} length - Length of the salt in bytes (default: 16)
- * @returns {string} - Hexadecimal salt string
+ * @returns {string} - salt string
  */
 function generateSalt(length = 16) {
     return crypto.randomBytes(length).toString('base64url');

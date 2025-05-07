@@ -1,3 +1,4 @@
+require('dotenv').config();
 /**
  * Starts the server and listens on the specified port.
  * @function

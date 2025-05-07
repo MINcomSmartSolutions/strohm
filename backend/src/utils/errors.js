@@ -25,10 +25,11 @@ const ExceptionCodes = Object.freeze({
         INVALID_FORMAT: {code: 2001, status: 400, message: 'Invalid data format'},
         INVALID_EMAIL: {code: 2002, status: 400, message: 'Invalid email format'},
         INVALID_PASSWORD: {code: 2003, status: 400, message: 'Invalid password format'},
-        // Asked for one return, but received two, NOT asked for one return, but received none
+        //PS: Asked for one return, but received two, NOT asked for one return, but received none
         ASK_RETURN_DISCREPANCY: {code: 2004, status: 400, message: 'Ask return discrepancy'},
-        MISSING_PARAMETERS: {code: 2005, status: 400, message: 'Missing parameters'},
-        INVALID_PARAMETERS: {code: 2006, status: 400, message: 'Invalid parameters'},
+        GIVEN_RETURN_DISCREPANCY: {code: 2005, status: 400, message: 'Given return discrepancy'},
+        MISSING_PARAMETERS: {code: 2006, status: 400, message: 'Missing parameters'},
+        INVALID_PARAMETERS: {code: 2007, status: 400, message: 'Invalid parameters'},
     }),
 
     // Database errors (3000-3099)
