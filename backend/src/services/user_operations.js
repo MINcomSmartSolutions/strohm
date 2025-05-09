@@ -1,6 +1,6 @@
 const {createOdooUser} = require('./odoo');
 const {getUserUnique, createDBUser} = require('../utils/queries');
-const {createSteveUser} = require('./steve');
+const {createSteveUser} = require('./steve_user');
 
 /**
  * @typedef {Object} User

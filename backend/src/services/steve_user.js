@@ -1,6 +1,6 @@
-const {ValidationError, ErrorCodes} = require('../utils/errors');
+const {ValidationError, ErrorCodes, appErrorHandler} = require('../utils/errors');
 const {steveAxios} = require('./network');
-const {validateSteveUserCreationResponse} = require('../utils/steve');
+const {validateSteveUser} = require('../utils/steve');
 const logger = require('./logger');
 const {setSteveUserParamaters, recordActivityLog} = require('../utils/queries');
 const {STEVE_CONFIG} = require('../config');
@@ -29,7 +29,7 @@ const createSteveUser = async (user, blocked = true) => {
     }
 
     // Validate the response, ensuring it contains the expected fields and values. Any discrepancies will throw an error.
-    validateSteveUserCreationResponse(create_response.data, user.rfid);
+    validateSteveUser(create_response.data, user.rfid);
 
     // Set steve_id in the database
     await setSteveUserParamaters(user, create_response.data.ocppTagPk);
@@ -61,6 +61,11 @@ const getSteveUser = async (user_rfid) => {
     if (response.data.length === 0) {
         return null; // User not found
     }
+    if (response.data.length > 1) {
+        throw new Error('Multiple users found with the same RFID, which should be impossible');
+    }
+
+    validateSteveUser(response.data[0], user_rfid);
 
     return response.data;
 };

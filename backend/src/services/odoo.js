@@ -8,7 +8,7 @@ const {
 const {generateOdooHash, generateSalt} = require('../helpers/auth');
 const {odooAxios} = require('./network');
 const {DateTime} = require('luxon');
-const {datetimeEPSFormat} = require('../utils/datetime_format');
+const {ISO_EPS_NO_ZONE} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
 
 
@@ -77,7 +77,7 @@ const getOdooPortalLogin = async (user) => {
     // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials
     const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.HOST);
 
-    let timestamp = DateTime.utc().toFormat(datetimeEPSFormat);
+    let timestamp = DateTime.utc().toFormat(ISO_EPS_NO_ZONE);
 
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
     const _hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
@@ -100,7 +100,7 @@ const rotateOdooUserAuth = async (user) => {
     const odoo_credentials = await getUserOdooCredentials(user.user_id);
     const {key_id, key, key_salt} = odoo_credentials;
     let data = {
-        timestamp: DateTime.utc().toFormat(datetimeEPSFormat),
+        timestamp: DateTime.utc().toFormat(ISO_EPS_NO_ZONE),
         user_id: user.odoo_user_id,
         key: key,
         key_salt: key_salt,
