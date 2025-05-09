@@ -18,7 +18,7 @@ const createSteveUser = async (user, blocked = true) => {
         throw new ValidationError(ErrorCodes.STEVE.USER_EXISTS);
     }
 
-    const create_response = await steveAxios.post(STEVE_CONFIG.OCPP_TAGS_URL, {
+    const create_response = await steveAxios.post(STEVE_CONFIG.OCPP_TAGS_URI, {
         idTag: user.rfid,
         maxActiveTransactionCount: blocked ? 0 : 1,
         note: 'User created by API by MINcom Smart Solutions GmbH',
@@ -49,7 +49,7 @@ const getSteveUser = async (user_rfid) => {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
 
-    const response = await steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URL, {
+    const response = await steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
         params: {
             idTag: user_rfid,
         },
@@ -71,7 +71,7 @@ const blockSteveUser = async (user) => {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
 
-    const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URL + `/${user.steve_id}`, {
+    const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
         maxActiveTransactionCount: 0,
         // Maybe also add a note of the reason for blocking
@@ -93,7 +93,7 @@ const unblockSteveUser = async (user) => {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
 
-    const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URL + `/${user.steve_id}`, {
+    const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
         maxActiveTransactionCount: 1,
         // Maybe also add a note of the reason for blocking

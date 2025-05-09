@@ -30,20 +30,18 @@ const userOperations = async (oidc_user) => {
         );
 
         await createOdooUser(createdUser);
-        // await createSteveUser(user);
+        await createSteveUser(createdUser);
         user = await getUserUnique({user_id: createdUser.user_id});
     } else if (user && !user.odoo_user_id) {
         // User exists but doesn't have an Odoo ID
         await createOdooUser(user);
         user = await getUserUnique({user_id: user.user_id});
     } else if (user && user.odoo_user_id && !user.steve_id) {
-        // await createSteveUser(user);
+        await createSteveUser(user);
         user = await getUserUnique({user_id: user.user_id});
     }
 
-    // User already exists and has proper parameters
     return user;
-
 
     // TODO: Check valid payment method
     // TODO: Check for fraud

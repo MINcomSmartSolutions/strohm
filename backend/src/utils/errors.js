@@ -85,7 +85,11 @@ const ExceptionCodes = Object.freeze({
     }),
 
     EPS: Object.freeze({
-        CONNECTION_ERROR: {code: 8001, status: 500, message: 'SOAP could\'nt establish connection with EPS'},
+        CONNECTION_ERROR: {code: 8001, status: 500, message: 'SOAP could not establish connection with EPS'},
+    }),
+
+    STEVE: Object.freeze({
+        USER_EXISTS: {code: 9000, status: 500, message: 'User already exists in Steve'},
     }),
 });
 

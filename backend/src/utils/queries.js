@@ -218,7 +218,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
 
     const query = `
         UPDATE odoo_apikeys
-        SET revoked_at = NOW()
+        SET revoked_at = current_timestamp
         WHERE user_id = $1::integer
           AND id = $2::integer
           AND revoked_at IS NULL
@@ -255,7 +255,6 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
 
 
 const setSteveUserParamaters = async (user, steve_id) => {
-
     const update_query = `
         UPDATE users
         SET steve_id = $1::integer

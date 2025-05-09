@@ -1,6 +1,6 @@
 const axios = require('axios');
-const {response} = require('express');
 const {userOperations} = require('../services/user_operations');
+const logger = require('../services/logger');
 
 const oidc_config = {
     authRequired: false,
@@ -26,13 +26,13 @@ const oidc_config = {
             },
         }).then(response => response.data)
             .catch(error => {
-                console.error('Error fetching user info:', error.message);
+                logger.error('Error fetching user info:', error.message);
                 return {};
             });
 
         req.session.user = await userOperations(userInfo);
         req.session.save(() => {
-            console.log('Session saved');
+            logger.info('Session saved');
         });
 
         return {

@@ -1,12 +1,16 @@
 STEVE_CONFIG = {
-    OCPP_TAGS_URL: '/api/v1/ocppTags',
-    TRANSACTIONS_URL: '/api/v1/transactions',
+    HOST: process.env.STEVE_BASE_URL,
+    OCPP_TAGS_URI: '/api/v1/ocppTags',
+    TRANSACTIONS_URI: '/api/v1/transactions',
 };
 
 //FIXME
 ODOO_CONFIG = {
-    ODOO_HOST: process.env.ODOO_HOST,
-    ODOO_ADMIN_API_KEY: process.env.ODOO_ADMIN_API_KEY,
+    HOST: process.env.ODOO_HOST,
+    API_SECRET: process.env.ODOO_API_SECRET,
+    USER_CREATION_URI: '/internal/user/create',
+    PORTAL_LOGIN_URI: '/portal_login',
+    ROTATE_APIKEY_URI: '/internal/rotate_api_key',
 };
 
 module.exports = {

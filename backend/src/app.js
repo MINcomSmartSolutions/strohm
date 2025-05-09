@@ -62,7 +62,7 @@ app.get('/', async (req, res) => {
         if (req.oidc.isAuthenticated()) {
             if (req.session.user) {
                 // User exists in session, redirect to Odoo portal
-                const redirect_url = await getOdooPortalLogin(req.session.user.user_id);
+                const redirect_url = await getOdooPortalLogin(req.session.user);
                 return res.redirect(redirect_url);
             }
         }
@@ -72,13 +72,6 @@ app.get('/', async (req, res) => {
         appErrorHandler(error, res);
     }
 });
-
-app.get('/env_test', async (req, res) => {
-    console.log('Started');
-
-    return res.send('ok');
-});
-
 
 app.get('/welcome', async (req, res) => {
     try {

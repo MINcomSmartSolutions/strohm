@@ -1,10 +1,10 @@
 const axios = require('axios');
 const logger = require('./logger');
-const {steve_config} = require('../config');
+const {STEVE_CONFIG, ODOO_CONFIG} = require('../config');
 
 
 const odooAxios = axios.create({
-    baseURL: process.env.ODOO_HOST,
+    baseURL: ODOO_CONFIG.HOST,
     headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.ODOO_ADMIN_API_KEY}`,
@@ -12,7 +12,7 @@ const odooAxios = axios.create({
 });
 
 const steveAxios = axios.create({
-    baseURL: process.env.STEVE_BASE_URL,
+    baseURL: STEVE_CONFIG.HOST,
     auth: {
         username: process.env.STEVE_AUTH_USERNAME,
         password: process.env.STEVE_API_PASSWORD,
@@ -23,21 +23,36 @@ const steveAxios = axios.create({
 });
 
 // Test the connection to Steve
-steveAxios.get(steve_config.OCPP_TAGS_URL, {
+steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
     params: {
         idTag: 'NETWORK_TEST',
     },
 })
     .then(response => {
         if (response.status !== 200) {
-            logger.error('Error connecting to SteVe:', response.statusText);
+            logger.error('Error connecting to SteVe:', response.data);
             throw new Error('Failed to connect to SteVe');
         } else {
-            logger.info('Connected to SteVe successfully');
+            logger.info('Steve connection successful:');
         }
     })
     .catch(error => {
-        console.error('Error connecting to SteVe:', error.message);
+        logger.error('Error connecting to SteVe:', error.message);
+    });
+
+// Test the connection to Odoo
+// FIXME: Create a test endpoint in Odoo to check the connection. This check is merely to see if the server is reachable.
+odooAxios.get('/')
+    .then(response => {
+        if (response.status !== 200) {
+            logger.error('Error connecting to Odoo:', response.data);
+            throw new Error('Failed to connect to Odoo');
+        } else {
+            logger.info('Odoo connection successful:');
+        }
+    })
+    .catch(error => {
+        logger.error('Error connecting to Odoo:', error.message);
     });
 
 
