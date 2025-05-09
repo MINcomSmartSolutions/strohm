@@ -24,7 +24,7 @@ const fullyQualifiedUserSchema = Joi.object({
     steve_id: Joi.number().required(),
 });
 
-const steveResponseSchema = Joi.object({
+const steveUserSchema = Joi.object({
     //PK of the OCPP tag
     ocppTagPk: Joi.number().positive().required(),
     //The OCPP tag (for example, RFID)
@@ -49,4 +49,5 @@ module.exports = {
     userSchema,
     fullyQualifiedUserSchema,
     steveResponseSchema,
+    steveUserSchema,
 };

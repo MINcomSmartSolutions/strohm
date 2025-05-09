@@ -1,9 +1,9 @@
 const {ValidationError, ErrorCodes} = require('./errors');
-const {steveResponseSchema} = require('./joi');
+const {steveUserSchema} = require('./joi');
 
-const validateSteveUserCreationResponse = (response_data, userRfid) => {
+const validateSteveUser = (response_data, userRfid) => {
     // Validate response structure using Joi
-    const {error} = steveResponseSchema.validate(response_data);
+    const {error} = steveUserSchema.validate(response_data);
 
     if (error) {
         const errorMessage = error.details[0].message;
@@ -28,5 +28,5 @@ const validateSteveUserCreationResponse = (response_data, userRfid) => {
 };
 
 module.exports = {
-    validateSteveUserCreationResponse,
+    validateSteveUser,
 };

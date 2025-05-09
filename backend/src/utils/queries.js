@@ -32,16 +32,21 @@ const createDBUser = async (oauth_id, name, email, rfid) => {
     `;
     const values = [oauth_id, name, email, rfid];
 
+    const client = await pool.connect();
     try {
-        const result = await pool.query(query, values);
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
         const created_user = result.rows[0];
-        recordActivityLog(created_user.user_id, 'Create', rfid, 'DB');
+        recordActivityLog(created_user.user_id, 'Create', 'DB', rfid);
+        await client.query('COMMIT');
         return created_user;
     } catch (error) {
+        await client.query('ROLLBACK');
         handleQueryError(error, 'createDBUser');
+    } finally {
+        client.release();
     }
 };
-
 
 /**
  * Gets users based on dynamic filter parameters.
@@ -56,53 +61,59 @@ const createDBUser = async (oauth_id, name, email, rfid) => {
  * getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users ordered by creation date descending
  */
 const getUsers = async (filters = {}, options = {}) => {
+
+    // Start building the query
+    let query = 'SELECT * FROM users';
+    const values = [];
+    let paramIndex = 1;
+
+    // Add WHERE clauses for each filter
+    if (Object.keys(filters).length > 0) {
+        const whereClauses = [];
+
+        for (const [field, value] of Object.entries(filters)) {
+            if (value === null) {
+                whereClauses.push(`${field} IS NULL`);
+            } else {
+                whereClauses.push(`${field} = $${paramIndex}`);
+                values.push(value);
+                paramIndex++;
+            }
+        }
+
+        if (whereClauses.length > 0) {
+            query += ` WHERE ${whereClauses.join(' AND ')}`;
+        }
+    }
+
+    // Add ORDER BY, LIMIT, OFFSET if provided in options
+    if (options.orderBy) {
+        const direction = options.orderDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        query += ` ORDER BY ${options.orderBy} ${direction}`;
+    }
+
+    if (options.limit) {
+        query += ` LIMIT $${paramIndex}`;
+        values.push(options.limit);
+        paramIndex++;
+    }
+
+    if (options.offset) {
+        query += ` OFFSET $${paramIndex}`;
+        values.push(options.offset);
+        paramIndex++;
+    }
+    const client = await pool.connect();
     try {
-        // Start building the query
-        let query = 'SELECT * FROM users';
-        const values = [];
-        let paramIndex = 1;
-
-        // Add WHERE clauses for each filter
-        if (Object.keys(filters).length > 0) {
-            const whereClauses = [];
-
-            for (const [field, value] of Object.entries(filters)) {
-                if (value === null) {
-                    whereClauses.push(`${field} IS NULL`);
-                } else {
-                    whereClauses.push(`${field} = $${paramIndex}`);
-                    values.push(value);
-                    paramIndex++;
-                }
-            }
-
-            if (whereClauses.length > 0) {
-                query += ` WHERE ${whereClauses.join(' AND ')}`;
-            }
-        }
-
-        // Add ORDER BY, LIMIT, OFFSET if provided in options
-        if (options.orderBy) {
-            const direction = options.orderDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-            query += ` ORDER BY ${options.orderBy} ${direction}`;
-        }
-
-        if (options.limit) {
-            query += ` LIMIT $${paramIndex}`;
-            values.push(options.limit);
-            paramIndex++;
-        }
-
-        if (options.offset) {
-            query += ` OFFSET $${paramIndex}`;
-            values.push(options.offset);
-            paramIndex++;
-        }
-
-        const result = await pool.query(query, values);
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
         return result.rows;
     } catch (error) {
+        await client.query('ROLLBACK');
         handleQueryError(error, 'getUsers');
+    } finally {
+        client.release();
     }
 };
 
@@ -131,7 +142,6 @@ const getUserUnique = async (filters) => {
 
         // Return the users details
         return users[0];
-
     } catch (error) {
         handleQueryError(error, 'getUserUnique');
     }
@@ -167,11 +177,17 @@ const setUserOdooCredentials = async (user, credentials) => {
         VALUES ($1::integer, $2::varchar, $3::varchar)
     `;
 
+    const client = await pool.connect();
     try {
-        await pool.query(userTableQuery, [odoo_user_id, partner_id, user.user_id]);
-        await pool.query(odooUserKeyQuery, [user.user_id, encrypted_key, salt]);
+        await client.query('BEGIN');
+        await client.query(userTableQuery, [odoo_user_id, partner_id, user.user_id]);
+        await client.query(odooUserKeyQuery, [user.user_id, encrypted_key, salt]);
+        await client.query('COMMIT');
     } catch (error) {
+        await client.query('ROLLBACK');
         handleQueryError(error, 'setUserOdooCredentials');
+    } finally {
+        client.release();
     }
 };
 
@@ -229,9 +245,11 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
         VALUES ($1::integer, $2, $3)
     `;
 
-
+    const client = await pool.connect();
     try {
-        const result = await pool.query(query, [user_id, old_key_id]);
+        await client.query('BEGIN');
+
+        const result = await client.query(query, [user_id, old_key_id]);
         if (result.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
@@ -239,7 +257,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
             );
         }
 
-        const insertResult = await pool.query(insertQuery, [user_id, new_key, new_key_salt]);
+        const insertResult = await client.query(insertQuery, [user_id, new_key, new_key_salt]);
         if (insertResult.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
@@ -247,9 +265,13 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
             );
         }
 
+        await client.query('COMMIT');
         return true; // Rotation successful
     } catch (error) {
-        handleQueryError(error, 'rotateOdooUserCredentials');
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'rotateOdooUserKey');
+    } finally {
+        client.release();
     }
 };
 
@@ -261,14 +283,20 @@ const setSteveUserParamaters = async (user, steve_id) => {
         WHERE user_id = $2::integer
     `;
 
+    const client = await pool.connect();
     try {
-        const result = await pool.query(update_query, [steve_id, user.user_id]);
+        await client.query('BEGIN');
+        const result = await client.query(update_query, [steve_id, user.user_id]);
         if (result.rowCount === 0) {
             throw new Error('Could not set user parameters');
         }
+        await client.query('COMMIT');
         return result.rows[0];
     } catch (error) {
+        await client.query('ROLLBACK');
         handleQueryError(error, 'setSteveUserParamaters');
+    } finally {
+        client.release();
     }
 };
 
@@ -284,6 +312,51 @@ const recordActivityLog = (user_id, event_type, target, rfid) => {
         handleQueryError(error, 'recordActivityLog');
     }
 };
+
+/**
+ * Upsert a transaction record into the `transactions` table.
+ * Inserts a new row or updates stopTimestamp, stopValue, and stopReason on conflict.
+ * @param {Object} tx
+ * @param {number} tx.id
+ * @param {string} tx.ocppIdTag
+ * @param {string} tx.startTimestamp  ISO datetime string
+ * @param {string} tx.stopTimestamp   ISO datetime string
+ * @param {string|number} tx.startValue
+ * @param {string|number} tx.stopValue
+ * @param {string} tx.stopReason
+ */
+async function upsertTransaction(tx) {
+    const text = `
+        INSERT INTO charging_transactions (id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
+                                           stop_reason)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO UPDATE SET stop_timestamp = EXCLUDED.stop_timestamp,
+                                       stop_value     = EXCLUDED.stop_value,
+                                       stop_reason    = EXCLUDED.stop_reason;
+    `;
+    const values = [
+        tx.id,
+        tx.ocppIdTag,
+        tx.startTimestamp,
+        tx.stopTimestamp,
+        tx.startValue,
+        tx.stopValue,
+        tx.stopReason,
+    ];
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query(text, values);
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('upsertTransaction error:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
 
 
 module.exports = {
