@@ -2,7 +2,7 @@ const {ValidationError, ErrorCodes, appErrorHandler} = require('../utils/errors'
 const {steveAxios} = require('./network');
 const {validateSteveUser} = require('../utils/steve');
 const logger = require('./logger');
-const {setSteveUserParamaters, recordActivityLog} = require('../utils/queries');
+const {db} = require('../utils/queries');
 const {STEVE_CONFIG} = require('../config');
 
 const createSteveUser = async (user, blocked = true) => {
@@ -32,7 +32,7 @@ const createSteveUser = async (user, blocked = true) => {
     validateSteveUser(create_response.data, user.rfid);
 
     // Set steve_id in the database
-    await setSteveUserParamaters(user, create_response.data.ocppTagPk);
+    await db.setSteveUserParamaters(user, create_response.data.ocppTagPk);
 
     // Check if the user is returned when queried
     const create_check_query = await getSteveUser(user.rfid);
@@ -90,7 +90,7 @@ const blockSteveUser = async (user) => {
         throw new Error('User could not be blocked in SteVe');
     }
 
-    recordActivityLog(user.user_id, 'Block', 'SteVe', user.rfid);
+    db.recordActivityLog(user.user_id, 'Block', 'SteVe', user.rfid);
 };
 
 const unblockSteveUser = async (user) => {
@@ -111,7 +111,7 @@ const unblockSteveUser = async (user) => {
         throw new Error('User could not be unblocked in SteVe');
     }
 
-    recordActivityLog(user.user_id, 'Unblock', 'SteVe', user.rfid);
+    db.recordActivityLog(user.user_id, 'Unblock', 'SteVe', user.rfid);
 };
 
 

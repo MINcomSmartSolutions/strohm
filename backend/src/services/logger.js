@@ -3,12 +3,9 @@
  * @type {winston}
  */
 const winston = require('winston');
-// const fs = require('fs');
-//
-// if (!fs.existsSync('./logs')) {
-// 	fs.mkdirSync('./logs');
-// }
-// Create a logger instance
+
+
+//TODO: Add the file/function where the logger is used
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
     format: winston.format.combine(

@@ -169,7 +169,10 @@ CREATE TABLE public.charging_transactions
     ocpp_id_tag         character varying,
     chargebox_pk        integer,
     connector_id        integer,
-    stop_event_actor    character varying
+    stop_event_actor character varying,
+    invoice_ref      integer,
+    steve_id         integer NOT NULL,
+    CONSTRAINT always_positive CHECK ((delivered_energy_wh >= 0.0))
 );
 
 
@@ -269,10 +272,10 @@ ALTER SEQUENCE public.charging_events_id_seq OWNED BY public.charging_transactio
 
 
 --
--- Name: exchange_prices; Type: TABLE; Schema: public; Owner: strohm_admin
+-- Name: electricity_prices; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
-CREATE TABLE public.exchange_prices
+CREATE TABLE public.electricity_prices
 (
     id         integer          NOT NULL,
     price      double precision NOT NULL,
@@ -281,7 +284,7 @@ CREATE TABLE public.exchange_prices
 );
 
 
-ALTER TABLE public.exchange_prices
+ALTER TABLE public.electricity_prices
     OWNER TO strohm_admin;
 
 --
@@ -303,7 +306,7 @@ ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNER TO strohm_admin;
 -- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
 --
 
-ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNED BY public.exchange_prices.id;
+ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNED BY public.electricity_prices.id;
 
 
 --
@@ -493,6 +496,44 @@ ALTER SEQUENCE public.users_user_id_seq OWNED BY public.users.user_id;
 
 
 --
+-- Name: watermark; Type: TABLE; Schema: public; Owner: strohm_admin
+--
+
+CREATE TABLE public.watermark
+(
+    last_stop_timestamp timestamp without time zone,
+    created_at          timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    id                  integer                                               NOT NULL,
+    iterated_at         timestamp without time zone
+);
+
+
+ALTER TABLE public.watermark
+    OWNER TO strohm_admin;
+
+--
+-- Name: watermark_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
+--
+
+CREATE SEQUENCE public.watermark_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.watermark_id_seq OWNER TO strohm_admin;
+
+--
+-- Name: watermark_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
+--
+
+ALTER SEQUENCE public.watermark_id_seq OWNED BY public.watermark.id;
+
+
+--
 -- Name: access_logs id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
@@ -517,10 +558,10 @@ ALTER TABLE ONLY public.charging_transactions
 
 
 --
--- Name: exchange_prices id; Type: DEFAULT; Schema: public; Owner: strohm_admin
+-- Name: electricity_prices id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
-ALTER TABLE ONLY public.exchange_prices
+ALTER TABLE ONLY public.electricity_prices
     ALTER COLUMN id SET DEFAULT nextval('public.exchange_prices_exchange_id_seq'::regclass);
 
 
@@ -549,113 +590,11 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Data for Name: access_logs; Type: TABLE DATA; Schema: public; Owner: strohm_admin
+-- Name: watermark id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
-COPY public.access_logs (id, user_id, ip, method, path, status_code, returned_success, response_time,
-                         created_at) FROM stdin;
-\.
-
-
---
--- Data for Name: activity_log; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.activity_log (id, user_id, datetime, reason, event_type, rfid, target) FROM stdin;
-\.
-
-
---
--- Data for Name: charging_transactions; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.charging_transactions (id, created_at, start_timestamp, stop_timestamp, stop_reason, start_value,
-                                   stop_value, ocpp_id_tag, chargebox_pk, connector_id, stop_event_actor) FROM stdin;
-\.
-
-
---
--- Data for Name: exchange_prices; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.exchange_prices (id, price, "timestamp", created_at) FROM stdin;
-\.
-
-
---
--- Data for Name: odoo_apikeys; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.odoo_apikeys (id, created_at, key, user_id, revoked_at, salt) FROM stdin;
-29	2025-05-09 21:14:37.876373	Z0FBQUFBQm9IbkE5VnNhZW9UZDNRZWhCRkFJUlcwdlNFWmRQcnZYdFpHekh2dU9pRXhXR1BHVGowVGhINmxpTmx2cFdjZ2ZPcTVzd1k4czE3ek5oMUxpVUl4SzkzZDVtVVhyUEhCYjhZNUh4WDZWZWZkRmxiZ0lPM1Y1czhRMzdsUlNnaWtzTTVIV3Q=	37	\N	f5HIdfImBtq-gJM8nhkSSw==
-\.
-
-
---
--- Data for Name: sessions; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.sessions (user_id, id, odoo_session_id, created_at) FROM stdin;
-\.
-
-
---
--- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: strohm_admin
---
-
-COPY public.users (user_id, first_name, email, rfid, active, created_at, updated_at, deleted_at, odoo_user_id,
-                   last_name, lastlogin_at, oauth_id, postal_code, address, odoo_partner_id, name, steve_id) FROM stdin;
-37	\N	tester@tester2.com	qqb4inm8	t	2025-05-09 21:14:37.605976	2025-05-09 21:14:37.605976	\N	14	\N	2025-05-09 21:14:37.605976	auth0|67befe96d90a2ff1ed988d0a	\N	\N	8	tester@tester2.com	5
-\.
-
-
---
--- Name: access_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.access_logs_id_seq', 1, false);
-
-
---
--- Name: charging_events_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.charging_events_id_seq', 1, false);
-
-
---
--- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.exchange_prices_exchange_id_seq', 1, false);
-
-
---
--- Name: odoo_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.odoo_tokens_id_seq', 29, true);
-
-
---
--- Name: sessions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.sessions_id_seq', 1, false);
-
-
---
--- Name: user_activity_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.user_activity_id_seq', 7, true);
-
-
---
--- Name: users_user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: strohm_admin
---
-
-SELECT pg_catalog.setval('public.users_user_id_seq', 37, true);
+ALTER TABLE ONLY public.watermark
+    ALTER COLUMN id SET DEFAULT nextval('public.watermark_id_seq'::regclass);
 
 
 --
@@ -675,6 +614,14 @@ ALTER TABLE ONLY public.activity_log
 
 
 --
+-- Name: charging_transactions charging_transactions_pk; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.charging_transactions
+    ADD CONSTRAINT charging_transactions_pk UNIQUE (steve_id);
+
+
+--
 -- Name: charging_transactions charging_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
@@ -683,10 +630,10 @@ ALTER TABLE ONLY public.charging_transactions
 
 
 --
--- Name: exchange_prices exchange_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+-- Name: electricity_prices exchange_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
-ALTER TABLE ONLY public.exchange_prices
+ALTER TABLE ONLY public.electricity_prices
     ADD CONSTRAINT exchange_prices_pkey PRIMARY KEY (id);
 
 
@@ -712,6 +659,22 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_rfid_key UNIQUE (rfid);
+
+
+--
+-- Name: watermark watermark_pk; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.watermark
+    ADD CONSTRAINT watermark_pk PRIMARY KEY (id);
+
+
+--
+-- Name: watermark watermark_pk_timestamp; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.watermark
+    ADD CONSTRAINT watermark_pk_timestamp UNIQUE (last_stop_timestamp);
 
 
 --

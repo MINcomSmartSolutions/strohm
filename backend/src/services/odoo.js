@@ -1,9 +1,5 @@
 const {ValidationError, ErrorCodes, SystemError} = require('../utils/errors');
-const {
-    setUserOdooCredentials,
-    getUserOdooCredentials,
-    rotateOdooUserKey,
-} = require('../utils/queries');
+const {db} = require('../utils/queries');
 
 const {generateOdooHash, generateSalt} = require('../helpers/auth');
 const {odooAxios} = require('./network');
@@ -43,13 +39,13 @@ const createOdooUser = async (user) => {
             throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED, 'Hash verification failed');
         }
 
-        await setUserOdooCredentials(user, {
+        await db.setUserOdooCredentials(user, {
             odoo_user_id: odoo_user_id,
             partner_id: odoo_partner_id,
             encrypted_key: encrypted_key,
             salt: key_salt,
         });
-
+        db.recordActivityLog(user.user_id, 'CREATE', 'Odoo', user.rfid);
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {
@@ -64,7 +60,7 @@ const getOdooPortalLogin = async (user) => {
         throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
     }
 
-    const odoo_credentials = await getUserOdooCredentials(user.user_id);
+    const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
     const {key, key_salt} = odoo_credentials;
     const _salt = generateSalt();
     if (!odoo_credentials || !key || !key_salt) {
@@ -97,7 +93,7 @@ const rotateOdooUserAuth = async (user) => {
         throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
     }
 
-    const odoo_credentials = await getUserOdooCredentials(user.user_id);
+    const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
     const {key_id, key, key_salt} = odoo_credentials;
     let data = {
         timestamp: DateTime.utc().toFormat(ISO_EPS_NO_ZONE),
@@ -130,11 +126,11 @@ const rotateOdooUserAuth = async (user) => {
             throw new SystemError(ErrorCodes.User.ODOO_ID_MISMATCH);
         }
 
-        const db_query = rotateOdooUserKey(user.user_id, key_id, new_key, new_key_salt);
+        const db_query = db.rotateOdooUserKey(user.user_id, key_id, new_key, new_key_salt);
         if (!db_query) {
             throw new SystemError(ErrorCodes.USER.KEY_ROTATION_FAILED);
         }
-        return getUserOdooCredentials(user.user_id);
+        return db.getUserOdooCredentials(user.user_id);
     } else {
         const errorMSG = response.data['error'];
         throw new SystemError(ErrorCodes.ODOO.KEY_ROTATION_FAILED, errorMSG);

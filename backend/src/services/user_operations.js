@@ -1,5 +1,5 @@
 const {createOdooUser} = require('./odoo');
-const {getUserUnique, createDBUser} = require('../utils/queries');
+const {db} = require('../utils/queries');
 const {createSteveUser} = require('./steve_user');
 
 /**
@@ -15,14 +15,14 @@ const {createSteveUser} = require('./steve_user');
 
 
 const userOperations = async (oidc_user) => {
-    let user = await getUserUnique({oauth_id: oidc_user.sub});
+    let user = await db.getUserUnique({oauth_id: oidc_user.sub});
 
     if (!user) {
         // Use random RFID for development
         const rfid = Math.random().toString(36).substring(2, 10);
         // const rfid = oidc_user.rfid,
 
-        const createdUser = await createDBUser(
+        const createdUser = await db.createUser(
             oidc_user.sub,
             oidc_user.name,
             oidc_user.email,
@@ -31,14 +31,14 @@ const userOperations = async (oidc_user) => {
 
         await createOdooUser(createdUser);
         await createSteveUser(createdUser);
-        user = await getUserUnique({user_id: createdUser.user_id});
+        user = await db.getUserUnique({user_id: createdUser.user_id});
     } else if (user && !user.odoo_user_id) {
         // User exists but doesn't have an Odoo ID
         await createOdooUser(user);
-        user = await getUserUnique({user_id: user.user_id});
+        user = await db.getUserUnique({user_id: user.user_id});
     } else if (user && user.odoo_user_id && !user.steve_id) {
         await createSteveUser(user);
-        user = await getUserUnique({user_id: user.user_id});
+        user = await db.getUserUnique({user_id: user.user_id});
     }
 
     return user;

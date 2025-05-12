@@ -20,7 +20,7 @@ const handleQueryError = (error, operation) => {
 };
 
 
-const createDBUser = async (oauth_id, name, email, rfid) => {
+const createUser = async (oauth_id, name, email, rfid) => {
     if (!oauth_id || !name || !email || !rfid) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'Missing required parameters: oauth_id, name, email or rfid.');
     }
@@ -42,7 +42,7 @@ const createDBUser = async (oauth_id, name, email, rfid) => {
         return created_user;
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'createDBUser');
+        handleQueryError(error, 'createUser');
     } finally {
         client.release();
     }
@@ -314,25 +314,21 @@ const recordActivityLog = (user_id, event_type, target, rfid) => {
 };
 
 /**
- * Upsert a transaction record into the `transactions` table.
+ * Upsert a transaction record into the `charging_transactions` table.
  * Inserts a new row or updates stopTimestamp, stopValue, and stopReason on conflict.
  * @param {Object} tx
- * @param {number} tx.id
- * @param {string} tx.ocppIdTag
- * @param {string} tx.startTimestamp  ISO datetime string
- * @param {string} tx.stopTimestamp   ISO datetime string
- * @param {string|number} tx.startValue
- * @param {string|number} tx.stopValue
- * @param {string} tx.stopReason
  */
 async function upsertTransaction(tx) {
-    const text = `
-        INSERT INTO charging_transactions (id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
+    // FIXME: I am skeptical about this logic. Since we already fetch stopped transactions no need to update they are already final.
+    // Switch to skipping steve_id, ocpp_id_tag, delivered, start_timestamp and stop_timestamp same values.
+    const query = `
+        INSERT INTO charging_transactions (steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value,
+                                           stop_value,
                                            stop_reason)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (id) DO UPDATE SET stop_timestamp = EXCLUDED.stop_timestamp,
-                                       stop_value     = EXCLUDED.stop_value,
-                                       stop_reason    = EXCLUDED.stop_reason;
+        VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar)
+        ON CONFLICT (steve_id) DO UPDATE SET stop_timestamp = EXCLUDED.stop_timestamp,
+                                             stop_value     = EXCLUDED.stop_value,
+                                             stop_reason    = EXCLUDED.stop_reason;
     `;
     const values = [
         tx.id,
@@ -347,25 +343,69 @@ async function upsertTransaction(tx) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query(text, values);
+        await client.query(query, values);
         await client.query('COMMIT');
-    } catch (err) {
+    } catch (error) {
         await client.query('ROLLBACK');
-        console.error('upsertTransaction error:', err);
-        throw err;
+        handleQueryError(error, 'upsertTransaction');
     } finally {
         client.release();
     }
 }
 
+async function setLastStopTimestamp(new_watermark) {
+    const query = `
+        INSERT INTO watermark (last_stop_timestamp)
+        VALUES ($1::timestamp)
+        ON CONFLICT (last_stop_timestamp)
+            DO UPDATE SET iterated_at = NOW()
+    `;
+    const value = [new_watermark];
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query(query, value);
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'setLastStopTimestamp');
+    } finally {
+        client.release();
+    }
+}
+
+async function getLastStopTimestamp() {
+    const query = `
+        SELECT last_stop_timestamp
+        FROM watermark
+        ORDER BY created_at DESC
+        LIMIT 1
+    `;
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query);
+        return result.rows[0]?.last_stop_timestamp || null;
+    } catch (error) {
+        handleQueryError(error, 'getLastStopTimestamp');
+    } finally {
+        client.release();
+    }
+}
 
 module.exports = {
-    createDBUser,
-    getUsers,
-    getUserUnique,
-    setUserOdooCredentials,
-    getUserOdooCredentials,
-    rotateOdooUserKey,
-    setSteveUserParamaters,
-    recordActivityLog,
+    db: {
+        createUser,
+        getUsers,
+        getUserUnique,
+        setUserOdooCredentials,
+        getUserOdooCredentials,
+        rotateOdooUserKey,
+        setSteveUserParamaters,
+        recordActivityLog,
+        upsertTransaction,
+        setLastStopTimestamp,
+        getLastStopTimestamp,
+    },
 };
