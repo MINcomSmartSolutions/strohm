@@ -1,6 +1,7 @@
 const logger = require('../services/logger');
 const pool = require('../services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
+const {DateTime} = require('luxon');
 
 
 /**
@@ -320,7 +321,7 @@ const recordActivityLog = (user_id, event_type, target, rfid) => {
  */
 async function upsertTransaction(tx) {
     // FIXME: I am skeptical about this logic. Since we already fetch stopped transactions no need to update they are already final.
-    // Switch to skipping steve_id, ocpp_id_tag, delivered, start_timestamp and stop_timestamp same values.
+    // Switch to skipping steve_id, ocpp_id_tag, delivered, start_timestamp and stop_timestamp if they are exact in db values.
     const query = `
         INSERT INTO charging_transactions (steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value,
                                            stop_value,
@@ -356,7 +357,7 @@ async function upsertTransaction(tx) {
 async function setLastStopTimestamp(new_watermark) {
     const query = `
         INSERT INTO watermark (last_stop_timestamp)
-        VALUES ($1::timestamp)
+        VALUES ($1::timestamptz)
         ON CONFLICT (last_stop_timestamp)
             DO UPDATE SET iterated_at = NOW()
     `;
@@ -377,7 +378,7 @@ async function setLastStopTimestamp(new_watermark) {
 
 async function getLastStopTimestamp() {
     const query = `
-        SELECT last_stop_timestamp
+        SELECT last_stop_timestamp::timestamptz
         FROM watermark
         ORDER BY created_at DESC
         LIMIT 1
@@ -386,7 +387,9 @@ async function getLastStopTimestamp() {
     const client = await pool.connect();
     try {
         const result = await client.query(query);
-        return result.rows[0]?.last_stop_timestamp || null;
+        return result.rows[0]?.last_stop_timestamp
+            ? DateTime.fromJSDate(result.rows[0].last_stop_timestamp)
+            : null;
     } catch (error) {
         handleQueryError(error, 'getLastStopTimestamp');
     } finally {

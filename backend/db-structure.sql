@@ -75,15 +75,15 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.access_logs
 (
-    id            integer                                               NOT NULL,
-    user_id       integer,
-    ip            character varying(15),
-    method        character varying(10)                                 NOT NULL,
-    path          character varying(255)                                NOT NULL,
-    status_code   integer,
+    id          integer                                            NOT NULL,
+    user_id     integer,
+    ip          character varying(15),
+    method      character varying(10)                              NOT NULL,
+    path        character varying(255)                             NOT NULL,
+    status_code integer,
     returned_success boolean,
     response_time integer,
-    created_at    timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 
@@ -125,13 +125,13 @@ ALTER SEQUENCE public.access_logs_id_seq OWNED BY public.access_logs.id;
 
 CREATE TABLE public.activity_log
 (
-    id         integer                                               NOT NULL,
-    user_id    integer,
-    datetime   timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    reason     character varying,
+    id       integer                                            NOT NULL,
+    user_id  integer,
+    datetime timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    reason   character varying,
     event_type character varying,
-    rfid       character varying(255)                                NOT NULL,
-    target     character varying
+    rfid     character varying(255)                             NOT NULL,
+    target   character varying
 );
 
 
@@ -158,20 +158,20 @@ COMMENT ON COLUMN public.activity_log.rfid IS 'Even tough we have a user foreign
 
 CREATE TABLE public.charging_transactions
 (
-    id                  integer NOT NULL,
-    created_at          timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    start_timestamp     timestamp without time zone,
-    stop_timestamp      timestamp without time zone,
-    stop_reason         character varying,
-    start_value         numeric,
-    stop_value          numeric,
+    id              integer NOT NULL,
+    created_at      timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    start_timestamp timestamp with time zone,
+    stop_timestamp  timestamp with time zone,
+    stop_reason     character varying,
+    start_value     numeric,
+    stop_value      numeric,
     delivered_energy_wh numeric GENERATED ALWAYS AS ((stop_value - start_value)) STORED,
-    ocpp_id_tag         character varying,
-    chargebox_pk        integer,
-    connector_id        integer,
+    ocpp_id_tag     character varying,
+    chargebox_pk    integer,
+    connector_id    integer,
     stop_event_actor character varying,
-    invoice_ref      integer,
-    steve_id         integer NOT NULL,
+    invoice_ref     integer,
+    steve_id        integer NOT NULL,
     CONSTRAINT always_positive CHECK ((delivered_energy_wh >= 0.0))
 );
 
@@ -183,7 +183,9 @@ ALTER TABLE public.charging_transactions
 -- Name: TABLE charging_transactions; Type: COMMENT; Schema: public; Owner: strohm_admin
 --
 
-COMMENT ON TABLE public.charging_transactions IS 'Bzw. charging transactions/sessions. For active transactions, all ''stop''-prefixed fields would be null. The energy consumed during the transaction can be calculated by subtracting the ''startValue'' from the ''stopValue''. The unit of the ''startValue'' and ''stopValue'' is watt-hours (Wh).';
+COMMENT ON TABLE public.charging_transactions IS 'Bzw. charging transactions/sessions. 
+For active transactions, all ''stop''-prefixed fields would be null. 
+The energy consumed during the transaction can be calculated by subtracting the ''startValue'' from the ''stopValue''. The unit of the ''startValue'' and ''stopValue'' is watt-hours (Wh).';
 
 
 --
@@ -277,10 +279,10 @@ ALTER SEQUENCE public.charging_events_id_seq OWNED BY public.charging_transactio
 
 CREATE TABLE public.electricity_prices
 (
-    id         integer          NOT NULL,
-    price      double precision NOT NULL,
-    "timestamp" timestamp without time zone NOT NULL,
-    created_at timestamp without time zone DEFAULT now()
+    id         integer                  NOT NULL,
+    price      double precision         NOT NULL,
+    datetime   timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now()
 );
 
 
@@ -315,12 +317,12 @@ ALTER SEQUENCE public.exchange_prices_exchange_id_seq OWNED BY public.electricit
 
 CREATE TABLE public.odoo_apikeys
 (
-    id      integer           NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    key     character varying NOT NULL,
+    id         integer                                            NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    key        character varying                                  NOT NULL,
     user_id integer,
-    revoked_at timestamp without time zone,
-    salt    character varying NOT NULL
+    revoked_at timestamp with time zone,
+    salt       character varying                                  NOT NULL
 );
 
 
@@ -369,8 +371,8 @@ ALTER SEQUENCE public.odoo_tokens_id_seq OWNED BY public.odoo_apikeys.id;
 
 CREATE TABLE public.sessions
 (
-    user_id    integer                                               NOT NULL,
-    id         integer                                               NOT NULL,
+    user_id integer NOT NULL,
+    id      integer NOT NULL,
     odoo_session_id integer,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
@@ -429,23 +431,23 @@ ALTER SEQUENCE public.user_activity_id_seq OWNED BY public.activity_log.id;
 
 CREATE TABLE public.users
 (
-    user_id      integer                                               NOT NULL,
-    first_name   character varying(255),
-    email        character varying(255)                                NOT NULL,
-    rfid         character varying(255),
-    active       boolean                     DEFAULT true,
-    created_at   timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at   timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    deleted_at   timestamp without time zone,
+    user_id     integer                                            NOT NULL,
+    first_name  character varying(255),
+    email       character varying(255)                             NOT NULL,
+    rfid        character varying(255),
+    active      boolean                  DEFAULT true,
+    created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    deleted_at  timestamp without time zone,
     odoo_user_id integer,
-    last_name    character varying,
+    last_name   character varying,
     lastlogin_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    oauth_id     character varying(255),
-    postal_code  integer,
-    address      character varying(255),
+    oauth_id    character varying(255),
+    postal_code integer,
+    address     character varying(255),
     odoo_partner_id integer,
-    name         character varying,
-    steve_id     integer
+    name        character varying,
+    steve_id    integer
 );
 
 
@@ -501,10 +503,10 @@ ALTER SEQUENCE public.users_user_id_seq OWNED BY public.users.user_id;
 
 CREATE TABLE public.watermark
 (
-    last_stop_timestamp timestamp without time zone,
-    created_at          timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    id                  integer                                               NOT NULL,
-    iterated_at         timestamp without time zone
+    last_stop_timestamp timestamp with time zone,
+    created_at          timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    id                  integer                                            NOT NULL,
+    iterated_at         timestamp with time zone
 );
 
 

@@ -9,7 +9,6 @@
    • No overlap or reprocessing of already handled transactions.
    • No gaps: even if a transaction ends just after T0, it will be fetched next run.
    • Linear, efficient incremental retrieval without maintaining complex windows.
-   with slack window to handle late-arriving wallbox data.
  */
 
 const {DateTime} = require('luxon');
@@ -22,29 +21,26 @@ const {ValidationError, ErrorCodes} = require('../utils/errors');
 const {db} = require('../utils/queries');
 
 /**
- * Fetch STOPPED transactions since a given timestamp (exclusive),
- * backing off by SLACK to catch late arrivals.
+ * Fetch STOPPED transactions since a given timestamp (exclusive).
+ * If no timestamp is provided, fetch all transactions
  * @param {DateTime|null} since  Only transactions with stopTimestamp > since
  */
-async function fetchSince(since) {
-    const now = DateTime.utc();
+async function fetchSince(since = null) {
+    const to = DateTime.now().toUTC();
 
     // Always fetch stopped sessions
-    let params = [{
+    let params = {
         type: 'STOPPED',
-    }];
+    };
 
-    // If no `since` provided fetch all transactions
+    // If `since` is provided, add periodType and date range
     if (since) {
-        params.push({
-            periodType: 'FROM_TO',
-            from: fmt(since),
-            to: fmt(now),
-        });
+        params.periodType = 'FROM_TO';
+        params.from = fmt(since.toUTC());
+        params.to = fmt(to);
     } else {
-        params.push({
-            periodType: 'ALL',
-        });
+        // If `since` is not provided, fetch all transactions
+        params.periodType = 'ALL';
     }
 
 
@@ -89,18 +85,33 @@ async function processSince(txns) {
 /**
  * Run incremental billing cycle: fetch and process since last T0,
  * with slack to catch any wallbox that reconnected late.
- * @returns {Promise<{fetched: number, newHighWater: DateTime}>}
+ * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
  */
 async function runIncremental() {
-    // retrieve last watermark
-    const lastDate = await db.getLastStopTimestamp();
+    // retrieve the last watermark
+    const since = await db.getLastStopTimestamp();
 
-    const since = lastDate ? DateTime.fromJSDate(lastDate) : null;
+    const newTxs = await fetchSince(since);
+    const new_high_water = newTxs.length > 0 ? await processSince(newTxs) : since;
 
-    const newTx = await fetchSince(since);
-    const new_high_water = newTx.length > 0 ? await processSince(newTx) : since;
+    return {fetched: newTxs.length, high_water_mark: new_high_water};
+}
 
-    return {fetched: newTx.length, newHighWater: new_high_water};
+async function runFull() {
+    const newTxs = await fetchSince();
+    const new_high_water = newTxs.length > 0 ? await processSince(newTxs) : null;
+
+    return {fetched: newTxs.length, high_water_mark: new_high_water};
+}
+
+async function runToday() {
+    // Get today's date and set it to midnight
+    const today = DateTime.utc().startOf('day');
+    // Fetch transactions from the start of today
+    const newTx = await fetchSince(today);
+    const new_high_water = newTx.length > 0 ? await processSince(newTx) : null;
+
+    return {fetched: newTx.length, high_water_mark: new_high_water};
 }
 
 module.exports = {runIncremental};
