@@ -64,10 +64,9 @@ fi
 source ../../.env
 ODOO_DB=$ODOO_DB
 ODOO_DB_USER=$ODOO_DB_USER
-ODOO_DB_DEVELOPMENT_PASSWORD=$ODOO_DB_DEVELOPMENT_PASSWORD
 
 # Check environment variables
-if [ -z "$ODOO_DB" ] || [ -z "$ODOO_DB_DEVELOPMENT_PASSWORD" ]; then
+if [ -z "$ODOO_DB" ]; then
     echo "Please set the ODOO_DB and ODOO_DB_DEVELOPMENT_PASSWORD in the .env file. Exiting..."
     exit 1
 fi
@@ -99,14 +98,14 @@ if [ -d "$RESTORE_DIR/filestore" ]; then
     if [ -z "$(ls -A $RESTORE_DIR/filestore)" ]; then
         echo "Filestore directory exists but is empty, skipping..."
     else
-        docker exec -u root -i $DOCKER_NAME rm -rf /var/lib/odoo/filestore
-        if ! docker cp $RESTORE_DIR/filestore $DOCKER_NAME:/var/lib/odoo/; then
+        docker exec -u root -i $DOCKER_NAME rm -rf /var/lib/ODOO_CONFIG/filestore
+        if ! docker cp $RESTORE_DIR/filestore $DOCKER_NAME:/var/lib/ODOO_CONFIG/; then
             echo "Filestore restore failed. Exiting..."
             docker start $DOCKER_NAME
             exit 1
         fi
         # set filestore permissions
-        docker exec -u root -i $DOCKER_NAME chown -R odoo:odoo /var/lib/odoo/filestore
+        docker exec -u root -i $DOCKER_NAME chown -R ODOO_CONFIG:ODOO_CONFIG /var/lib/ODOO_CONFIG/filestore
     fi
 else
     echo "No filestore found in backup, skipping..."

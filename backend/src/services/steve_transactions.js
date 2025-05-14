@@ -92,7 +92,6 @@ async function processSince(txns) {
         }, DateTime.fromMillis(0));
     }
 
-    await db.setLastStopTimestamp(maxStop);
     return maxStop;
 }
 
@@ -104,14 +103,21 @@ async function processSince(txns) {
 async function runIncremental() {
     // retrieve the last watermark
     const since = await db.getLastStopTimestamp();
-    // add 1 second to the last high water mark to prevent overlapping
+
+    // add 1 second to the last high water mark to prevent overlapping and fetching the same transactions
     const last_high_water = since ? since.plus(1000) : null;
+    let new_high_water = since ? since : DateTime.now().toUTC();
 
-    const new_txs = await fetchSince(last_high_water);
-    const new_high_water = new_txs.length > 0 ? await processSince(new_txs) : last_high_water;
+    const new_txns = await fetchSince(last_high_water);
+    if (new_txns > 0) {
+        new_high_water = await processSince(new_txns);
+    }
 
-    return {fetched: new_txs.length, high_water_mark: new_high_water};
+    await db.setLastStopTimestamp(new_high_water);
+
+    return {fetched: new_txns.length, high_water_mark: new_high_water};
 }
+
 
 async function runFull() {
     const new_txs = await fetchSince();
@@ -119,6 +125,7 @@ async function runFull() {
 
     return {fetched: new_txs.length, high_water_mark: new_high_water};
 }
+
 
 async function runToday() {
     // Get today's date and set it to midnight

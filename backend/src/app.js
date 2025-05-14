@@ -18,8 +18,10 @@ const {getOdooPortalLogin} = require('./services/odoo');
 const session = require('express-session');
 const verifyApiKey = require('./middlewares/auth');
 const logger = require('./services/logger');
-
-
+const {runIncremental} = require('./services/steve_transactions');
+const {transactionFetchLoop} = require('./services/cron');
+const {Settings} = require('luxon');
+Settings.defaultZoneName = 'utc';
 
 // Session configuration
 app.use(session({
@@ -111,5 +113,7 @@ app.get('/internal/update_user', verifyApiKey, async (req, res) => {
     }
 });
 
+// Start the cron job
+transactionFetchLoop.start();
 
 module.exports = app;

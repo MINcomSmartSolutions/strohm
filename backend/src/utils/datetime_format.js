@@ -1,6 +1,4 @@
 const {DateTime} = require('luxon');
-const ISO_EPS_NO_ZONE = 'yyyyMMdd\'T\'HH:mm:ss';
-
 // Define ISO format without timezone (matching SteVe expectation)
 const ISO_NO_ZONE = 'yyyy-MM-dd\'T\'HH:mm:ss';
 
@@ -16,7 +14,6 @@ function fmt(dt, toUTC = true) {
 }
 
 module.exports = {
-    ISO_EPS_NO_ZONE,
     ISO_NO_ZONE,
     fmt,
 };

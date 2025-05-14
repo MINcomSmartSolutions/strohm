@@ -37,7 +37,7 @@ const createOdooUser = async (user) => {
 
         // Compare the calculated hash with the hash received from Odoo
         if (calculatedHash !== hash) {
-            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED, 'Hash verification failed');
+            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
         }
 
         await db.setUserOdooCredentials(user, {
@@ -74,8 +74,7 @@ const getOdooPortalLogin = async (user) => {
     // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials
     const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.HOST);
 
-    let timestamp = DateTime.utc().toFormat(ISO_EPS_NO_ZONE);
-
+    let timestamp = fmt(DateTime.now());
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
     const _hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
@@ -97,7 +96,7 @@ const rotateOdooUserAuth = async (user) => {
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
     const {key_id, key, key_salt} = odoo_credentials;
     let data = {
-        timestamp: DateTime.utc().toFormat(ISO_EPS_NO_ZONE),
+        timestamp: fmt(DateTime.now()),
         user_id: user.odoo_user_id,
         key: key,
         key_salt: key_salt,
