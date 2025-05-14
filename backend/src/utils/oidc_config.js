@@ -11,6 +11,7 @@ const axios = require('axios');
 const {userOperations} = require('../services/user_operations');
 const logger = require('../services/logger');
 
+// noinspection JSUnusedGlobalSymbols
 const oidc_config = {
     authRequired: false,
     // auth0Logout: true,
@@ -28,6 +29,16 @@ const oidc_config = {
         logout: false, // Disable default logout route
         postLogoutRedirect: '/welcome',
     },
+    /**
+     * Handles user session after authentication.
+     * - Fetches user info from OIDC provider.
+     * - Attaches user data to session.
+     * @param {Object} req - Express request object.
+     * @param {Object} res - Express response object.
+     * @param {Object} session - OIDC session object.
+     * @param {Object} decodedState - Decoded OIDC state.
+     * @returns {Promise<Object>} Updated session.
+     */
     afterCallback: async (req, res, session, decodedState) => {
         const userInfo = await axios.get(process.env.SERVER_OIDC_ISSUER_BASE_URL + '/userinfo', {
             headers: {
