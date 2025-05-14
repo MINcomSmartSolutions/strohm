@@ -7,7 +7,7 @@ const winston = require('winston');
 
 //TODO: Add the file/function where the logger is used
 const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || 'info',
+    level: process.env.LOG_LEVEL || 'silly',
     format: winston.format.combine(
         winston.format.label({label: process.env.NODE_ENV}),
         winston.format.timestamp(), winston.format.errors({stack: true}),

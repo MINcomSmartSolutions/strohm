@@ -19,6 +19,7 @@ const {STEVE_CONFIG} = require('../config');
 const {steveTransactionSchema} = require('../utils/joi');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
 const {db} = require('../utils/queries');
+const {createOdooTxnBill} = require('./odoo');
 
 /**
  * Fetch STOPPED transactions since a given timestamp (exclusive).
@@ -53,7 +54,7 @@ async function fetchSince(since = null) {
  * @param {Array<Object>} txns
  */
 async function processSince(txns) {
-    // dedupe by id: ensure unique set.
+    // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
     const unique = Array.from(
         txns.reduce((map, tx) => {
             // Validate transaction against schema
@@ -66,11 +67,24 @@ async function processSince(txns) {
         }, new Map()).values(),
     );
 
+
+    //TODO: More checks needed.
+    // 1. Check if the bill already exists in Odoo
+    //
+
     let maxStop;
 
-    // Upsert all unique
+    // Record all unique
     for (const tx of unique) {
-        await db.upsertTransaction(tx);
+        const db_txn = await db.recordTransaction(tx);
+
+        // If the transaction does not have a invoice_ref to odoo
+        // and have a associated user, create a bill.
+        if (!db_txn.invoice_ref && db_txn.user_id) {
+            const bill_id = await createOdooTxnBill(db_txn);
+            await db.saveBillId(db_txn, bill_id);
+        }
+
         // Determine new high‑water mark: max stopTimestamp of unique
         maxStop = unique.reduce((max, tx) => {
             const stop = DateTime.fromISO(tx.stopTimestamp, {zone: 'utc'});
@@ -90,18 +104,20 @@ async function processSince(txns) {
 async function runIncremental() {
     // retrieve the last watermark
     const since = await db.getLastStopTimestamp();
+    // add 1 second to the last high water mark to prevent overlapping
+    const last_high_water = since ? since.plus(1000) : null;
 
-    const newTxs = await fetchSince(since);
-    const new_high_water = newTxs.length > 0 ? await processSince(newTxs) : since;
+    const new_txs = await fetchSince(last_high_water);
+    const new_high_water = new_txs.length > 0 ? await processSince(new_txs) : last_high_water;
 
-    return {fetched: newTxs.length, high_water_mark: new_high_water};
+    return {fetched: new_txs.length, high_water_mark: new_high_water};
 }
 
 async function runFull() {
-    const newTxs = await fetchSince();
-    const new_high_water = newTxs.length > 0 ? await processSince(newTxs) : null;
+    const new_txs = await fetchSince();
+    const new_high_water = new_txs.length > 0 ? await processSince(new_txs) : null;
 
-    return {fetched: newTxs.length, high_water_mark: new_high_water};
+    return {fetched: new_txs.length, high_water_mark: new_high_water};
 }
 
 async function runToday() {

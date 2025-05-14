@@ -11,6 +11,13 @@ const odooAxios = axios.create({
     },
 });
 
+const odooUserAxios = axios.create({
+    baseURL: ODOO_CONFIG.HOST,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
 const steveAxios = axios.create({
     baseURL: STEVE_CONFIG.HOST,
     auth: {
@@ -58,4 +65,5 @@ odooAxios.get('/')
 module.exports = {
     odooAxios,
     steveAxios,
+    odooUserAxios,
 };

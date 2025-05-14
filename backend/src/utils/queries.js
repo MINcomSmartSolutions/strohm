@@ -315,40 +315,81 @@ const recordActivityLog = (user_id, event_type, target, rfid) => {
 };
 
 /**
- * Upsert a transaction record into the `charging_transactions` table.
- * Inserts a new row or updates stopTimestamp, stopValue, and stopReason on conflict.
- * @param {Object} tx
+ * Record a transaction record into the `charging_transactions` table.
+ * If transaction already exists and is complete, returns it without modification.
+ * Otherwise, inserts a new record with proper user association.
+ * @param {Object} tx - Transaction from Steve system
+ * @returns {Promise<Object>} db_txn - The transaction record from database
  */
-async function upsertTransaction(tx) {
-    // FIXME: I am skeptical about this logic. Since we already fetch stopped transactions no need to update they are already final.
-    // Switch to skipping steve_id, ocpp_id_tag, delivered, start_timestamp and stop_timestamp if they are exact in db values.
-    const query = `
-        INSERT INTO charging_transactions (steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value,
-                                           stop_value,
-                                           stop_reason)
-        VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar)
-        ON CONFLICT (steve_id) DO UPDATE SET stop_timestamp = EXCLUDED.stop_timestamp,
-                                             stop_value     = EXCLUDED.stop_value,
-                                             stop_reason    = EXCLUDED.stop_reason;
-    `;
-    const values = [
-        tx.id,
-        tx.ocppIdTag,
-        tx.startTimestamp,
-        tx.stopTimestamp,
-        tx.startValue,
-        tx.stopValue,
-        tx.stopReason,
-    ];
-
+async function recordTransaction(tx) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query(query, values);
+
+        // First check if transaction already exists in our database
+        const existingTxQuery = `
+            SELECT *
+            FROM charging_transactions
+            WHERE tx_steve_id = $1
+        `;
+
+        const existingTxResult = await client.query(existingTxQuery, [tx.id]);
+
+        // If transaction exists, check if values match to avoid unnecessary updates
+        if (existingTxResult.rowCount > 0) {
+            const existingTx = existingTxResult.rows[0];
+
+            // Check if transaction is complete and matches incoming data
+            if (existingTx.stop_timestamp !== null &&
+                DateTime.fromJSDate(existingTx.stop_timestamp).toUTC().toMillis() === DateTime.fromISO(tx.stopTimestamp).toMillis()
+                // DateTime.fromJSDate(existingTx.stop_timestamp).toUTC().equals(DateTime.fromISO(tx.stopTimestamp))
+            ) {
+                logger.info('Returned');
+                await client.query('COMMIT');
+                return existingTx;
+            }
+        }
+
+        // Transaction doesn't exist or values differ, proceed with user lookup
+        const userCrossCheckQuery = `
+            SELECT user_id
+            FROM users
+            WHERE steve_id = $1::integer
+              AND rfid = $2::varchar
+        `;
+
+        const userCrossCheckResult = await client.query(userCrossCheckQuery, [tx.ocppTagPk, tx.ocppIdTag]);
+        let user_id = null;
+
+        if (userCrossCheckResult.rowCount > 0) {
+            user_id = userCrossCheckResult.rows[0].user_id;
+        } else {
+            logger.warn(`Unknown user's transaction is received. Inserting without user_id. ocppTagPk=${tx.ocppTagPk}, ocppIdTag=${tx.ocppIdTag}`);
+        }
+
+        const insertQuery = `INSERT INTO charging_transactions
+                             (tx_steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
+                              stop_reason, user_id)
+                             VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar, $8)
+                             RETURNING *`;
+
+        const values = [
+            tx.id,
+            tx.ocppIdTag,
+            tx.startTimestamp,
+            tx.stopTimestamp,
+            tx.startValue,
+            tx.stopValue,
+            tx.stopReason,
+            user_id,
+        ];
+
+        const result = await client.query(insertQuery, values);
         await client.query('COMMIT');
+        return result.rows[0];
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'upsertTransaction');
+        handleQueryError(error, 'recordTransaction');
     } finally {
         client.release();
     }
@@ -397,6 +438,28 @@ async function getLastStopTimestamp() {
     }
 }
 
+async function saveBillId(txn, bill_id) {
+    const query = `
+        UPDATE charging_transactions
+        SET invoice_ref = $1::integer
+        WHERE id = $2::integer
+    `;
+    const values = [bill_id, txn.id];
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query(query, values);
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'saveBillId');
+    } finally {
+        client.release();
+    }
+}
+
+
 module.exports = {
     db: {
         createUser,
@@ -407,8 +470,9 @@ module.exports = {
         rotateOdooUserKey,
         setSteveUserParamaters,
         recordActivityLog,
-        upsertTransaction,
+        recordTransaction,
         setLastStopTimestamp,
         getLastStopTimestamp,
+        saveBillId,
     },
 };

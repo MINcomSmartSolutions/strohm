@@ -2,10 +2,11 @@ const {ValidationError, ErrorCodes, SystemError} = require('../utils/errors');
 const {db} = require('../utils/queries');
 
 const {generateOdooHash, generateSalt} = require('../helpers/auth');
-const {odooAxios} = require('./network');
+const {odooAxios, odooUserAxios} = require('./network');
 const {DateTime} = require('luxon');
-const {ISO_EPS_NO_ZONE} = require('../utils/datetime_format');
+const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
+const {dbTransactionSchema} = require('../utils/joi');
 
 
 const createOdooUser = async (user) => {
@@ -138,8 +139,47 @@ const rotateOdooUserAuth = async (user) => {
 };
 
 
+async function createOdooTxnBill(db_txn) {
+    const {error} = dbTransactionSchema.validate(db_txn);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
+            `Invalid transaction ${error.message}`);
+    }
+
+    const {key, key_salt} = await db.getUserOdooCredentials(db_txn.user_id);
+
+    const lines_data = [
+        {
+            'name': 'Ladung AC',
+            'sku': 'AC-001',
+            'uom_name': 'kWh',
+            'base_price': 0.35,
+            'quantity': db_txn.delivered_energy_wh / 1000,
+        },
+    ];
+
+
+    const data = {
+        timestamp: fmt(DateTime.utc()),
+        key: key,
+        key_salt: key_salt,
+        session_start: fmt(DateTime.fromJSDate(db_txn.start_timestamp)),
+        session_end: fmt(DateTime.fromJSDate(db_txn.stop_timestamp)),
+        lines_data: lines_data,
+    };
+
+    const response = await odooUserAxios.post(ODOO_CONFIG.BILL_CREATION_URI, data);
+    if (response.status !== 201) {
+        const errorMSG = response.data['error'];
+        throw new SystemError(ErrorCodes.ODOO.BILL_CREATE_FAILED, errorMSG);
+    }
+    return response.data['bill_id'];
+}
+
+
 module.exports = {
     createOdooUser,
     getOdooPortalLogin,
     rotateOdooUserAuth,
+    createOdooTxnBill,
 };

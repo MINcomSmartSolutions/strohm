@@ -77,10 +77,22 @@ const steveTransactionSchema = Joi.object({
     return obj;
 }, 'startValue <= stopValue validation');
 
+const dbTransactionSchema = Joi.object({
+    id: Joi.number().integer().positive().required(),
+    created_at: Joi.date().required(),
+    start_timestamp: Joi.date().required(),
+    stop_timestamp: Joi.date().required(),
+    start_value: Joi.number().min(0).required(),
+    stop_value: Joi.number().min(0).required(),
+    delivered_energy_wh: Joi.number().min(0).required(),
+    ocpp_id_tag: Joi.string().required(),
+}).unknown(true);
+
 
 module.exports = {
     userSchema,
     fullyQualifiedUserSchema,
     steveUserSchema,
     steveTransactionSchema,
+    dbTransactionSchema,
 };
