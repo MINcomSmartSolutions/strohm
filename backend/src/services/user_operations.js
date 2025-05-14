@@ -2,18 +2,19 @@ const {createOdooUser} = require('./odoo');
 const {db} = require('../utils/queries');
 const {createSteveUser} = require('./steve_user');
 
+
 /**
- * @typedef {Object} User
- * @property {string} user_id - The user's ID
- * @property {string} name - The user's name
- * @property {string} email - The user's email
- * @property {string|null} odoo_user_id - The user's Odoo ID
- * @property {string} oauth_id - The OAuth ID
- * @property {string} rfid - The user's RFID
- * @property {string} steve_id - The user's OCPP tag primary key in SteVe
+ * Handles user creation and linking with external systems.
+ *
+ * - Checks if a user exists by OIDC ID.
+ * - If not, creates a new user with a random RFID (for development).
+ * - Ensures the user is registered in Odoo and Steve systems.
+ * - Returns the up-to-date user object.
+ *
+ * @async
+ * @param {Object} oidc_user - OIDC user info.
+ * @returns {Promise<Object>} User object from the database.
  */
-
-
 const userOperations = async (oidc_user) => {
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
 

@@ -1,14 +1,15 @@
-// steve_transactions.js
-/*
- Incremental fetch of STOPPED transactions since last high‑water mark (T0).
-
- High‑Water Mark Concept:
- We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
- On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
- After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
-   • No overlap or reprocessing of already handled transactions.
-   • No gaps: even if a transaction ends just after T0, it will be fetched next run.
-   • Linear, efficient incremental retrieval without maintaining complex windows.
+/**
+ * Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+ *
+ * High‑Water Mark Concept:
+ * We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
+ * On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
+ * After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
+ *   • No overlap or reprocessing of already handled transactions.
+ *   • No gaps: even if a transaction ends just after T0, it will be fetched next run.
+ *   • Linear, efficient incremental retrieval without maintaining complex windows.
+ *
+ * @module services/steve_transactions
  */
 
 const {DateTime} = require('luxon');
@@ -22,9 +23,11 @@ const {db} = require('../utils/queries');
 const {createOdooTxnBill} = require('./odoo');
 
 /**
- * Fetch STOPPED transactions since a given timestamp (exclusive).
+ * Fetch STOPPED transactions since a given timestamp (exclusive)
  * If no timestamp is provided, fetch all transactions
+ * @async
  * @param {DateTime|null} since  Only transactions with stopTimestamp > since
+ * @returns {Promise<Array<Object>>} Array of transactions
  */
 async function fetchSince(since = null) {
     const to = DateTime.now().toUTC();
@@ -49,9 +52,12 @@ async function fetchSince(since = null) {
     return res.data;
 }
 
+
 /**
- * Process new transactions, dedupe, and return updated high‑water mark.
+ * Record and create bills for transactions/charging sessions
+ * @async
  * @param {Array<Object>} txns
+ * @returns {Promise<DateTime>} The new high‑water mark (max stopTimestamp)
  */
 async function processSince(txns) {
     // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
@@ -95,9 +101,10 @@ async function processSince(txns) {
     return maxStop;
 }
 
+
 /**
- * Run incremental billing cycle: fetch and process since last T0,
- * with slack to catch any wallbox that reconnected late.
+ * Run incremental billing cycle: fetch and process since last T0
+ * @async
  * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
  */
 async function runIncremental() {
@@ -112,29 +119,45 @@ async function runIncremental() {
     if (new_txns > 0) {
         new_high_water = await processSince(new_txns);
     }
-
     await db.setLastStopTimestamp(new_high_water);
-
     return {fetched: new_txns.length, high_water_mark: new_high_water};
 }
 
 
+/**
+ * Fetches all transactions from Steve, processes them, and updates the high-water mark.
+ * Use for a full sync (no time filter).
+ * @async
+ * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
+ */
 async function runFull() {
-    const new_txs = await fetchSince();
-    const new_high_water = new_txs.length > 0 ? await processSince(new_txs) : null;
+    let new_high_water = DateTime.now().toUTC();
 
-    return {fetched: new_txs.length, high_water_mark: new_high_water};
+    const new_txns = await fetchSince();
+    if (new_txns > 0) {
+        new_high_water = await processSince(new_txns);
+    }
+    await db.setLastStopTimestamp(new_high_water);
+    return {fetched: new_txns.length, high_water_mark: new_high_water};
 }
 
 
+/**
+ * Fetch and process all of today's transactions and updates the high-water mark.
+ * @async
+ * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
+ */
 async function runToday() {
     // Get today's date and set it to midnight
     const today = DateTime.utc().startOf('day');
-    // Fetch transactions from the start of today
-    const newTx = await fetchSince(today);
-    const new_high_water = newTx.length > 0 ? await processSince(newTx) : null;
+    let new_high_water = today;
 
-    return {fetched: newTx.length, high_water_mark: new_high_water};
+    const new_txns = await fetchSince(new_high_water);
+    if (new_txns > 0) {
+        new_high_water = await processSince(new_txns);
+    }
+    await db.setLastStopTimestamp(new_high_water);
+    return {fetched: new_txns.length, high_water_mark: new_high_water};
 }
 
 module.exports = {runIncremental};

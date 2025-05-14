@@ -5,7 +5,7 @@ const Joi = require('joi');
 
 const userSchema = Joi.object({
     user_id: Joi.number().positive().required(),
-    name: Joi.string().required(),
+    name: Joi.string().allow(null, ''),
     email: Joi.string().email().required(),
     odoo_user_id: Joi.number().allow(null),
     oauth_id: Joi.string().required(),
@@ -22,7 +22,7 @@ const fullyQualifiedUserSchema = Joi.object({
     oauth_id: Joi.string().required(),
     rfid: Joi.string().required(),
     steve_id: Joi.number().required(),
-});
+}).unknown(true); // Allow additional fields
 
 const steveUserSchema = Joi.object({
     //PK of the OCPP tag

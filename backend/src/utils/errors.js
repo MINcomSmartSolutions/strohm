@@ -85,10 +85,6 @@ const ExceptionCodes = Object.freeze({
         BILL_CREATE_FAILED: {code: 7009, message: 'Transaction bill creation in Odoo failed'},
     }),
 
-    EPS: Object.freeze({
-        CONNECTION_ERROR: {code: 8001, status: 500, message: 'SOAP could not establish connection with EPS'},
-    }),
-
     STEVE: Object.freeze({
         USER_EXISTS: {code: 9000, status: 500, message: 'User already exists in Steve'},
     }),

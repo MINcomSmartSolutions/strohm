@@ -1,3 +1,8 @@
+/**
+ * Odoo integration service: user creation, login, key rotation, and billing API.
+ *
+ * @module services/odoo
+ */
 const {ValidationError, ErrorCodes, SystemError} = require('../utils/errors');
 const {db} = require('../utils/queries');
 
@@ -6,9 +11,21 @@ const {odooAxios, odooUserAxios} = require('./network');
 const {DateTime} = require('luxon');
 const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
-const {dbTransactionSchema} = require('../utils/joi');
+const {dbTransactionSchema, fullyQualifiedUserSchema} = require('../utils/joi');
 
 
+/**
+ * Creates a new Odoo user.
+ *
+ * - Throws if the user already has an Odoo user ID.
+ * - Sends a POST request to Odoo to create the user.
+ * - Verifies the response hash for integrity.
+ * - Stores Odoo credentials in the database.
+ * - Logs the creation activity.
+ * @async
+ * @param {Object} user - User object with at least name and email.
+ * @throws {ValidationError|SystemError} On validation or Odoo errors.
+ */
 const createOdooUser = async (user) => {
     if (user.odoo_user_id !== null) {
         throw new ValidationError(ErrorCodes.USER.ODOO_EXISTS);
@@ -56,9 +73,24 @@ const createOdooUser = async (user) => {
 };
 
 
+/**
+ * Generates a secure Odoo portal login URL for the given user.
+ *
+ * - Validates the user object.
+ * - Fetches Odoo credentials from the database.
+ * - Constructs a login URL with required query parameters for authentication.
+ * - Throws if credentials are missing or invalid.
+ *
+ * @async
+ * @param {Object} user - User object with odoo_user_id and user_id.
+ * @throws {ValidationError} If user or credentials are invalid.
+ * @returns {string} Odoo portal login URL.
+ */
 const getOdooPortalLogin = async (user) => {
-    if (!user.odoo_user_id) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
+    const {error} = fullyQualifiedUserSchema.validate(user);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
+            `Invalid user ${error.message}`);
     }
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
@@ -88,9 +120,25 @@ const getOdooPortalLogin = async (user) => {
 };
 
 
+/**
+ * Rotates the Odoo user API key for the given user.
+ *
+ * - Validates the user object.
+ * - Fetches current Odoo credentials from the database.
+ * - Requests a new API key from Odoo and verifies the response hash.
+ * - Updates the database with the new key and salt.
+ * - Returns the updated Odoo credentials.
+ *
+ * @async
+ * @param {Object} user - User object with odoo_user_id and user_id.
+ * @throws {ValidationError|SystemError} On validation or Odoo errors.
+ * @returns {Promise<Object>} Updated Odoo credentials.
+ */
 const rotateOdooUserAuth = async (user) => {
-    if (!user.odoo_user_id) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_NOT_FOUND);
+    const {error} = fullyQualifiedUserSchema.validate(user);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
+            `Invalid user ${error.message}`);
     }
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
@@ -138,6 +186,20 @@ const rotateOdooUserAuth = async (user) => {
 };
 
 
+/**
+ * Creates a bill in Odoo for a given transaction.
+ *
+ * - Validates the transaction object.
+ * - Fetches Odoo credentials for the user.
+ * - Prepares billing line data.
+ * - Sends a POST request to Odoo to create the bill.
+ * - Throws if creation fails.
+ *
+ * @async
+ * @param {Object} db_txn - Transaction object from the database.
+ * @returns {Promise<string>} The created bill ID.
+ * @throws {ValidationError|SystemError} On validation or Odoo errors.
+ */
 async function createOdooTxnBill(db_txn) {
     const {error} = dbTransactionSchema.validate(db_txn);
     if (error) {

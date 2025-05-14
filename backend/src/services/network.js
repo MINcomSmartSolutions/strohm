@@ -1,3 +1,11 @@
+/**
+ * Network service module for external API clients.
+ *
+ * - Exports pre-configured Axios instances for Odoo and SteVe APIs.
+ * - Tests connections to SteVe and Odoo on module load.
+ *
+ * @module services/network
+ */
 const axios = require('axios');
 const logger = require('./logger');
 const {STEVE_CONFIG, ODOO_CONFIG} = require('../config');

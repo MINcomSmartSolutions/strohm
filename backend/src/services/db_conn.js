@@ -2,7 +2,6 @@ const { Pool } = require('pg');
 const {DatabaseError, ErrorCodes} = require('../utils/errors');
 const logger = require('./logger');
 
-// Do not use pool.query if you are using a transaction.
 
 const pool = new Pool({
     user: process.env.DB_USER,

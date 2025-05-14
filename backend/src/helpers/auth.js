@@ -20,19 +20,6 @@ function generateOdooHash(message, secret) {
 }
 
 
-// AKA: hash
-function generateEPSHash(message, secret) {
-    if (!message || typeof message !== 'string' || !message.trim() ||
-        !secret || typeof secret !== 'string' || !secret.trim()) {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
-    }
-    return crypto
-        .createHmac('sha256', secret)
-        .update(message)
-        .digest('hex');
-}
-
-
 /**
  * Generate a cryptographically secure random salt
  * @param {number} length - Length of the salt in bytes (default: 16)
@@ -45,6 +32,5 @@ function generateSalt(length = 16) {
 
 module.exports = {
     generateOdooHash,
-    generateEPSHash,
     generateSalt,
 };

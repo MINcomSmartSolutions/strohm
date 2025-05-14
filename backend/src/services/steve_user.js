@@ -1,10 +1,37 @@
-const {ValidationError, ErrorCodes, appErrorHandler} = require('../utils/errors');
+/**
+ * SteVe User Service
+ *
+ * Provides functions to create, fetch, block, and unblock users in the SteVe OCPP backend.
+ * - createSteveUser: Creates a new user in SteVe with the given RFID.
+ * - getSteveUser: Fetches a user from SteVe by RFID.
+ * - blockSteveUser: Blocks a user in SteVe (sets maxActiveTransactionCount to 0).
+ * - unblockSteveUser: Unblocks a user in SteVe (sets maxActiveTransactionCount to 1).
+ *
+ * All functions validate input and handle errors using custom error types.
+ *
+ * @module services/steve_user
+ */
+const {ValidationError, ErrorCodes} = require('../utils/errors');
 const {steveAxios} = require('./network');
 const {validateSteveUser} = require('../utils/steve');
 const logger = require('./logger');
 const {db} = require('../utils/queries');
 const {STEVE_CONFIG} = require('../config');
 
+
+/**
+ * Creates a new user in SteVe with the given RFID.
+ * - Checks if the user already exists.
+ * - Creates the user with the specified block status.
+ * - Validates the response and stores the steve_id in the database.
+ * - Returns the created user data.
+ *
+ * @async
+ * @param {Object} user - The user object (must include rfid).
+ * @param {boolean} [blocked=true] - Whether the user should be created `blocked`.
+ * @returns {Promise<Object>} The created user data from SteVe.
+ * @throws {ValidationError|Error} If validation fails or creation fails.
+ */
 const createSteveUser = async (user, blocked = true) => {
     logger.info(`Creating user in Steve with RFID: ${user.rfid}`);
 
@@ -44,6 +71,15 @@ const createSteveUser = async (user, blocked = true) => {
 };
 
 
+/**
+ * Fetches a user from SteVe by RFID.
+ * Returns null if not found, throws if multiple found or on error.
+ * Validates the user data.
+ *
+ * @param {string} user_rfid - The user's RFID.
+ * @returns {Promise<Object[]|null>} User data array or null if not found.
+ * @throws {ValidationError|Error} On invalid input or fetch error.
+ */
 const getSteveUser = async (user_rfid) => {
     if (!user_rfid || user_rfid.trim() === '') {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
@@ -71,6 +107,14 @@ const getSteveUser = async (user_rfid) => {
 };
 
 
+/**
+ * Blocks a user in SteVe by setting their maxActiveTransactionCount to 0.
+ * Validates input, updates the user, checks the block status, and logs the action.
+ *
+ * @async
+ * @param {Object} user - The user object (must include rfid and steve_id).
+ * @throws {ValidationError|Error} If input is invalid or block fails.
+ */
 const blockSteveUser = async (user) => {
     if (!user || !user.rfid || user.rfid.trim() === '') {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
@@ -93,6 +137,15 @@ const blockSteveUser = async (user) => {
     db.recordActivityLog(user.user_id, 'Block', 'SteVe', user.rfid);
 };
 
+
+/**
+ * Unblocks a user in SteVe by setting their maxActiveTransactionCount to 1.
+ * Validates input, updates the user, checks the unblock status, and logs the action.
+ *
+ * @async
+ * @param {Object} user - The user object (must include rfid and steve_id).
+ * @throws {ValidationError|Error} If input is invalid or unblock fails.
+ */
 const unblockSteveUser = async (user) => {
     if (!user || !user.rfid || user.rfid.trim() === '') {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);

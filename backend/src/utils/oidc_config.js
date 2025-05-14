@@ -1,3 +1,12 @@
+/**
+ * OIDC configuration for authentication middleware.
+ * - Uses environment variables for secrets and endpoints.
+ * - Customizes authorization parameters and routes.
+ * - Handles user session after authentication callback.
+ *
+ * @module utils/oidc_config
+ * @exports {Object} oidc_config - Configuration object for OIDC authentication.
+ */
 const axios = require('axios');
 const {userOperations} = require('../services/user_operations');
 const logger = require('../services/logger');
@@ -13,7 +22,7 @@ const oidc_config = {
     authorizationParams: {
         response_type: 'code', // This requires to provide a client secret
         // audience: 'https://api.example.com/products',
-        scope: 'openid profile email',
+        scope: 'openid profile email', // + rfid
     },
     routes: {
         logout: false, // Disable default logout route
@@ -26,7 +35,7 @@ const oidc_config = {
             },
         }).then(response => response.data)
             .catch(error => {
-                logger.error('Error fetching user info:', error.message);
+                logger.error('Error fetching user info OIDC:', error.message);
                 return {};
             });
 
