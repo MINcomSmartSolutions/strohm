@@ -9,7 +9,7 @@ ODOO_CONFIG = {
     HOST: process.env.ODOO_HOST,
     API_SECRET: process.env.ODOO_API_SECRET,
     USER_CREATION_URI: '/internal/user/create',
-    BILL_CREATION_URI: '/internal/bill/create',
+    INVOICE_CREATION_URI: '/internal/bill/create',
     PORTAL_LOGIN_URI: '/portal_login',
     ROTATE_APIKEY_URI: '/internal/rotate_api_key',
 };

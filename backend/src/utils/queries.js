@@ -52,6 +52,7 @@ const createUser = async (oauth_id, name, email, rfid) => {
 /**
  * Gets users based on dynamic filter parameters.
  *
+ * @async
  * @param {Object} filters - Object containing field names and values to filter by
  * @param {Object} options - Additional query options (limit, offset, orderBy, etc.)
  * @returns {Promise<Array>} - The matching users
@@ -123,9 +124,11 @@ const getUsers = async (filters = {}, options = {}) => {
  * Gets a single user with uniqueness validation.
  * Throws an error if multiple users match the criteria.
  *
+ * @async
  * @param {Object} filters - Object containing field names and values to filter by
  * @returns {Promise<Object|null>} - The matching user or null if not found
- * @throws {DatabaseError} - If multiple users match or database operation fails
+ * @throws {DatabaseError} - database operation fails
+ * @throws {ValidationError} - if multiple users match the criteria
  */
 const getUserUnique = async (filters) => {
     try {
@@ -193,6 +196,15 @@ const setUserOdooCredentials = async (user, credentials) => {
 };
 
 
+/**
+ * Retrieves the latest valid Odoo API key credentials for a user.
+ * Returns null if no credentials are found.
+ *
+ * @async
+ * @param {number} user_id - The user's ID.
+ * @returns {Promise<Object|null>} The credentials object or null.
+ * @throws {ValidationError|DatabaseError} On missing parameters or query error.
+ */
 const getUserOdooCredentials = async (user_id) => {
     if (!user_id) {
         throw new ValidationError(
@@ -225,6 +237,18 @@ const getUserOdooCredentials = async (user_id) => {
 };
 
 
+/**
+ * Rotates a user's Odoo API key.
+ * Revokes the old key and inserts a new one for the user.
+ *
+ * @async
+ * @param {number} user_id - The user's ID.
+ * @param {number} old_key_id - The ID of the old API key to revoke.
+ * @param {string} new_key - The new API key.
+ * @param {string} new_key_salt - The salt for the new API key.
+ * @returns {Promise<boolean>} True if rotation is successful.
+ * @throws {ValidationError|DatabaseError} On missing parameters or DB error.
+ */
 const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => {
     if (!user_id || !old_key_id || !new_key || !new_key_salt) {
         throw new ValidationError(
@@ -277,7 +301,24 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
 };
 
 
+/**
+ * Sets the SteVe user ID for a user in the database.
+ *
+ * @async
+ * @param {Object} user - The user object (must include user_id).
+ * @param {number} steve_id - The SteVe user ID to set.
+ * @throws {ValidationError} If required parameters are missing.
+ * @throws {Error} If the update fails.
+ * @returns {Promise<Object|undefined>} The updated user row or undefined.
+ */
 const setSteveUserParamaters = async (user, steve_id) => {
+    if (!user || !user.user_id || !steve_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
     const update_query = `
         UPDATE users
         SET steve_id = $1::integer
@@ -302,6 +343,14 @@ const setSteveUserParamaters = async (user, steve_id) => {
 };
 
 
+/**
+ * Records an activity event for a user in the activity log.
+ *
+ * @param {number} user_id - The user's ID.
+ * @param {string} event_type - The type of event (e.g., 'Create', 'Block').
+ * @param {string} target - The target system or entity (e.g., 'DB', 'SteVe').
+ * @param {string} rfid - The user's RFID.
+ */
 const recordActivityLog = (user_id, event_type, target, rfid) => {
     try {
         const activity_log_query = `
@@ -314,10 +363,13 @@ const recordActivityLog = (user_id, event_type, target, rfid) => {
     }
 };
 
+
 /**
  * Record a transaction record into the `charging_transactions` table.
  * If transaction already exists and is complete, returns it without modification.
  * Otherwise, inserts a new record with proper user association.
+ *
+ * @async
  * @param {Object} tx - Transaction from Steve system
  * @returns {Promise<Object>} db_txn - The transaction record from database
  */
@@ -395,6 +447,15 @@ async function recordTransaction(tx) {
     }
 }
 
+
+/**
+ * Sets the last stop timestamp watermark.
+ * Inserts or updates the `watermark` table with the given timestamp.
+ *
+ * @async
+ * @param {string|Date} new_watermark - The new last stop timestamp.
+ * @returns {Promise<void>}
+ */
 async function setLastStopTimestamp(new_watermark) {
     const query = `
         INSERT INTO watermark (last_stop_timestamp)
@@ -417,6 +478,15 @@ async function setLastStopTimestamp(new_watermark) {
     }
 }
 
+
+/**
+ * Retrieves the most recent `last_stop_timestamp` from the watermark table.
+ * Returns a Luxon DateTime if found, otherwise null.
+ *
+ * @async
+ * @returns {Promise<DateTime|null>} The latest stop timestamp or null if not found.
+ * @throws {DatabaseError} On query error.
+ */
 async function getLastStopTimestamp() {
     const query = `
         SELECT last_stop_timestamp::timestamptz
@@ -438,13 +508,23 @@ async function getLastStopTimestamp() {
     }
 }
 
-async function saveBillId(txn, bill_id) {
+
+/**
+ * Updates the `invoice_ref` field for a transaction in `charging_transactions`.
+ *
+ * @async
+ * @param {Object} txn - The transaction object (must include `id`).
+ * @param {number} invoice_id - The invoice ID came from Odoo to set.
+ * @returns {Promise<void>}
+ * @throws {DatabaseError|ValidationError} On query error.
+ */
+async function saveInvoiceId(txn, invoice_id) {
     const query = `
         UPDATE charging_transactions
         SET invoice_ref = $1::integer
         WHERE id = $2::integer
     `;
-    const values = [bill_id, txn.id];
+    const values = [invoice_id, txn.id];
 
     const client = await pool.connect();
     try {
@@ -453,7 +533,7 @@ async function saveBillId(txn, bill_id) {
         await client.query('COMMIT');
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'saveBillId');
+        handleQueryError(error, 'saveInvoiceId');
     } finally {
         client.release();
     }
@@ -473,6 +553,6 @@ module.exports = {
         recordTransaction,
         setLastStopTimestamp,
         getLastStopTimestamp,
-        saveBillId,
+        saveInvoiceId,
     },
 };

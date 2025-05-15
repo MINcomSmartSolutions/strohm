@@ -1,5 +1,5 @@
 /**
- * Odoo integration service: user creation, login, key rotation, and billing API.
+ * Odoo integration service: user creation, login, key rotation, and invoicing API.
  *
  * @module services/odoo
  */
@@ -86,7 +86,7 @@ const createOdooUser = async (user) => {
  * @throws {ValidationError} If user or credentials are invalid.
  * @returns {string} Odoo portal login URL.
  */
-const getOdooPortalLogin = async (user) => {
+async function getOdooPortalLogin(user) {
     const {error} = fullyQualifiedUserSchema.validate(user);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -187,12 +187,12 @@ const rotateOdooUserAuth = async (user) => {
 
 
 /**
- * Creates a bill in Odoo for a given transaction.
+ * Creates a bill/invoice in Odoo for a given transaction.
  *
  * - Validates the transaction object.
  * - Fetches Odoo credentials for the user.
- * - Prepares billing line data.
- * - Sends a POST request to Odoo to create the bill.
+ * - Prepares invoice line data.
+ * - Sends a POST request to Odoo to create the invoice.
  * - Throws if creation fails.
  *
  * @async
@@ -200,7 +200,7 @@ const rotateOdooUserAuth = async (user) => {
  * @returns {Promise<string>} The created bill ID.
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
-async function createOdooTxnBill(db_txn) {
+async function createOdooTxnInvoice(db_txn) {
     const {error} = dbTransactionSchema.validate(db_txn);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -229,10 +229,10 @@ async function createOdooTxnBill(db_txn) {
         lines_data: lines_data,
     };
 
-    const response = await odooUserAxios.post(ODOO_CONFIG.BILL_CREATION_URI, data);
+    const response = await odooUserAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
     if (response.status !== 201) {
         const errorMSG = response.data['error'];
-        throw new SystemError(ErrorCodes.ODOO.BILL_CREATE_FAILED, errorMSG);
+        throw new SystemError(ErrorCodes.ODOO.INVOICE_CREATE_FAILED, errorMSG);
     }
     return response.data['bill_id'];
 }
@@ -242,5 +242,5 @@ module.exports = {
     createOdooUser,
     getOdooPortalLogin,
     rotateOdooUserAuth,
-    createOdooTxnBill,
+    createOdooTxnInvoice,
 };

@@ -82,7 +82,7 @@ const ExceptionCodes = Object.freeze({
         USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
         KEY_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
         HASH_VERIFICATION_FAILED: {code: 7008, message: 'Odoo hash verification failed'},
-        BILL_CREATE_FAILED: {code: 7009, message: 'Transaction bill creation in Odoo failed'},
+        INVOICE_CREATE_FAILED: {code: 7009, message: 'Transaction bill creation in Odoo failed'},
     }),
 
     STEVE: Object.freeze({

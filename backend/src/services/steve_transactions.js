@@ -20,7 +20,7 @@ const {STEVE_CONFIG} = require('../config');
 const {steveTransactionSchema} = require('../utils/joi');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
 const {db} = require('../utils/queries');
-const {createOdooTxnBill} = require('./odoo');
+const {createOdooTxnInvoice} = require('./odoo');
 
 /**
  * Fetch STOPPED transactions since a given timestamp (exclusive)
@@ -87,8 +87,8 @@ async function processSince(txns) {
         // If the transaction does not have a invoice_ref to odoo
         // and have a associated user, create a bill.
         if (!db_txn.invoice_ref && db_txn.user_id) {
-            const bill_id = await createOdooTxnBill(db_txn);
-            await db.saveBillId(db_txn, bill_id);
+            const bill_id = await createOdooTxnInvoice(db_txn);
+            await db.saveInvoiceId(db_txn, bill_id);
         }
 
         // Determine new high‑water mark: max stopTimestamp of unique
