@@ -1,5 +1,6 @@
 /**
- * OIDC configuration for authentication middleware.
+ * @file OIDC configuration for authentication middleware.
+ *
  * - Uses environment variables for secrets and endpoints.
  * - Customizes authorization parameters and routes.
  * - Handles user session after authentication callback.

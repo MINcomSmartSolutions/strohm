@@ -97,6 +97,10 @@ app.get('/logout', async (req, res) => {
     await res.oidc.logout({returnTo: '/welcome'});
 });
 
+app.get('/test', async (req, res) => {
+    const values = await runIncremental();
+    return res.send(values);
+});
 
 // ODOO INCOMING WEBHOOKS
 app.get('/internal/update_user', verifyApiKey, async (req, res) => {

@@ -1,5 +1,5 @@
 /**
- * Network service module for external API clients.
+ * @file Network service module for external API clients.
  *
  * - Exports pre-configured Axios instances for Odoo and SteVe APIs.
  * - Tests connections to SteVe and Odoo on module load.

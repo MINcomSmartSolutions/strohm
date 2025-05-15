@@ -1,5 +1,5 @@
 /**
- * Cron job service for periodic transaction fetching.
+ * @file Cron job service for periodic transaction fetching.
  *
  * - Schedules a job to run every 20 second.
  * - Calls runIncremental to fetch new transactions.

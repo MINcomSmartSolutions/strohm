@@ -6,7 +6,8 @@
     "clean": "rm -rf node_modules && rm -rf package-lock.json && npm cache clean --force",
     "start": "node ./server.js",
     "debug": "nodemon --inspect ./server.js",
-    "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --coverage --ci --runInBand --forceExit"
+    "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --coverage --ci --runInBand --forceExit",
+    "docs": "npx jsdoc2md -c jsdoc.config.json -p package.json  src/**/*.js > Docs.md"
   },
   "keywords": [],
   "author": "MINcom Smart Solutions GmbH",

@@ -1,3 +1,10 @@
+/**
+ * @file Global database queries
+ *
+ * @module utils/queries
+ */
+
+
 const logger = require('../services/logger');
 const pool = require('../services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');

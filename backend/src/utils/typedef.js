@@ -1,4 +1,10 @@
 /**
+ * @file Type definitions
+ *
+ * @module utils/typedef
+ */
+
+/**
  * @typedef {Object} User
  * @memberOf Users
  * @property {string} user_id - The user's ID

@@ -1,3 +1,11 @@
+/**
+ * @file Service for checking overall user integrity and creating users with proper links to external systems.
+ *
+ * @module services/user_operations
+ * @exports userOperations
+ */
+
+
 const {createOdooUser} = require('./odoo');
 const {db} = require('../utils/queries');
 const {createSteveUser} = require('./steve_user');
@@ -38,6 +46,7 @@ const userOperations = async (oidc_user) => {
         await createOdooUser(user);
         user = await db.getUserUnique({user_id: user.user_id});
     } else if (user && user.odoo_user_id && !user.steve_id) {
+        // User exists and has an Odoo ID but not a Steve ID
         await createSteveUser(user);
         user = await db.getUserUnique({user_id: user.user_id});
     }

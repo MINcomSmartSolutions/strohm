@@ -1,5 +1,5 @@
 /**
- * Utility functions for Steve user data.
+ * @file Utility functions for Steve user data.
  *
  * @exports validateSteveUser: Validates the structure and idTag of a Steve user response.
  * @module utils/steve

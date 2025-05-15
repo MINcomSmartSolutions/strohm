@@ -1,6 +1,8 @@
 /**
- * Creates a logger instance with specified configuration.
+ * @file Logger service using winston
+ *
  * @type {winston}
+ * @module services/logger
  */
 const winston = require('winston');
 

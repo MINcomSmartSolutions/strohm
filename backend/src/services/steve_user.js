@@ -1,5 +1,5 @@
 /**
- * SteVe User Service
+ * @file SteVe User Service
  *
  * Provides functions to create, fetch, block, and unblock users in the SteVe OCPP backend.
  * - createSteveUser: Creates a new user in SteVe with the given RFID.

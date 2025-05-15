@@ -1,6 +1,7 @@
 /**
- * Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+ * @file SteVe Transactions Service
  *
+ * Incremental fetch of STOPPED transactions since last high‑water mark (T0).
  * High‑Water Mark Concept:
  * We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
  * On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.

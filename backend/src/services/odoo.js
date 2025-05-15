@@ -1,5 +1,7 @@
 /**
- * Odoo integration service: user creation, login, key rotation, and invoicing API.
+ * @file Odoo Integration Service
+ *
+ * It is responsible for user creation, login, key rotation, and invoicing with Odoo via REST API.
  *
  * @module services/odoo
  */
