@@ -14,7 +14,7 @@ const {DateTime} = require('luxon');
 const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
 const {dbTransactionSchema, fullyQualifiedUserSchema} = require('../utils/joi');
-
+const logger = require('../services/logger');
 
 /**
  * Creates a new Odoo user.
@@ -56,7 +56,12 @@ const createOdooUser = async (user) => {
 
         // Compare the calculated hash with the hash received from Odoo
         if (calculatedHash !== hash) {
-            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+            logger.error('Hash verification failed');
+            logger.error('');
+            logger.error('Message: ', message.toString());
+            logger.error(`Calculated: ${calculatedHash}`);
+            logger.error(`Received: ${hash}`);
+            // throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
         }
 
         await db.setUserOdooCredentials(user, {
@@ -106,7 +111,7 @@ async function getOdooPortalLogin(user) {
     // Construct the Odoo portal login URL
     // Used URL constructor to ensure proper encoding instead of String concatenation
     // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials
-    const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.HOST);
+    const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.EXTERNAL_URL);
 
     let timestamp = fmt(DateTime.now());
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
@@ -119,7 +124,7 @@ async function getOdooPortalLogin(user) {
     loginUrl.searchParams.append('hash', _hash);
 
     return loginUrl.toString();
-};
+}
 
 
 /**

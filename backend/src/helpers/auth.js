@@ -1,3 +1,4 @@
+'use strict';
 const crypto = require('crypto');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
 

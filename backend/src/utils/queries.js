@@ -1,3 +1,4 @@
+'use strict';
 /**
  * @file Global database queries
  *
@@ -97,6 +98,28 @@ const getUsers = async (filters = {}, options = {}) => {
 
     // Add ORDER BY, LIMIT, OFFSET if provided in options
     if (options.orderBy) {
+        // whitelist of allowed column names
+        const allowedColumns = [
+            'user_id',
+            'oauth_id',
+            'name',
+            'email',
+            'rfid',
+            'odoo_user_id',
+            'odoo_partner_id',
+            'steve_id',
+            'created_at',
+            'updated_at',
+        ];
+
+        // Validate that the orderBy parameter is in the whitelist
+        if (!allowedColumns.includes(options.orderBy)) {
+            throw new ValidationError(
+                ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                `Invalid orderBy parameter: ${options.orderBy}`,
+            );
+        }
+
         const direction = options.orderDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
         query += ` ORDER BY ${options.orderBy} ${direction}`;
     }

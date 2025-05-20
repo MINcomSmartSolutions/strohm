@@ -1,3 +1,4 @@
+'use strict';
 /**
  * @file Joi validation schemas
  */
@@ -11,18 +12,20 @@ const userSchema = Joi.object({
     oauth_id: Joi.string().required(),
     rfid: Joi.string().required(),
     steve_id: Joi.number().allow(null),
-});
+}).unknown(true); // Allow additional fields
+
 
 const fullyQualifiedUserSchema = Joi.object({
     user_id: Joi.number().positive().required(),
     name: Joi.string().required(),
     email: Joi.string().email().required(),
     odoo_user_id: Joi.number().required(),
-    partner_id: Joi.number().required(),
+    odoo_partner_id: Joi.number().required(),
     oauth_id: Joi.string().required(),
     rfid: Joi.string().required(),
     steve_id: Joi.number().required(),
 }).unknown(true); // Allow additional fields
+
 
 const steveUserSchema = Joi.object({
     //PK of the OCPP tag
@@ -61,29 +64,25 @@ const steveTransactionSchema = Joi.object({
     // The timestamp at which the transaction started
     startTimestamp: Joi.date().required(),
     // The timestamp at which the transaction ended
-    stopTimestamp: Joi.date().allow(null),
+    stopTimestamp: Joi.date().required(),
     // The meter value reading at the start of the transaction
-    startValue: Joi.string().required(),
+    startValue: Joi.number().required(),
     // The meter value reading at the end of the transaction
-    stopValue: Joi.string().allow(null),
+    stopValue: Joi.number().min(Joi.ref('startValue')).required(),
     // The reason for the transaction being stopped
     stopReason: Joi.string().allow(null),
     // The actor who stopped the transaction
     stopEventActor: Joi.string().valid('station', 'manual').allow(null),
-}).custom((obj, helpers) => {
-    if (obj.stopValue !== null && Number(obj.startValue) > Number(obj.stopValue)) {
-        return helpers.error('any.invalid');
-    }
-    return obj;
-}, 'startValue <= stopValue validation');
+}).unknown(true); // Allow additional fields
 
+// Database transaction schema
 const dbTransactionSchema = Joi.object({
     id: Joi.number().integer().positive().required(),
     created_at: Joi.date().required(),
     start_timestamp: Joi.date().required(),
     stop_timestamp: Joi.date().required(),
     start_value: Joi.number().min(0).required(),
-    stop_value: Joi.number().min(0).required(),
+    stop_value: Joi.number().min(Joi.ref('start_value')).required(),
     delivered_energy_wh: Joi.number().min(0).required(),
     ocpp_id_tag: Joi.string().required(),
 }).unknown(true);

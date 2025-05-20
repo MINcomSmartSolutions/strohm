@@ -1,3 +1,4 @@
+'use strict';
 /**
  * @file Middleware for API key authentication between Odoo and the server.
  * Checks the 'x-api-key' header against the configured secret.

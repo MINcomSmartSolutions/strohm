@@ -1,3 +1,4 @@
+'use strict';
 /**
  * @file OIDC configuration for authentication middleware.
  *

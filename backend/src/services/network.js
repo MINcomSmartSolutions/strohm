@@ -11,8 +11,9 @@ const logger = require('./logger');
 const {STEVE_CONFIG, ODOO_CONFIG} = require('../config');
 
 
+
 const odooAxios = axios.create({
-    baseURL: ODOO_CONFIG.HOST,
+    baseURL: `http://${ODOO_CONFIG.HOST}:${ODOO_CONFIG.PORT}`,
     headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.ODOO_ADMIN_API_KEY}`,
@@ -20,14 +21,15 @@ const odooAxios = axios.create({
 });
 
 const odooUserAxios = axios.create({
-    baseURL: ODOO_CONFIG.HOST,
+    baseURL: `http://${ODOO_CONFIG.HOST}:${ODOO_CONFIG.PORT}`,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
+
 const steveAxios = axios.create({
-    baseURL: STEVE_CONFIG.HOST,
+    baseURL: `http://${STEVE_CONFIG.HOST}:${STEVE_CONFIG.PORT}/steve`,
     auth: {
         username: process.env.STEVE_AUTH_USERNAME,
         password: process.env.STEVE_API_PASSWORD,
@@ -45,14 +47,14 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
 })
     .then(response => {
         if (response.status !== 200) {
-            logger.error('Error connecting to SteVe:', response.data);
+            logger.error('Error connecting to SteVe:' + response.data.toJSON());
             throw new Error('Failed to connect to SteVe');
         } else {
             logger.info('Steve connection successful:');
         }
     })
     .catch(error => {
-        logger.error('Error connecting to SteVe:', error.message);
+        logger.error('Error connecting to SteVe:' + error);
     });
 
 // Test the connection to Odoo
@@ -60,7 +62,7 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
 odooAxios.get('/')
     .then(response => {
         if (response.status !== 200) {
-            logger.error(`Error connecting to Odoo:"${response.data}"`);
+            logger.error(`Error connecting to Odoo:"${response}"`);
         } else {
             logger.info('Odoo connection successful:');
         }

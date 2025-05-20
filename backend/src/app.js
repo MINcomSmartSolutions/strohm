@@ -21,7 +21,17 @@ const logger = require('./services/logger');
 const {runIncremental} = require('./services/steve_transactions');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
+const {STEVE_CONFIG} = require('./config');
 Settings.defaultZoneName = 'utc';
+// Handling response status codes where the respected function is called instead of axios throwing an error
+axios.defaults.validateStatus = function () {
+    return true;
+};
+
+logger.info(`http://${STEVE_CONFIG.HOST}:${STEVE_CONFIG.PORT}/steve`);
+
+
+//TODO: Implement input sanitization. Validation is done by the JOI
 
 // Session configuration
 app.use(session({
@@ -37,11 +47,6 @@ app.use(session({
 if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1 /* number of proxies between user and server */);
 }
-
-// Handling response status codes where the respected function is called instead of axios throwing an error
-axios.defaults.validateStatus = function () {
-    return true;
-};
 
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
@@ -118,6 +123,6 @@ app.get('/internal/update_user', verifyApiKey, async (req, res) => {
 });
 
 // Start the cron job
-transactionFetchLoop.start();
+// transactionFetchLoop.start();
 
 module.exports = app;
