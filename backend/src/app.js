@@ -68,7 +68,6 @@ app.get('/', async (req, res) => {
     try {
         if (req.oidc.isAuthenticated()) {
             if (req.session.user) {
-                // User exists in session, redirect to Odoo portal
                 const redirect_url = await getOdooPortalLogin(req.session.user);
                 return res.redirect(redirect_url);
             }

@@ -66,6 +66,10 @@ const createSteveUser = async (user, blocked = true) => {
     if (!create_check_query) {
         throw new Error('User could not be found after creation');
     }
+    db.recordActivityLog(user.user_id, 'CREATE USER', 'SteVe', user.rfid);
+    if (blocked) {
+        db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid);
+    }
 
     return create_check_query;
 };
@@ -134,7 +138,7 @@ const blockSteveUser = async (user) => {
         throw new Error('User could not be blocked in SteVe');
     }
 
-    db.recordActivityLog(user.user_id, 'Block', 'SteVe', user.rfid);
+    db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid);
 };
 
 
@@ -164,7 +168,7 @@ const unblockSteveUser = async (user) => {
         throw new Error('User could not be unblocked in SteVe');
     }
 
-    db.recordActivityLog(user.user_id, 'Unblock', 'SteVe', user.rfid);
+    db.recordActivityLog(user.user_id, 'UNBLOCK USER', 'SteVe', user.rfid);
 };
 
 

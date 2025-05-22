@@ -46,8 +46,9 @@ const createUser = async (oauth_id, name, email, rfid) => {
         await client.query('BEGIN');
         const result = await client.query(query, values);
         const created_user = result.rows[0];
-        recordActivityLog(created_user.user_id, 'Create', 'DB', rfid);
         await client.query('COMMIT');
+
+        recordActivityLog(created_user.user_id, 'CREATE USER', 'DB', rfid);
         return created_user;
     } catch (error) {
         await client.query('ROLLBACK');
@@ -156,7 +157,7 @@ const getUsers = async (filters = {}, options = {}) => {
  *
  * @async
  * @param {Object} filters - Object containing field names and values to filter by
- * @returns {Promise<Object|null>} - The matching user or null if not found
+ * @returns {Promise<Object<User>|null>} - The matching user or null if not found
  * @throws {DatabaseError} - database operation fails
  * @throws {ValidationError} - if multiple users match the criteria
  */
@@ -182,17 +183,16 @@ const getUserUnique = async (filters) => {
 };
 
 
-const setUserOdooCredentials = async (user, credentials) => {
-    const {odoo_user_id, partner_id, encrypted_key, salt} = credentials;
+const setUserOdooCredentials = async (user, odoo_user_id, odoo_partner_id, encrypted_key, salt) => {
 
-    if (!user || !odoo_user_id || !partner_id || !encrypted_key || !salt) {
+    if (!user || !odoo_user_id || !odoo_partner_id || !encrypted_key || !salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
             `Missing required parameters.`,
         );
     }
 
-    if (!Number.isInteger(user.user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(partner_id)) {
+    if (!Number.isInteger(user.user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(odoo_partner_id)) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
             `Invalid parameters.`,
@@ -214,7 +214,7 @@ const setUserOdooCredentials = async (user, credentials) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query(userTableQuery, [odoo_user_id, partner_id, user.user_id]);
+        await client.query(userTableQuery, [odoo_user_id, odoo_partner_id, user.user_id]);
         await client.query(odooUserKeyQuery, [user.user_id, encrypted_key, salt]);
         await client.query('COMMIT');
     } catch (error) {

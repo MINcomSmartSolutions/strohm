@@ -56,21 +56,23 @@ const createOdooUser = async (user) => {
 
         // Compare the calculated hash with the hash received from Odoo
         if (calculatedHash !== hash) {
-            logger.error('Hash verification failed');
-            logger.error('');
-            logger.error('Message: ', message.toString());
-            logger.error(`Calculated: ${calculatedHash}`);
-            logger.error(`Received: ${hash}`);
+            if (process.env.NODE_ENV !== 'production') {
+                // FIXME
+                logger.error('Hash verification failed');
+                logger.error('Message: ', message.toString());
+                logger.error(`Calculated: ${calculatedHash}`);
+                logger.error(`Received: ${hash}`);
+            }
             // throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
         }
 
-        await db.setUserOdooCredentials(user, {
-            odoo_user_id: odoo_user_id,
-            partner_id: odoo_partner_id,
-            encrypted_key: encrypted_key,
-            salt: key_salt,
-        });
-        db.recordActivityLog(user.user_id, 'CREATE', 'Odoo', user.rfid);
+        await db.setUserOdooCredentials(user,
+            odoo_user_id,
+            odoo_partner_id,
+            encrypted_key,
+            key_salt,
+        );
+        db.recordActivityLog(user.user_id, 'CREATE USER', 'Odoo', user.rfid);
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {
@@ -185,6 +187,7 @@ const rotateOdooUserAuth = async (user) => {
         if (!db_query) {
             throw new SystemError(ErrorCodes.USER.KEY_ROTATION_FAILED);
         }
+        db.recordActivityLog(user.user_id, 'ROTATE USER KEY', 'Odoo', user.rfid);
         return db.getUserOdooCredentials(user.user_id);
     } else {
         const errorMSG = response.data['error'];
@@ -215,6 +218,7 @@ async function createOdooTxnInvoice(db_txn) {
     }
 
     const {key, key_salt} = await db.getUserOdooCredentials(db_txn.user_id);
+    const user = await db.getUserUnique(db_txn.user_id);
 
     const lines_data = [
         {
@@ -241,6 +245,8 @@ async function createOdooTxnInvoice(db_txn) {
         const errorMSG = response.data['error'];
         throw new SystemError(ErrorCodes.ODOO.INVOICE_CREATE_FAILED, errorMSG);
     }
+
+    db.recordActivityLog(user.user_id, 'CREATE INVOICE', 'ODOO', user.rfid);
     return response.data['bill_id'];
 }
 

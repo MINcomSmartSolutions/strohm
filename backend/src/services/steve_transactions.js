@@ -16,7 +16,6 @@
 const {DateTime} = require('luxon');
 const {steveAxios} = require('./network');
 const {fmt} = require('../utils/datetime_format');
-const logger = require('./logger');
 const {STEVE_CONFIG} = require('../config');
 const {steveTransactionSchema} = require('../utils/joi');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
@@ -31,7 +30,7 @@ const {createOdooTxnInvoice} = require('./odoo');
  * @returns {Promise<Array<Object>>} Array of transactions
  */
 async function fetchSince(since = null) {
-    const to = DateTime.now().toUTC();
+    const to = DateTime.now();
 
     // Always fetch stopped sessions
     let params = {
@@ -42,7 +41,7 @@ async function fetchSince(since = null) {
     if (since) {
         params.periodType = 'FROM_TO';
         params.from = fmt(since.toUTC());
-        params.to = fmt(to);
+        params.to = fmt(to.toUTC());
     } else {
         // If `since` is not provided, fetch all transactions
         params.periodType = 'ALL';
@@ -150,8 +149,7 @@ async function runFull() {
  */
 async function runToday() {
     // Get today's date and set it to midnight
-    const today = DateTime.utc().startOf('day');
-    let new_high_water = today;
+    let new_high_water = DateTime.utc().startOf('day');
 
     const new_txns = await fetchSince(new_high_water);
     if (new_txns > 0) {

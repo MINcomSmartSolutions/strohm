@@ -13,7 +13,7 @@ const {STEVE_CONFIG, ODOO_CONFIG} = require('../config');
 
 
 const odooAxios = axios.create({
-    baseURL: `http://${ODOO_CONFIG.HOST}:${ODOO_CONFIG.PORT}`,
+    baseURL: ODOO_CONFIG.URL,
     headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.ODOO_ADMIN_API_KEY}`,
@@ -21,7 +21,7 @@ const odooAxios = axios.create({
 });
 
 const odooUserAxios = axios.create({
-    baseURL: `http://${ODOO_CONFIG.HOST}:${ODOO_CONFIG.PORT}`,
+    baseURL: ODOO_CONFIG.URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -29,7 +29,7 @@ const odooUserAxios = axios.create({
 
 
 const steveAxios = axios.create({
-    baseURL: `http://${STEVE_CONFIG.HOST}:${STEVE_CONFIG.PORT}/steve`,
+    baseURL: STEVE_CONFIG.URL,
     auth: {
         username: process.env.STEVE_AUTH_USERNAME,
         password: process.env.STEVE_API_PASSWORD,
