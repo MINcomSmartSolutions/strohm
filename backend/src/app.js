@@ -31,7 +31,8 @@ axios.defaults.validateStatus = function () {
 logger.info(`http://${STEVE_CONFIG.HOST}:${STEVE_CONFIG.PORT}/steve`);
 
 
-//TODO: Implement input sanitization. Validation is done by the JOI
+// TODO: Seperate to controllers folder
+
 
 // Session configuration
 app.use(session({

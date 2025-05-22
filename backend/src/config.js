@@ -19,6 +19,7 @@ ODOO_CONFIG = {
     INVOICE_CREATION_URI: '/internal/bill/create',
     PORTAL_LOGIN_URI: '/portal_login',
     ROTATE_APIKEY_URI: '/internal/rotate_api_key',
+    CHECK_PAYMENT_METHOD_URI: '/internal/user/valid_pm',
 };
 
 module.exports = {

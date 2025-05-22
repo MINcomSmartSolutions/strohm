@@ -6,10 +6,10 @@
  */
 
 
-const {createOdooUser} = require('./odoo');
+const {createOdooUser, checkValidPaymentMethod} = require('./odoo');
 const {db} = require('../utils/queries');
 const {createSteveUser} = require('./steve_user');
-
+const logger = require('../services/logger');
 
 /**
  * Handles user creation and linking with external systems.
@@ -51,6 +51,10 @@ const userOperations = async (oidc_user) => {
         user = await db.getUserUnique({user_id: user.user_id});
     }
 
+    const has_valid_payment_method = await checkValidPaymentMethod(user);
+    if (!has_valid_payment_method) {
+        logger.warning('User does not have a valid payment method');
+    }
     return user;
 
     // TODO: Check valid payment method

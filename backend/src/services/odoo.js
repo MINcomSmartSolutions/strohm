@@ -143,7 +143,7 @@ async function getOdooPortalLogin(user) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  * @returns {Promise<Object>} Updated Odoo credentials.
  */
-const rotateOdooUserAuth = async (user) => {
+async function rotateOdooUserAuth(user) {
     const {error} = fullyQualifiedUserSchema.validate(user);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -250,10 +250,59 @@ async function createOdooTxnInvoice(db_txn) {
     return response.data['bill_id'];
 }
 
+async function checkValidPaymentMethod(user) {
+    const {error} = fullyQualifiedUserSchema.validate(user);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
+            `Invalid user ${error.message}`);
+    }
+
+    const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
+    const {key, key_salt} = odoo_credentials;
+    const salt = generateSalt();
+    const data = {
+        timestamp: fmt(DateTime.now()),
+        user_id: user.odoo_user_id,
+        partner_id: user.odoo_partner_id,
+        key: key,
+        key_salt: key_salt,
+        salt: salt,
+    };
+    const message = `${data.timestamp}${data.user_id}${data.partner_id}${data.key}${data.key_salt}${data.salt}`;
+    data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
+
+    const response = await odooAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
+    if (response.status === 200) {
+        //     Verify hash
+        const data = response.data;
+        const timestamp = data['timestamp'];
+        const result = data['result'];
+        const salt = data['salt'];
+        const hash = data['hash'];
+
+        if (!result || !timestamp || !salt || !hash) {
+            throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE);
+        }
+
+        const message = `${timestamp}${result}${salt}`;
+        const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
+        // Compare the calculated hash with the hash received from Odoo
+        if (expected_hash !== hash) {
+            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+        }
+        logger.warn('Payment method check result:' + result);
+        return (result === 'valid');
+    } else {
+        logger.error(`Error checking payment method: ${response.status}, ${response.data}`);
+        throw new SystemError(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
+    }
+}
+
 
 module.exports = {
     createOdooUser,
     getOdooPortalLogin,
     rotateOdooUserAuth,
     createOdooTxnInvoice,
+    checkValidPaymentMethod,
 };

@@ -33,6 +33,7 @@ async function fetchSince(since = null) {
     const to = DateTime.now();
 
     // Always fetch stopped sessions
+    // FIXME: STOPPED can also mean its paused. Check stop reason?!!!
     let params = {
         type: 'STOPPED',
     };

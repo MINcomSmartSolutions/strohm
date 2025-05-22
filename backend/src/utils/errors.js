@@ -83,6 +83,8 @@ const ExceptionCodes = Object.freeze({
         KEY_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
         HASH_VERIFICATION_FAILED: {code: 7008, message: 'Odoo hash verification failed'},
         INVOICE_CREATE_FAILED: {code: 7009, message: 'Transaction bill creation in Odoo failed'},
+        PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check in Odoo failed'},
+        INVALID_RESPONSE: {code: 7011, message: 'Invalid response from Odoo'},
     }),
 
     STEVE: Object.freeze({

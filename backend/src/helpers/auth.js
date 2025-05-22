@@ -16,7 +16,7 @@ function generateOdooHash(message, secret) {
     }
     return crypto
         .createHmac('sha256', secret)
-        .update(message)
+        .update(message, 'utf8')
         .digest('hex');
 }
 

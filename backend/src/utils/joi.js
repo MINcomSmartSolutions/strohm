@@ -3,6 +3,7 @@
  * @file Joi validation schemas
  */
 const Joi = require('joi');
+//TODO: Implement input sanitization. Validation is done by the JOI
 
 const userSchema = Joi.object({
     user_id: Joi.number().positive().required(),

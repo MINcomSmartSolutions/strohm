@@ -45,7 +45,7 @@ services:
       STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME}
       STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD}
       ODOO_ADMIN_API_KEY: ${ODOO_DEVELOPMENT_ADMIN_API_KEY}
-      ODOO_API_SECRET: 'anothersecret'
+      ODOO_API_SECRET: anothersecret
       ODOO_HOST: odoo
       ODOO_PORT: 8069
       ODOO_EXTERNAL_HOST: localhost
@@ -77,7 +77,7 @@ services:
     #      retries: 5           # retry 5 times before marking unhealthy
     #      start_period: 60s    # allow 60 seconds for Odoo to start
     environment:
-      DOODBA_ENVIRONMENT: "${DOODBA_ENVIRONMENT-devel}"
+      ODOO_ENV: "dev"
       LIST_DB: "true"
       PGHOST: db
       PGDATABASE: ${ODOO_DB}
@@ -86,7 +86,7 @@ services:
       ADMIN_PASSWORD: ${ODOO_PASSWORD}
       PYTHONDONTWRITEBYTECODE: 1
       SMTP_PORT: "1025"
-      ODOO_API_SECRET: "anothersecret"
+      ODOO_API_SECRET: anothersecret
       INITIAL_LANG: "de_DE"
       BACKEND_HOST: server
       BACKEND_PORT: 3000
