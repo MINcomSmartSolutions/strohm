@@ -22,14 +22,12 @@ const {runIncremental} = require('./services/steve_transactions');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
 const {STEVE_CONFIG} = require('./config');
+const {morganMiddleware} = require('./services/logger');
 Settings.defaultZoneName = 'utc';
 // Handling response status codes where the respected function is called instead of axios throwing an error
 axios.defaults.validateStatus = function () {
     return true;
 };
-
-logger.info(`http://${STEVE_CONFIG.HOST}:${STEVE_CONFIG.PORT}/steve`);
-
 
 // TODO: Seperate to controllers folder
 
@@ -51,7 +49,7 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
-
+app.use(morganMiddleware);
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 // See: https://github.com/auth0/express-openid-connect
 app.use(auth(oidc_config));

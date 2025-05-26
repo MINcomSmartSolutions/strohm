@@ -50,7 +50,7 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
             logger.error('Error connecting to SteVe:' + response.data.toJSON());
             throw new Error('Failed to connect to SteVe');
         } else {
-            logger.info('Steve connection successful:');
+            logger.info('Steve connection successful');
         }
     })
     .catch(error => {
@@ -64,7 +64,7 @@ odooAxios.get('/')
         if (response.status !== 200) {
             logger.error(`Error connecting to Odoo:"${response}"`);
         } else {
-            logger.info('Odoo connection successful:');
+            logger.info('Odoo connection successful');
         }
     })
     .catch(error => {

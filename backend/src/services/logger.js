@@ -1,33 +1,66 @@
 /**
- * @file Logger service using winston
+ * @file Logger service using winston with file rotation and enhanced console output
  *
  * @type {winston}
  * @module services/logger
  */
 const winston = require('winston');
+const {format} = winston;
+const DailyRotateFile = require('winston-daily-rotate-file');
+const morgan = require('morgan');
 
 
-//TODO: Add the file/function where the logger is used
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'silly',
-    format: winston.format.combine(
-        winston.format.label({label: process.env.NODE_ENV}),
-        winston.format.timestamp(), winston.format.errors({stack: true}),
-        winston.format.splat(), winston.format.json()),
-
+    format: format.combine(
+        format.label({label: process.env.NODE_ENV}),
+        format.timestamp(),
+        format.errors({stack: true}),
+        format.splat(),
+        format.json(),
+    ),
     transports: [
-        new winston.transports.File({filename: 'logs/error.log', level: 'error'}),
-        new winston.transports.File({
-            filename: 'logs/combined.log',
+        new DailyRotateFile({
+            filename: 'logs/error-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            level: 'error',
+            maxFiles: '14d',
+            zippedArchive: true,
+        }),
+        new DailyRotateFile({
+            filename: 'logs/combined-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
             level: process.env.LOG_LEVEL || 'info',
+            maxFiles: '14d',
+            zippedArchive: true,
         }),
     ],
 });
 
-
-// If we're not in production then log to the `console` with the format:
+// Enhanced console output for non-production
 if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({format: winston.format.simple()}));
+    logger.add(new winston.transports.Console({
+        format: format.combine(
+            format.colorize(),
+            format.timestamp({format: 'HH:mm:ss'}),
+            format.printf(({timestamp, level, message, file, line, label, ...meta}) => {
+                let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
+                let envLabel = label ? `[${label.toUpperCase()}]` : '';
+                return `[${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${envLabel}`.trim();
+            }),
+        ),
+    }));
 }
 
+const morganMiddleware = morgan(
+    ':method :url :status :res[content-length] - :response-time ms - :remote-addr',
+    {
+        stream: {
+            write: (message) => logger.http(message.trim()),
+        },
+    },
+);
+
+
 module.exports = logger;
+module.exports.morganMiddleware = morganMiddleware;

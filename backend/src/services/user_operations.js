@@ -53,7 +53,7 @@ const userOperations = async (oidc_user) => {
 
     const has_valid_payment_method = await checkValidPaymentMethod(user);
     if (!has_valid_payment_method) {
-        logger.warning('User does not have a valid payment method');
+        logger.warn('User does not have a valid payment method');
     }
     return user;
 
