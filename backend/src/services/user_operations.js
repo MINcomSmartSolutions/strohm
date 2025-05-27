@@ -57,7 +57,7 @@ const userOperations = async (oidc_user) => {
     }
     return user;
 
-    // TODO: Check valid payment method
+
     // TODO: Check for fraud
 
     //TODO: Check remote and local updated_at date

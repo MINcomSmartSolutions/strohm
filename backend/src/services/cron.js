@@ -10,11 +10,14 @@
  */
 const {CronJob} = require('cron');
 const {runIncremental} = require('./steve_transactions');
-const {info} = require('./logger');
+const logger = require('./logger');
 
-const transactionFetchLoop = new CronJob('20 * * * * *', async () => {
-    const response = await runIncremental();
-    info('Cron job executed successfully', response);
+const transactionFetchLoop = new CronJob('1 * * * * *', async () => {
+    try {
+        await runIncremental();
+    } catch (error) {
+        logger.error('Error during transaction fetch loop: ' + error.message);
+    }
 });
 
 module.exports = {

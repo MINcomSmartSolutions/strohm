@@ -21,7 +21,6 @@ const logger = require('./services/logger');
 const {runIncremental} = require('./services/steve_transactions');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
-const {STEVE_CONFIG} = require('./config');
 const {morganMiddleware} = require('./services/logger');
 Settings.defaultZoneName = 'utc';
 // Handling response status codes where the respected function is called instead of axios throwing an error
@@ -121,6 +120,7 @@ app.get('/internal/update_user', verifyApiKey, async (req, res) => {
 });
 
 // Start the cron job
-// transactionFetchLoop.start();
+transactionFetchLoop.start();
+
 
 module.exports = app;

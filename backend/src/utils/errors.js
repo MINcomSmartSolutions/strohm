@@ -78,13 +78,17 @@ const ExceptionCodes = Object.freeze({
         USER_CREATE_FAILED: {code: 7002, message: 'User creation in Odoo failed'},
         USER_UPDATE_FAILED: {code: 7003, message: 'User update in Odoo failed'},
         USER_DELETE_FAILED: {code: 7004, message: 'User deletion in Odoo failed'},
-        USER_NOT_AUTHORIZED: {code: 7005, message: 'User is not authorized to perform this action in Odoo'},
+        USER_NOT_AUTHORIZED: {
+            code: 7005,
+            status: 401,
+            message: 'User is not authorized to perform this action in Odoo',
+        },
         USER_NOT_ACTIVE: {code: 7006, message: 'User is not active in Odoo'},
         KEY_ROTATION_FAILED: {code: 7007, message: 'Token rotation in Odoo failed'},
-        HASH_VERIFICATION_FAILED: {code: 7008, message: 'Odoo hash verification failed'},
+        HASH_VERIFICATION_FAILED: {code: 7008, status: 401, message: 'Odoo hash verification failed'},
         INVOICE_CREATE_FAILED: {code: 7009, message: 'Transaction bill creation in Odoo failed'},
         PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check in Odoo failed'},
-        INVALID_RESPONSE: {code: 7011, message: 'Invalid response from Odoo'},
+        INVALID_RESPONSE: {code: 7011, status: 400, message: 'Invalid response from Odoo'},
     }),
 
     STEVE: Object.freeze({
@@ -148,6 +152,8 @@ class OAuthError extends AppError {
 class SystemError extends AppError {
 }
 
+class ResponseError extends AppError {
+}
 
 /**
  * Express error handler for AppErrors
@@ -176,5 +182,6 @@ module.exports = {
     DatabaseError,
     OAuthError,
     SystemError,
+    ResponseError,
     appErrorHandler,
 };

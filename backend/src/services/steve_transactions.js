@@ -21,6 +21,7 @@ const {steveTransactionSchema} = require('../utils/joi');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
 const {db} = require('../utils/queries');
 const {createOdooTxnInvoice} = require('./odoo');
+const logger = require('../services/logger');
 
 /**
  * Fetch STOPPED transactions since a given timestamp (exclusive)
@@ -43,9 +44,11 @@ async function fetchSince(since = null) {
         params.periodType = 'FROM_TO';
         params.from = fmt(since.toUTC());
         params.to = fmt(to.toUTC());
+        logger.info(`Fetching transactions from SteVe since ${since.toISO()} to ${to.toISO()}`);
     } else {
         // If `since` is not provided, fetch all transactions
         params.periodType = 'ALL';
+        logger.info('Fetching all transactions from SteVe');
     }
 
 
@@ -59,49 +62,57 @@ async function fetchSince(since = null) {
  * @async
  * @param {Array<Object>} txns
  * @returns {Promise<DateTime>} The new high‑water mark (max stopTimestamp)
+ * @throws {ValidationError} If any transaction does not match the expected schema
  */
 async function processSince(txns) {
-    // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
-    const unique = Array.from(
-        txns.reduce((map, tx) => {
-            // Validate transaction against schema
-            const {error} = steveTransactionSchema.validate(tx);
-            if (error) {
-                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
-                    `Invalid transaction format: ${error.message}`);
+    try {
+        // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
+        const unique = Array.from(
+            txns.reduce((map, tx) => {
+                logger.info('Processing transaction: ' + tx.id);
+                // Validate transaction against schema
+                const {error} = steveTransactionSchema.validate(tx);
+                if (error) {
+                    throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
+                        `Invalid transaction format: ${error.message}`);
+                }
+                return map.set(tx.id, tx);
+            }, new Map()).values(),
+        );
+
+        //TODO: More checks needed.
+        // 1. Check if the bill already exists in Odoo
+        //
+
+
+        let maxStop;
+
+        logger.info('Processing transactions since last high-water mark');
+        // Record all unique
+        for (const tx of unique) {
+            logger.info('Recording transaction: ' + tx.id);
+            const db_txn = await db.recordTransaction(tx);
+
+            // If the transaction does not have a invoice_ref to odoo
+            // and have a associated user, create a bill.
+            if (!db_txn.invoice_ref && db_txn.user_id) {
+                const bill_id = await createOdooTxnInvoice(db_txn);
+                await db.saveInvoiceId(db_txn, bill_id);
             }
-            return map.set(tx.id, tx);
-        }, new Map()).values(),
-    );
 
-
-    //TODO: More checks needed.
-    // 1. Check if the bill already exists in Odoo
-    //
-
-    let maxStop;
-
-    // Record all unique
-    for (const tx of unique) {
-        const db_txn = await db.recordTransaction(tx);
-
-        // If the transaction does not have a invoice_ref to odoo
-        // and have a associated user, create a bill.
-        if (!db_txn.invoice_ref && db_txn.user_id) {
-            const bill_id = await createOdooTxnInvoice(db_txn);
-            await db.saveInvoiceId(db_txn, bill_id);
+            // Determine new high‑water mark: max stopTimestamp of unique
+            maxStop = unique.reduce((max, tx) => {
+                const stop = DateTime.fromISO(tx.stopTimestamp, {zone: 'utc'});
+                return stop > max ? stop : max;
+            }, DateTime.fromMillis(0));
         }
 
-        // Determine new high‑water mark: max stopTimestamp of unique
-        maxStop = unique.reduce((max, tx) => {
-            const stop = DateTime.fromISO(tx.stopTimestamp, {zone: 'utc'});
-            return stop > max ? stop : max;
-        }, DateTime.fromMillis(0));
+        return maxStop;
+    } catch (error) {
+        logger.error('Error in processSince: ' + error);
+        throw error;
     }
-
-    return maxStop;
 }
-
 
 /**
  * Run incremental billing cycle: fetch and process since last T0
@@ -109,6 +120,8 @@ async function processSince(txns) {
  * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
  */
 async function runIncremental() {
+    //FIXME: What happens if proccessing fails but high-water mark is updated?
+    logger.info('Running incremental transaction fetch and processing');
     // retrieve the last watermark
     const since = await db.getLastStopTimestamp();
 
@@ -117,7 +130,8 @@ async function runIncremental() {
     let new_high_water = since ? since : DateTime.now().toUTC();
 
     const new_txns = await fetchSince(last_high_water);
-    if (new_txns > 0) {
+    if (new_txns.length > 0) {
+        logger.info('Sending ' + new_txns.length + ' transactions for processing');
         new_high_water = await processSince(new_txns);
     }
     await db.setLastStopTimestamp(new_high_water);

@@ -5,7 +5,7 @@
  *
  * @module services/odoo
  */
-const {ValidationError, ErrorCodes, SystemError} = require('../utils/errors');
+const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('../utils/errors');
 const {db} = require('../utils/queries');
 
 const {generateOdooHash, generateSalt} = require('../helpers/auth');
@@ -15,6 +15,7 @@ const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
 const {dbTransactionSchema, fullyQualifiedUserSchema} = require('../utils/joi');
 const logger = require('../services/logger');
+
 
 /**
  * Creates a new Odoo user.
@@ -28,7 +29,7 @@ const logger = require('../services/logger');
  * @param {Object} user - User object with at least name and email.
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
-const createOdooUser = async (user) => {
+async function createOdooUser(user) {
     if (user.odoo_user_id !== null) {
         throw new ValidationError(ErrorCodes.USER.ODOO_EXISTS);
     }
@@ -79,7 +80,7 @@ const createOdooUser = async (user) => {
         const errorMSG = response.data['error'];
         throw new SystemError(ErrorCodes.ODOO.USER_CREATE_FAILED, errorMSG);
     }
-};
+}
 
 
 /**
@@ -193,11 +194,24 @@ async function rotateOdooUserAuth(user) {
         const errorMSG = response.data['error'];
         throw new SystemError(ErrorCodes.ODOO.KEY_ROTATION_FAILED, errorMSG);
     }
-};
+}
 
 
 /**
  * Creates a bill/invoice in Odoo for a given transaction.
+ *
+ * Request payload to Odoo:
+ *   session_start (datetime): Session start datetime in UTC.
+ *   session_end (datetime): Session end datetime in UTC.
+ *   partner_id (int): ID of the sale/customer (`res.partner`).
+ *   lines_data (list[dict]): Invoice line data dict with the following fields:
+ *     - name (str): Product name.
+ *     - sku (str): Internal reference for product.
+ *     - uom_name (str): Unit of measure name (e.g., "kWh"; only "kWh" accepted for now).
+ *     - base_price (float): Standard list price for product (e.g., 0.35).
+ *     - custom_rate (float): Actual invoice price (e.g., 0.38).
+ *     - quantity (float): Consumed quantity (e.g., 150, in kWh).
+ *     // TODO: Add more fields if needed. e.g. payment terms, bill_date etc.
  *
  * - Validates the transaction object.
  * - Fetches Odoo credentials for the user.
@@ -218,14 +232,17 @@ async function createOdooTxnInvoice(db_txn) {
     }
 
     const {key, key_salt} = await db.getUserOdooCredentials(db_txn.user_id);
-    const user = await db.getUserUnique(db_txn.user_id);
+    const user = await db.getUserUnique({user_id: db_txn.user_id});
+    // The price of electricity at the time of transaction start
+    const txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
 
     const lines_data = [
         {
-            'name': 'Ladung AC',
-            'sku': 'AC-001',
-            'uom_name': 'kWh',
-            'base_price': 0.35,
+            // 'name': 'Ladung AC',
+            'sku': 'standard_charging',
+            // 'uom_name': 'kWh',
+            // 'base_price': 0.35,
+            'custom_rate': txn_started_with_electricity_price / 100 ?? 0.35,
             'quantity': db_txn.delivered_energy_wh / 1000,
         },
     ];
@@ -250,6 +267,21 @@ async function createOdooTxnInvoice(db_txn) {
     return response.data['bill_id'];
 }
 
+
+/**
+ * Checks if the given user has a valid payment method in Odoo.
+ *
+ * - Validates the user object.
+ * - Fetches Odoo credentials for the user.
+ * - Constructs and signs a request to Odoo to check payment method validity.
+ * - Verifies the response hash for integrity.
+ * - Returns true if the payment method is valid, false otherwise.
+ *
+ * @async
+ * @param {Object} user - User object with odoo_user_id, odoo_partner_id, and user_id.
+ * @returns {Promise<boolean>} True if payment method is valid, false otherwise.
+ * @throws {ValidationError|SystemError} On validation or Odoo errors.
+ */
 async function checkValidPaymentMethod(user) {
     const {error} = fullyQualifiedUserSchema.validate(user);
     if (error) {
@@ -273,25 +305,25 @@ async function checkValidPaymentMethod(user) {
 
     const response = await odooAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
     if (response.status === 200) {
-        //     Verify hash
         const data = response.data;
         const timestamp = data['timestamp'];
-        const result = data['result'];
+        const result = data['result']; // 1 for valid, 0 for invalid
         const salt = data['salt'];
         const hash = data['hash'];
 
-        if (!result || !timestamp || !salt || !hash) {
-            throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE);
+        if (!timestamp || !salt || !hash || result === undefined || result === null) {
+            throw new ResponseError(ErrorCodes.ODOO.INVALID_RESPONSE);
         }
 
+        // Verify hash
         const message = `${timestamp}${result}${salt}`;
         const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
-        // Compare the calculated hash with the hash received from Odoo
         if (expected_hash !== hash) {
-            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+            throw new ResponseError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
         }
-        logger.warn('Payment method check result:' + result);
-        return (result === 'valid');
+
+        logger.info('Payment method check result: ' + result);
+        return (result === 1);
     } else {
         logger.error(`Error checking payment method: ${response.status}, ${response.data}`);
         throw new SystemError(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);

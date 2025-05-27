@@ -18,6 +18,7 @@ const odooAxios = axios.create({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.ODOO_ADMIN_API_KEY}`,
     },
+    validateStatus: () => true,
 });
 
 const odooUserAxios = axios.create({
@@ -25,6 +26,7 @@ const odooUserAxios = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    validateStatus: () => true,
 });
 
 

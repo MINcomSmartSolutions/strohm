@@ -57,3 +57,14 @@
  * @property {number} invoice_ref - The invoice reference associated with the transaction returned from Odoo.
  * @property {number} steve_id - PK of the transaction
  */
+
+
+/**
+ * @typedef {Object} electricity_price
+ *
+ * @property {number} id - PK of the electricity price
+ * @propert {Date} created_at - The timestamp at which the electricity price was created
+ * @property {Date} valid_from - The date from which the electricity price is valid
+ * @property {Date} valid_till - The date until which the electricity price is valid
+ * @property {number} price - The price as per kWh in cents
+ */

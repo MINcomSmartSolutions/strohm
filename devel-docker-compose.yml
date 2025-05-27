@@ -67,7 +67,7 @@ services:
         AGGREGATE: "false"
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"
-        PIP_INSTALL_ODOO: "false"
+        PIP_INSTALL_ODOO: 1
         CLEAN: "false"
         COMPILE: "false"
     #    healthcheck:
@@ -90,10 +90,12 @@ services:
       INITIAL_LANG: "de_DE"
       BACKEND_HOST: server
       BACKEND_PORT: 3000
-      WITHOUT_DEMO: "${DOODBA_WITHOUT_DEMO-false}"
+      WITHOUT_DEMO: "all"
       PROXY_MODE: "false"
+      DEBUGPY_ENABLE: 0
     tty: true
     ports:
+#      - "127.0.0.1:6899:6899" # Debugpy
       - "127.0.0.1:18069:8069"
       - "127.0.0.1:18072:8072"
     volumes:

@@ -162,10 +162,17 @@ const getUsers = async (filters = {}, options = {}) => {
  * @throws {ValidationError} - if multiple users match the criteria
  */
 const getUserUnique = async (filters) => {
+    if (!filters || typeof filters !== 'object' || Object.keys(filters).length === 0) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required filters.`,
+        );
+    }
     try {
         const users = await getUsers(filters, {limit: 2});
 
         if (users.length > 1) {
+            logger.warn(`Multiple users found for filters: ${JSON.stringify(filters)}`);
             throw new ValidationError(
                 ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY,
                 `Multiple users match the criteria, expected unique result.`,
@@ -541,6 +548,7 @@ async function getLastStopTimestamp() {
 
 /**
  * Updates the `invoice_ref` field for a transaction in `charging_transactions`.
+ * This is used to link a transaction to an invoice in Odoo.
  *
  * @async
  * @param {Object} txn - The transaction object (must include `id`).
@@ -570,6 +578,63 @@ async function saveInvoiceId(txn, invoice_id) {
 }
 
 
+/**
+ * Retrieves the current electricity price from the database.
+ * If a `specified_datetime` is provided, it will return the price valid at that time.
+ *
+ * @async
+ * @param {DateTime|null} specified_datetime - Optional ISO 8601 datetime string to check the price at a specific time.
+ * @returns {Promise<number>} The current electricity price in cents per kWh.
+ */
+async function getCurrentElectricityPrice(specified_datetime = null) {
+    if (specified_datetime && !specified_datetime.isValid) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            `Invalid specified datetime: ${specified_datetime}`,
+        );
+    }
+
+    let query;
+    let params = [];
+
+    if (specified_datetime) {
+        query = `
+            SELECT price
+            FROM electricity_prices
+            WHERE valid_from <= $1::timestamptz
+              AND (valid_till IS NULL OR valid_till > $1::timestamptz)
+            LIMIT 1
+        `;
+        params = [specified_datetime];
+    } else {
+        query = `
+            SELECT price
+            FROM electricity_prices
+            WHERE valid_from <= NOW()
+              AND (valid_till IS NULL OR valid_till > NOW())
+            LIMIT 1
+        `;
+    }
+
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query, params);
+        if (result.rows.length === 0) {
+            throw new DatabaseError(
+                ErrorCodes.DATABASE.RECORD_NOT_FOUND,
+                `No valid electricity price found in the database for given ${specified_datetime.toString()}`,
+            );
+        }
+        return result.rows[0].price;
+    } catch (error) {
+        handleQueryError(error, 'getCurrentElectricityPrice');
+    } finally {
+        client.release();
+    }
+}
+
+
 module.exports = {
     db: {
         createUser,
@@ -584,5 +649,6 @@ module.exports = {
         setLastStopTimestamp,
         getLastStopTimestamp,
         saveInvoiceId,
+        getCurrentElectricityPrice,
     },
 };
