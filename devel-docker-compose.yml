@@ -95,7 +95,7 @@ services:
       DEBUGPY_ENABLE: 0
     tty: true
     ports:
-#      - "127.0.0.1:6899:6899" # Debugpy
+      #      - "127.0.0.1:6899:6899" # Debugpy
       - "127.0.0.1:18069:8069"
       - "127.0.0.1:18072:8072"
     volumes:
@@ -119,6 +119,8 @@ services:
     image: mariadb:10.4.30
     ports:
       - "3306:3306"
+    volumes:
+      - steve-db-data:/var/lib/mysql
     environment:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_DATABASE: stevedb
@@ -138,7 +140,6 @@ services:
       - "8443:8443"
     depends_on:
       - steve-db
-      - server
 
   stripe:
     container_name: stripe_dev
