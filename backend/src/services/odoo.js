@@ -238,15 +238,13 @@ async function createOdooTxnInvoice(db_txn) {
 
     const lines_data = [
         {
-            // 'name': 'Ladung AC',
             'sku': 'standard_charging',
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
-            'custom_rate': txn_started_with_electricity_price / 100 ?? 0.35,
+            'price_unit': txn_started_with_electricity_price / 100 ?? 0.35,
             'quantity': db_txn.delivered_energy_wh / 1000,
         },
     ];
-
 
     const data = {
         timestamp: fmt(DateTime.utc()),

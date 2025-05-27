@@ -120,7 +120,7 @@ async function processSince(txns) {
  * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
  */
 async function runIncremental() {
-    //FIXME: What happens if proccessing fails but high-water mark is updated?
+    //FIXME: What happens if proccessing fails but high-water mark is updated? BUG
     logger.info('Running incremental transaction fetch and processing');
     // retrieve the last watermark
     const since = await db.getLastStopTimestamp();
