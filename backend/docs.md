@@ -10,7 +10,7 @@
 </ul>
 </dd>
 <dt><a href="#module_services/logger">services/logger</a> : <code>winston</code></dt>
-<dd><p>Logger service using winston</p>
+<dd><p>Logger service using winston with file rotation and enhanced console output</p>
 </dd>
 <dt><a href="#module_services/network">services/network</a></dt>
 <dd><p>Network service module for external API clients.</p>
@@ -20,7 +20,7 @@
 </ul>
 </dd>
 <dt><a href="#module_services/odoo">services/odoo</a></dt>
-<dd><p>Odoo integration service</p>
+<dd><p>Odoo Integration Service</p>
 <p>It is responsible for user creation, login, key rotation, and invoicing with Odoo via REST API.</p>
 </dd>
 <dt><a href="#module_services/steve_transactions">services/steve_transactions</a></dt>
@@ -124,7 +124,7 @@ Cron job service for periodic transaction fetching.
 
 ## services/logger : <code>winston</code>
 
-Logger service using winston
+Logger service using winston with file rotation and enhanced console output
 
 <a name="module_services/network"></a>
 
@@ -138,15 +138,18 @@ Network service module for external API clients.
 
 ## services/odoo
 
-Odoo integration service
+Odoo Integration Service
 
 It is responsible for user creation, login, key rotation, and invoicing with Odoo via REST API.
+
 
 * [services/odoo](#module_services/odoo)
     * [~createOdooUser(user)](#module_services/odoo..createOdooUser)
     * [~getOdooPortalLogin(user)](#module_services/odoo..getOdooPortalLogin) ⇒ <code>string</code>
     * [~rotateOdooUserAuth(user)](#module_services/odoo..rotateOdooUserAuth) ⇒ <code>Promise.&lt;Object&gt;</code>
     * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;string&gt;</code>
+  * [~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>
+    Promise.&lt;boolean&gt;</code>
 
 <a name="module_services/odoo..createOdooUser"></a>
 
@@ -202,6 +205,19 @@ Rotates the Odoo user API key for the given user.
 ### services/odoo~createOdooTxnInvoice(db_txn) ⇒ <code>Promise.&lt;string&gt;</code>
 Creates a bill/invoice in Odoo for a given transaction.
 
+Request payload to Odoo:
+session_start (datetime): Session start datetime in UTC.
+session_end (datetime): Session end datetime in UTC.
+partner_id (int): ID of the sale/customer (`res.partner`).
+lines_data (list[dict]): Invoice line data dict with the following fields:
+- name (str): Product name.
+- sku (str): Internal reference for product.
+- uom_name (str): Unit of measure name (e.g., "kWh"; only "kWh" accepted for now).
+- base_price (float): Standard list price for product (e.g., 0.35).
+- custom_rate (float): Actual invoice price (e.g., 0.38).
+- quantity (float): Consumed quantity (e.g., 150, in kWh).
+// TODO: Add more fields if needed. e.g. payment terms, bill_date etc.
+
 - Validates the transaction object.
 - Fetches Odoo credentials for the user.
 - Prepares invoice line data.
@@ -214,10 +230,27 @@ Creates a bill/invoice in Odoo for a given transaction.
 
 - <code>ValidationError</code><code>SystemError</code> On validation or Odoo errors.
 
+<a name="module_services/odoo..checkValidPaymentMethod"></a>
+
+### services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
+Checks if the given user has a valid payment method in Odoo.
+
+- Validates the user object.
+- Fetches Odoo credentials for the user.
+- Constructs and signs a request to Odoo to check payment method validity.
+- Verifies the response hash for integrity.
+- Returns true if the payment method is valid, false otherwise.
+
+**Kind**: inner method of [<code>services/odoo</code>](#module_services/odoo)  
+**Returns**: <code>Promise.&lt;boolean&gt;</code> - True if payment method is valid, false otherwise.  
+**Throws**:
+
+- <code>ValidationError</code><code>SystemError</code> On validation or Odoo errors.
+
 <a name="module_services/steve_transactions"></a>
 
 ## services/steve\_transactions
-
 SteVe Transactions Service
 
 Incremental fetch of STOPPED transactions since last high‑water mark (T0).
@@ -256,6 +289,10 @@ Record and create bills for transactions/charging sessions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 **Returns**: <code>Promise.&lt;DateTime&gt;</code> - The new high‑water mark (max stopTimestamp)  
+**Throws**:
+
+- <code>ValidationError</code> If any transaction does not match the expected schema
+
 <a name="module_services/steve_transactions..runIncremental"></a>
 
 ### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
@@ -350,13 +387,11 @@ Validates input, updates the user, checks the unblock status, and logs the actio
 <a name="module_services/user_operations"></a>
 
 ## services/user\_operations
-
 Service for checking overall user integrity and creating users with proper links to external systems.
 
 <a name="module_services/user_operations..userOperations"></a>
 
 ### services/user_operations~userOperations(oidc_user) ⇒ <code>Promise.&lt;Object&gt;</code>
-
 Handles user creation and linking with external systems.
 
 - Checks if a user exists by OIDC ID.
@@ -378,13 +413,14 @@ OIDC configuration for authentication middleware.
 <a name="module_utils/queries"></a>
 
 ## utils/queries
-
 Global database queries
+
 
 * [utils/queries](#module_utils/queries)
   * [~handleQueryError(error, operation)](#module_utils/queries..handleQueryError)
   * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
-  * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+  * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
+    &gt;</code>
   * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(Object\|null)
     &gt;</code>
   * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
@@ -398,11 +434,12 @@ Global database queries
   * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
     &gt;</code>
   * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
+  * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
+    Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
 
 ### utils/queries~handleQueryError(error, operation)
-
 Handles query errors.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -413,7 +450,6 @@ Handles query errors.
 <a name="module_utils/queries..getUsers"></a>
 
 ### utils/queries~getUsers(filters, options) ⇒ <code>Promise.&lt;Array&gt;</code>
-
 Gets users based on dynamic filter parameters.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -425,36 +461,18 @@ Gets users based on dynamic filter parameters.
 **Example**
 
 ```js
-getUsers({first_name: 'John'}) - Get
-all
-users
-named
-John
-getUsers({active: true}, {limit: 10, offset: 20}) - Get
-10
-active
-users, skipping
-first
-20
-getUsers({}, {orderBy: 'created_at', orderDirection: 'DESC'}) - Get
-all
-users
-ordered
-by
-creation
-date
-descending
+getUsers({ first_name: 'John' }) - Get all users named John
+getUsers({ active: true }, { limit: 10, offset: 20 }) - Get 10 active users, skipping first 20
+getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users ordered by creation date descending
 ```
-
 <a name="module_utils/queries..getUserUnique"></a>
 
-### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
-
+### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code>
 Gets a single user with uniqueness validation.
 Throws an error if multiple users match the criteria.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;(Object\|null)&gt;</code> - - The matching user or null if not found  
+**Returns**: <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code> - - The matching user or null if not found  
 **Throws**:
 
 - <code>DatabaseError</code> - database operation fails
@@ -463,7 +481,6 @@ Throws an error if multiple users match the criteria.
 <a name="module_utils/queries..getUserOdooCredentials"></a>
 
 ### utils/queries~getUserOdooCredentials(user_id) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
-
 Retrieves the latest valid Odoo API key credentials for a user.
 Returns null if no credentials are found.
 
@@ -476,7 +493,6 @@ Returns null if no credentials are found.
 <a name="module_utils/queries..rotateOdooUserKey"></a>
 
 ### utils/queries~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt) ⇒ <code>Promise.&lt;boolean&gt;</code>
-
 Rotates a user's Odoo API key.
 Revokes the old key and inserts a new one for the user.
 
@@ -489,7 +505,6 @@ Revokes the old key and inserts a new one for the user.
 <a name="module_utils/queries..setSteveUserParamaters"></a>
 
 ### utils/queries~setSteveUserParamaters(user, steve_id) ⇒ <code>Promise.&lt;(Object\|undefined)&gt;</code>
-
 Sets the SteVe user ID for a user in the database.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -502,14 +517,12 @@ Sets the SteVe user ID for a user in the database.
 <a name="module_utils/queries..recordActivityLog"></a>
 
 ### utils/queries~recordActivityLog(user_id, event_type, target, rfid)
-
 Records an activity event for a user in the activity log.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..recordTransaction"></a>
 
 ### utils/queries~recordTransaction(tx) ⇒ <code>Promise.&lt;Object&gt;</code>
-
 Record a transaction record into the `charging_transactions` table.
 If transaction already exists and is complete, returns it without modification.
 Otherwise, inserts a new record with proper user association.
@@ -519,7 +532,6 @@ Otherwise, inserts a new record with proper user association.
 <a name="module_utils/queries..setLastStopTimestamp"></a>
 
 ### utils/queries~setLastStopTimestamp(new_watermark) ⇒ <code>Promise.&lt;void&gt;</code>
-
 Sets the last stop timestamp watermark.
 Inserts or updates the `watermark` table with the given timestamp.
 
@@ -527,7 +539,6 @@ Inserts or updates the `watermark` table with the given timestamp.
 <a name="module_utils/queries..getLastStopTimestamp"></a>
 
 ### utils/queries~getLastStopTimestamp() ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
-
 Retrieves the most recent `last_stop_timestamp` from the watermark table.
 Returns a Luxon DateTime if found, otherwise null.
 
@@ -540,14 +551,23 @@ Returns a Luxon DateTime if found, otherwise null.
 <a name="module_utils/queries..saveInvoiceId"></a>
 
 ### utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>
-
 Updates the `invoice_ref` field for a transaction in `charging_transactions`.
+This is used to link a transaction to an invoice in Odoo.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Throws**:
 
 - <code>DatabaseError</code><code>ValidationError</code> On query error.
 
+<a name="module_utils/queries..getCurrentElectricityPrice"></a>
+
+### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code>
+
+Retrieves the current electricity price from the database.
+If a `specified_datetime` is provided, it will return the price valid at that time.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;number&gt;</code> - The current electricity price in cents per kWh.  
 <a name="module_utils/steve"></a>
 
 ## utils/steve
@@ -568,8 +588,22 @@ Validates Steve user response data.
 <a name="module_utils/typedef"></a>
 
 ## utils/typedef
-
 Type definitions
+
+<a name="module_utils/typedef..electricity_price"></a>
+
+### utils/typedef~electricity\_price : <code>Object</code>
+
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Propert**: <code>Date</code> created_at - The timestamp at which the electricity price was created  
+**Properties**
+
+| Name       | Type                | Description                                         |
+|------------|---------------------|-----------------------------------------------------|
+| id         | <code>number</code> | PK of the electricity price                         |
+| valid_from | <code>Date</code>   | The date from which the electricity price is valid  |
+| valid_till | <code>Date</code>   | The date until which the electricity price is valid |
+| price      | <code>number</code> | The price as per kWh in cents                       |
 
 <a name="module_app"></a>
 
