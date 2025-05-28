@@ -39,7 +39,7 @@
 /**
  * @typedef {Object} db_txn
  *
- * @property {number} id - PK of the transaction
+ * @property {number} id - PK of the transaction in the database
  * @property {Date} created_at - The timestamp at which the transaction was created
  * @property {Date} start_timestamp - The timestamp at which the transaction started
  * @property {Date} stop_timestamp - The timestamp at which the transaction ended
@@ -49,12 +49,12 @@
  * @property {string} stop_reason - The reason for the transaction being stopped
  * @property {string} stop_event_actor - The actor who stopped the transaction
  * @property {number} connector_id - Connector ID of the charge box at which the transaction took place
- * @property {number} chargebox_pk - PK of the charge box at which the transaction took place
- * @property {number} ocpp_tag_pk - PK of the OCPP tag used in the transaction
- * @property {number} ocpp_id_tag - The Ocpp Tag used in the transaction
- * @property {number} user_id - The user ID associated with the transaction.
- * @property {number} invoice_ref - The invoice reference associated with the transaction returned from Odoo.
- * @property {number} steve_id - PK of the transaction
+ * @property {number} chargebox_pk - PK of the charge box at which the transaction took place in SteVe
+ * @property {number} ocpp_tag_pk - PK of the OCPP tag used in the transaction in SteVe (steve_id in strohm.users table)
+ * @property {number} ocpp_id_tag - The Ocpp Tag used in the transaction (rfid in strohm.users table)
+ * @property {number} user_id - The user ID associated with the transaction
+ * @property {number} invoice_ref - The invoice reference associated with the transaction returned from Odoo
+ * @property {number} steve_id - PK of the transaction in SteVe
  */
 
 

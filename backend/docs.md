@@ -78,6 +78,14 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 </dd>
 </dl>
 
+## Objects
+
+<dl>
+<dt><a href="#config">config</a> : <code>object</code></dt>
+<dd><p>Configuration settings for SteVe and Odoo integrations</p>
+</dd>
+</dl>
+
 ## Constants
 
 <dl>
@@ -586,6 +594,7 @@ Validates Steve user response data.
 ## utils/typedef
 Type definitions
 
+
 * [utils/typedef](#module_utils/typedef)
   * [~User](#module_utils/typedef..User) : <code>Object</code>
   * [~tx](#module_utils/typedef..tx) : <code>Object</code>
@@ -595,7 +604,6 @@ Type definitions
 <a name="module_utils/typedef..User"></a>
 
 ### utils/typedef~User : <code>Object</code>
-
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -613,7 +621,6 @@ Type definitions
 <a name="module_utils/typedef..tx"></a>
 
 ### utils/typedef~tx : <code>Object</code>
-
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -635,28 +642,27 @@ Type definitions
 <a name="module_utils/typedef..db_txn"></a>
 
 ### utils/typedef~db\_txn : <code>Object</code>
-
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
-| Name | Type | Description |
-| --- | --- | --- |
-| id | <code>number</code> | PK of the transaction |
-| created_at | <code>Date</code> | The timestamp at which the transaction was created |
-| start_timestamp | <code>Date</code> | The timestamp at which the transaction started |
-| stop_timestamp | <code>Date</code> | The timestamp at which the transaction ended |
-| delivered_energy_wh | <code>number</code> | The amount of energy delivered during the transaction in watt-hours |
-| start_value | <code>number</code> | The meter value reading at the start of the transaction |
-| stop_value | <code>number</code> | The meter value reading at the end of the transaction |
-| stop_reason | <code>string</code> | The reason for the transaction being stopped |
-| stop_event_actor | <code>string</code> | The actor who stopped the transaction |
-| connector_id | <code>number</code> | Connector ID of the charge box at which the transaction took place |
-| chargebox_pk | <code>number</code> | PK of the charge box at which the transaction took place |
-| ocpp_tag_pk | <code>number</code> | PK of the OCPP tag used in the transaction |
-| ocpp_id_tag | <code>number</code> | The Ocpp Tag used in the transaction |
-| user_id | <code>number</code> | The user ID associated with the transaction. |
-| invoice_ref | <code>number</code> | The invoice reference associated with the transaction returned from Odoo. |
-| steve_id | <code>number</code> | PK of the transaction |
+| Name                | Type                | Description                                                                          |
+|---------------------|---------------------|--------------------------------------------------------------------------------------|
+| id                  | <code>number</code> | PK of the transaction in the database                                                |
+| created_at          | <code>Date</code>   | The timestamp at which the transaction was created                                   |
+| start_timestamp     | <code>Date</code>   | The timestamp at which the transaction started                                       |
+| stop_timestamp      | <code>Date</code>   | The timestamp at which the transaction ended                                         |
+| delivered_energy_wh | <code>number</code> | The amount of energy delivered during the transaction in watt-hours                  |
+| start_value         | <code>number</code> | The meter value reading at the start of the transaction                              |
+| stop_value          | <code>number</code> | The meter value reading at the end of the transaction                                |
+| stop_reason         | <code>string</code> | The reason for the transaction being stopped                                         |
+| stop_event_actor    | <code>string</code> | The actor who stopped the transaction                                                |
+| connector_id        | <code>number</code> | Connector ID of the charge box at which the transaction took place                   |
+| chargebox_pk        | <code>number</code> | PK of the charge box at which the transaction took place in SteVe                    |
+| ocpp_tag_pk         | <code>number</code> | PK of the OCPP tag used in the transaction in SteVe (steve_id in strohm.users table) |
+| ocpp_id_tag         | <code>number</code> | The Ocpp Tag used in the transaction (rfid in strohm.users table)                    |
+| user_id             | <code>number</code> | The user ID associated with the transaction                                          |
+| invoice_ref         | <code>number</code> | The invoice reference associated with the transaction returned from Odoo             |
+| steve_id            | <code>number</code> | PK of the transaction in SteVe                                                       |
 
 <a name="module_utils/typedef..electricity_price"></a>
 
@@ -683,6 +689,37 @@ Express app instance.
 Base class for custom application errors
 
 **Kind**: global class  
+<a name="config"></a>
+
+## config : <code>object</code>
+
+Configuration settings for SteVe and Odoo integrations
+
+**Kind**: global namespace  
+**Properties**
+
+| Name                                 | Type                | Description                                      |
+|--------------------------------------|---------------------|--------------------------------------------------|
+| STEVE_CONFIG                         | <code>object</code> | Configuration for SteVe server and API endpoints |
+| STEVE_CONFIG.HOST                    | <code>string</code> | SteVe server host                                |
+| STEVE_CONFIG.PORT                    | <code>string</code> | SteVe server port                                |
+| STEVE_CONFIG.URL                     | <code>string</code> | SteVe base URL                                   |
+| STEVE_CONFIG.OCPP_TAGS_URI           | <code>string</code> | OCPP tags API endpoint                           |
+| STEVE_CONFIG.TRANSACTIONS_URI        | <code>string</code> | Transactions API endpoint                        |
+| ODOO_CONFIG                          | <code>object</code> | Configuration for Odoo server and API endpoints  |
+| ODOO_CONFIG.HOST                     | <code>string</code> | Odoo server host                                 |
+| ODOO_CONFIG.PORT                     | <code>string</code> | Odoo server port                                 |
+| ODOO_CONFIG.URL                      | <code>string</code> | Odoo base URL                                    |
+| ODOO_CONFIG.EXTERNAL_HOST            | <code>string</code> | Odoo external host                               |
+| ODOO_CONFIG.EXTERNAL_PORT            | <code>string</code> | Odoo external port                               |
+| ODOO_CONFIG.EXTERNAL_URL             | <code>string</code> | Odoo external URL                                |
+| ODOO_CONFIG.API_SECRET               | <code>string</code> | Odoo API secret                                  |
+| ODOO_CONFIG.USER_CREATION_URI        | <code>string</code> | User creation endpoint                           |
+| ODOO_CONFIG.INVOICE_CREATION_URI     | <code>string</code> | Invoice creation endpoint                        |
+| ODOO_CONFIG.PORTAL_LOGIN_URI         | <code>string</code> | Portal login endpoint                            |
+| ODOO_CONFIG.ROTATE_APIKEY_URI        | <code>string</code> | API key rotation endpoint                        |
+| ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI | <code>string</code> | Payment method check endpoint                    |
+
 <a name="logger"></a>
 
 ## logger
