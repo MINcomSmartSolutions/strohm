@@ -6,7 +6,7 @@
 
 /**
  * @typedef {Object} User
- * @memberOf Users
+ *
  * @property {string} user_id - The user's ID
  * @property {string} name - The user's name
  * @property {string} email - The user's email
@@ -20,8 +20,7 @@
 
 /**
  * @typedef {Object} tx
- * @memberOf Transactions
- * @memberOf SteveTransactions
+ *
  * @property {number} id - PK of the transaction
  * @property {number} connectorId - Connector ID of the charge box at which the transaction took place
  * @property {number} chargeBoxPk - PK of the charge box at which the transaction took place
@@ -39,7 +38,7 @@
 
 /**
  * @typedef {Object} db_txn
- * @memberOf Transactions
+ *
  * @property {number} id - PK of the transaction
  * @property {Date} created_at - The timestamp at which the transaction was created
  * @property {Date} start_timestamp - The timestamp at which the transaction started
@@ -63,7 +62,7 @@
  * @typedef {Object} electricity_price
  *
  * @property {number} id - PK of the electricity price
- * @propert {Date} created_at - The timestamp at which the electricity price was created
+ * @property {Date} created_at - The timestamp at which the electricity price was created
  * @property {Date} valid_from - The date from which the electricity price is valid
  * @property {Date} valid_till - The date until which the electricity price is valid
  * @property {number} price - The price as per kWh in cents

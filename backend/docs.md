@@ -123,7 +123,6 @@ Cron job service for periodic transaction fetching.
 <a name="module_services/logger"></a>
 
 ## services/logger : <code>winston</code>
-
 Logger service using winston with file rotation and enhanced console output
 
 <a name="module_services/network"></a>
@@ -137,7 +136,6 @@ Network service module for external API clients.
 <a name="module_services/odoo"></a>
 
 ## services/odoo
-
 Odoo Integration Service
 
 It is responsible for user creation, login, key rotation, and invoicing with Odoo via REST API.
@@ -233,7 +231,6 @@ lines_data (list[dict]): Invoice line data dict with the following fields:
 <a name="module_services/odoo..checkValidPaymentMethod"></a>
 
 ### services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>
-
 Checks if the given user has a valid payment method in Odoo.
 
 - Validates the user object.
@@ -562,7 +559,6 @@ This is used to link a transaction to an invoice in Odoo.
 <a name="module_utils/queries..getCurrentElectricityPrice"></a>
 
 ### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code>
-
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
 
@@ -590,20 +586,91 @@ Validates Steve user response data.
 ## utils/typedef
 Type definitions
 
+* [utils/typedef](#module_utils/typedef)
+  * [~User](#module_utils/typedef..User) : <code>Object</code>
+  * [~tx](#module_utils/typedef..tx) : <code>Object</code>
+  * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
+  * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
+
+<a name="module_utils/typedef..User"></a>
+
+### utils/typedef~User : <code>Object</code>
+
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| user_id | <code>string</code> | The user's ID |
+| name | <code>string</code> | The user's name |
+| email | <code>string</code> | The user's email |
+| odoo_user_id | <code>number</code> | The user's Odoo ID |
+| partner_id | <code>number</code> | The user's Odoo partner ID |
+| oauth_id | <code>string</code> | The OAuth ID |
+| rfid | <code>string</code> | The user's RFID |
+| steve_id | <code>number</code> | The user's OCPP tag primary key in SteVe |
+
+<a name="module_utils/typedef..tx"></a>
+
+### utils/typedef~tx : <code>Object</code>
+
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| id | <code>number</code> | PK of the transaction |
+| connectorId | <code>number</code> | Connector ID of the charge box at which the transaction took place |
+| chargeBoxPk | <code>number</code> | PK of the charge box at which the transaction took place |
+| ocppTagPk | <code>number</code> | PK of the OCPP tag used in the transaction |
+| chargeBoxId | <code>string</code> | The identifier of the charge box at which the transaction took place |
+| ocppIdTag | <code>string</code> | The Ocpp Tag used in the transaction |
+| startTimestamp | <code>Date</code> | The timestamp at which the transaction started |
+| stopTimestamp | <code>Date</code> \| <code>null</code> | The timestamp at which the transaction ended |
+| startValue | <code>string</code> | The meter value reading at the start of the transaction |
+| stopValue | <code>string</code> \| <code>null</code> | The meter value reading at the end of the transaction |
+| stopReason | <code>string</code> \| <code>null</code> | The reason for the transaction being stopped |
+| stopEventActor | <code>&#x27;station&#x27;</code> \| <code>&#x27;manual&#x27;</code> \| <code>null</code> | The actor who stopped the transaction |
+
+<a name="module_utils/typedef..db_txn"></a>
+
+### utils/typedef~db\_txn : <code>Object</code>
+
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| id | <code>number</code> | PK of the transaction |
+| created_at | <code>Date</code> | The timestamp at which the transaction was created |
+| start_timestamp | <code>Date</code> | The timestamp at which the transaction started |
+| stop_timestamp | <code>Date</code> | The timestamp at which the transaction ended |
+| delivered_energy_wh | <code>number</code> | The amount of energy delivered during the transaction in watt-hours |
+| start_value | <code>number</code> | The meter value reading at the start of the transaction |
+| stop_value | <code>number</code> | The meter value reading at the end of the transaction |
+| stop_reason | <code>string</code> | The reason for the transaction being stopped |
+| stop_event_actor | <code>string</code> | The actor who stopped the transaction |
+| connector_id | <code>number</code> | Connector ID of the charge box at which the transaction took place |
+| chargebox_pk | <code>number</code> | PK of the charge box at which the transaction took place |
+| ocpp_tag_pk | <code>number</code> | PK of the OCPP tag used in the transaction |
+| ocpp_id_tag | <code>number</code> | The Ocpp Tag used in the transaction |
+| user_id | <code>number</code> | The user ID associated with the transaction. |
+| invoice_ref | <code>number</code> | The invoice reference associated with the transaction returned from Odoo. |
+| steve_id | <code>number</code> | PK of the transaction |
+
 <a name="module_utils/typedef..electricity_price"></a>
 
 ### utils/typedef~electricity\_price : <code>Object</code>
-
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
-**Propert**: <code>Date</code> created_at - The timestamp at which the electricity price was created  
 **Properties**
 
-| Name       | Type                | Description                                         |
-|------------|---------------------|-----------------------------------------------------|
-| id         | <code>number</code> | PK of the electricity price                         |
-| valid_from | <code>Date</code>   | The date from which the electricity price is valid  |
-| valid_till | <code>Date</code>   | The date until which the electricity price is valid |
-| price      | <code>number</code> | The price as per kWh in cents                       |
+| Name       | Type                | Description                                              |
+|------------|---------------------|----------------------------------------------------------|
+| id         | <code>number</code> | PK of the electricity price                              |
+| created_at | <code>Date</code>   | The timestamp at which the electricity price was created |
+| valid_from | <code>Date</code>   | The date from which the electricity price is valid       |
+| valid_till | <code>Date</code>   | The date until which the electricity price is valid      |
+| price      | <code>number</code> | The price as per kWh in cents                            |
 
 <a name="module_app"></a>
 
