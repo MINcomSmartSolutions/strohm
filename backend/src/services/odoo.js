@@ -225,15 +225,21 @@ async function rotateOdooUserAuth(user) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function createOdooTxnInvoice(db_txn) {
-    const {error} = dbTransactionSchema.validate(db_txn);
-    if (error) {
+    const {txn_error} = dbTransactionSchema.validate(db_txn);
+    if (txn_error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
-            `Invalid transaction ${error.message}`);
+            `Invalid transaction ${txn_error.message}`);
     }
 
     const {key, key_salt} = await db.getUserOdooCredentials(db_txn.user_id);
     const user = await db.getUserUnique({user_id: db_txn.user_id});
-    // The price of electricity at the time of transaction start
+    const user_error = fullyQualifiedUserSchema.validate(user);
+    if (user_error.error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
+            `Invalid user ${user_error.error.message}`);
+    }
+
+    // The price of electricity at the time of transaction started
     const txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
 
     const lines_data = [
@@ -248,12 +254,20 @@ async function createOdooTxnInvoice(db_txn) {
 
     const data = {
         timestamp: fmt(DateTime.utc()),
+        user_id: user.odoo_user_id,
+        partner_id: user.odoo_partner_id,
         key: key,
         key_salt: key_salt,
         session_start: fmt(DateTime.fromJSDate(db_txn.start_timestamp)),
         session_end: fmt(DateTime.fromJSDate(db_txn.stop_timestamp)),
         lines_data: lines_data,
     };
+
+    const salt = generateSalt();
+    data.salt = salt;
+
+    const message = `${data.timestamp}${user.odoo_user_id}${user.odoo_partner_id}${data.session_start}${data.session_end}${data.key}${data.key_salt}${salt}`;
+    data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     const response = await odooUserAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
     if (response.status !== 201) {
