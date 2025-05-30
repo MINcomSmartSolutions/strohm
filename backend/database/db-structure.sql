@@ -318,12 +318,20 @@ ALTER SEQUENCE public.charging_events_id_seq OWNED BY public.charging_transactio
 CREATE TABLE public.electricity_prices (
     id integer NOT NULL,
     price double precision NOT NULL,
-    datetime timestamp with time zone NOT NULL,
-    created_at timestamp with time zone DEFAULT now()
+    valid_from timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    valid_till timestamp with time zone
 );
 
 
 ALTER TABLE public.electricity_prices OWNER TO strohm_admin;
+
+--
+-- Name: COLUMN electricity_prices.price; Type: COMMENT; Schema: public; Owner: strohm_admin
+--
+
+COMMENT ON COLUMN public.electricity_prices.price IS 'in cents/wh';
+
 
 --
 -- Name: exchange_prices_exchange_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
@@ -515,7 +523,8 @@ CREATE SEQUENCE public.watermark_id_seq
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
-    CACHE 1;
+    CACHE 1
+    CYCLE;
 
 
 ALTER SEQUENCE public.watermark_id_seq OWNER TO strohm_admin;
@@ -621,6 +630,22 @@ ALTER TABLE ONLY public.charging_transactions
 
 ALTER TABLE ONLY public.charging_transactions
     ADD CONSTRAINT charging_transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: electricity_prices electricity_prices_unique_valid_from; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.electricity_prices
+    ADD CONSTRAINT electricity_prices_unique_valid_from UNIQUE (valid_from);
+
+
+--
+-- Name: electricity_prices electricity_prices_unique_valid_till; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.electricity_prices
+    ADD CONSTRAINT electricity_prices_unique_valid_till UNIQUE (valid_till);
 
 
 --
