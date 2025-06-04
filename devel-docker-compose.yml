@@ -45,11 +45,12 @@ services:
       STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME}
       STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD}
       ODOO_ADMIN_API_KEY: ${ODOO_DEVELOPMENT_ADMIN_API_KEY}
-      ODOO_API_SECRET: anothersecret
+      ODOO_API_SECRET: "anothersecret"
       ODOO_HOST: odoo
       ODOO_PORT: 8069
       ODOO_EXTERNAL_HOST: localhost
       ODOO_EXTERNAL_PORT: 18069
+      WEBHOOK_API_KEY: "webhook-api-key"
       DB_HOST: db
       DB_NAME: ${STROHM_DB}
       DB_USER: ${STROHM_DB_USER}
@@ -86,10 +87,11 @@ services:
       ADMIN_PASSWORD: ${ODOO_PASSWORD}
       PYTHONDONTWRITEBYTECODE: 1
       SMTP_PORT: "1025"
-      ODOO_API_SECRET: anothersecret
+      ODOO_API_SECRET: "anothersecret"
       INITIAL_LANG: "de_DE"
       BACKEND_HOST: server
       BACKEND_PORT: 3000
+      WEBHOOK_API_KEY: "webhook-api-key"
       WITHOUT_DEMO: "all"
       PROXY_MODE: "false"
       DEBUGPY_ENABLE: 0

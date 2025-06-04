@@ -635,6 +635,43 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
 }
 
 
+async function deactivateUser(user) {
+    if (!user || !user.user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const query = `
+        UPDATE users
+        SET deactivated_at = now()
+        WHERE user_id = $1::integer
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(query, [user.user_id]);
+        if (result.rowCount === 0) {
+            throw new Error('Could not deactivate user');
+        }
+        await client.query('COMMIT');
+        await recordActivityLog(user.user_id, 'DEACTIVATE USER', 'DB', user.rfid);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'deactivateUser');
+    } finally {
+        client.release();
+    }
+}
+
+// This function is a placeholder for updating user information.
+//TODO: DO we need to store additional user information in the database?
+async function updateUser(user) {
+}
+
+
 module.exports = {
     db: {
         createUser,
@@ -650,5 +687,6 @@ module.exports = {
         getLastStopTimestamp,
         saveInvoiceId,
         getCurrentElectricityPrice,
+        deactivateUser,
     },
 };

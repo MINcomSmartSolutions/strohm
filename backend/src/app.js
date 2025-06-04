@@ -22,6 +22,8 @@ const {runIncremental} = require('./services/steve_transactions');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
 const {morganMiddleware} = require('./services/logger');
+const {db} = require('./utils/queries');
+const {blockSteveUser} = require('./services/steve_user');
 Settings.defaultZoneName = 'utc';
 // Handling response status codes where the respected function is called instead of axios throwing an error
 axios.defaults.validateStatus = function () {
@@ -105,17 +107,34 @@ app.get('/test', async (req, res) => {
 });
 
 // ODOO INCOMING WEBHOOKS
-app.get('/internal/update_user', verifyApiKey, async (req, res) => {
+app.post('/internal/user/sync', verifyApiKey, async (req, res) => {
     try {
-        const {operation, record_id, old_data, new_data} = req.body;
+        const {user_id: req_odoo_userid, partner_id: req_odoopartnerid, event, data} = req.body;
 
-        // Process the data based on operation (update/delete)
-        console.log(`Portal user ${operation} - ID: ${record_id}`);
+        if (!event || !data) {
+            logger.error('Invalid request body for Odoo webhook', {body: req.body});
+            return res.status(400).json({error: 'Invalid request body'});
+        }
 
-        // TODO: Handle the update or delete operation
-        res.status(200).json({success: true});
-    } catch (e) {
-        appErrorHandler(e, res);
+        logger.info(`Received Odoo webhook event: ${event}`, {data});
+
+        const user = await db.getUserUnique({odoo_user_id: req_odoo_userid, odoo_partner_id: req_odoopartnerid});
+        if (!user) {
+            logger.warn(`User not found for Odoo user ID: ${req_odoo_userid} and partner ID: ${req_odoopartnerid}`);
+            return res.status(400).json({error: 'User not found'});
+        }
+
+        if (event === 'user_deleted' || event === 'partner_deleted') {
+            await db.deactivateUser(user);
+            await blockSteveUser(user);
+        } else if (event === 'user_changed' || event === 'partner_changed') {
+            // TODO: Handle user update, the main details comes from partner_updated event
+            return res.status(200).json({success: true});
+        }
+
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
     }
 });
 

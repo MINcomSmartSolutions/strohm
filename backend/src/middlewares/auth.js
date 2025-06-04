@@ -1,16 +1,23 @@
 'use strict';
+const {SystemError, ErrorCodes} = require('../utils/errors');
 /**
  * @file Middleware for API key authentication between Odoo and the server.
- * Checks the 'x-api-key' header against the configured secret.
  */
 
-// Middleware to verify the API key coming from odoo
-// FIXME
 const verifyApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'];
-    if (!apiKey || apiKey !== process.env.ODOO_API_SECRET) {
-        return res.status(403).json({error: 'Unauthorized'});
+    const api_key = req.headers['authorization'];
+    const expected_api_key = process.env.WEBHOOK_API_KEY;
+    if (!expected_api_key || expected_api_key.trim() === '' || !api_key || api_key.trim() === '') {
+        throw new SystemError(ErrorCodes.AUTH.KEY_MISSING);
     }
+
+    if (!api_key || api_key !== expected_api_key) {
+        return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Invalid or missing API key',
+        });
+    }
+
     next();
 };
 
