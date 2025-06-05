@@ -269,15 +269,15 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 
 
 * [services/steve_transactions](#module_services/steve_transactions)
-  * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
-    Promise.&lt;Array.&lt;Object&gt;&gt;</code>
+    * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
+      Promise.&lt;Array.&lt;Object&gt;&gt;</code>
     * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;DateTime&gt;</code>
-  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-    high\_water\_mark: DateTime}&gt;</code>
-  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark:
-    DateTime}&gt;</code>
-  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
-    high\_water\_mark: DateTime}&gt;</code>
+    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
 
 <a name="module_services/steve_transactions..fetchSince"></a>
 
@@ -332,10 +332,10 @@ All functions validate input and handle errors using custom error types.
 
 
 * [services/steve_user](#module_services/steve_user)
-  * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
-    Promise.&lt;Object&gt;</code>
-  * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
-    Array.&lt;Object&gt;\|null)&gt;</code>
+    * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
+      Promise.&lt;Object&gt;</code>
+    * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
+      Array.&lt;Object&gt;\|null)&gt;</code>
     * [~blockSteveUser(user)](#module_services/steve_user..blockSteveUser)
     * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser)
 
@@ -422,25 +422,25 @@ Global database queries
 
 
 * [utils/queries](#module_utils/queries)
-  * [~handleQueryError(error, operation)](#module_utils/queries..handleQueryError)
-  * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
-  * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
-    &gt;</code>
-  * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(Object\|null)
-    &gt;</code>
-  * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
-    Promise.&lt;boolean&gt;</code>
-  * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
-    Object\|undefined)&gt;</code>
-  * [~recordActivityLog(user_id, event_type, target, rfid)](#module_utils/queries..recordActivityLog)
-  * [~recordTransaction(tx)](#module_utils/queries..recordTransaction) ⇒ <code>Promise.&lt;Object&gt;</code>
-  * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
-    Promise.&lt;void&gt;</code>
-  * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
-    &gt;</code>
-  * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
-  * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
-    Promise.&lt;number&gt;</code>
+    * [~handleQueryError(error, operation)](#module_utils/queries..handleQueryError)
+    * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
+    * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
+      &gt;</code>
+    * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(
+      Object\|null)&gt;</code>
+    * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
+      Promise.&lt;boolean&gt;</code>
+    * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
+      Object\|undefined)&gt;</code>
+    * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog)
+    * [~recordTransaction(tx)](#module_utils/queries..recordTransaction) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
+      Promise.&lt;void&gt;</code>
+    * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
+      &gt;</code>
+    * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
+      Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
 
@@ -521,7 +521,7 @@ Sets the SteVe user ID for a user in the database.
 
 <a name="module_utils/queries..recordActivityLog"></a>
 
-### utils/queries~recordActivityLog(user_id, event_type, target, rfid)
+### utils/queries~recordActivityLog(user_id, event_type, target, rfid, reason)
 Records an activity event for a user in the activity log.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -596,10 +596,10 @@ Type definitions
 
 
 * [utils/typedef](#module_utils/typedef)
-  * [~User](#module_utils/typedef..User) : <code>Object</code>
-  * [~tx](#module_utils/typedef..tx) : <code>Object</code>
-  * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
-  * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
+    * [~User](#module_utils/typedef..User) : <code>Object</code>
+    * [~tx](#module_utils/typedef..tx) : <code>Object</code>
+    * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
+    * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
 
 <a name="module_utils/typedef..User"></a>
 
@@ -607,16 +607,17 @@ Type definitions
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
-| Name | Type | Description |
-| --- | --- | --- |
-| user_id | <code>string</code> | The user's ID |
-| name | <code>string</code> | The user's name |
-| email | <code>string</code> | The user's email |
-| odoo_user_id | <code>number</code> | The user's Odoo ID |
-| partner_id | <code>number</code> | The user's Odoo partner ID |
-| oauth_id | <code>string</code> | The OAuth ID |
-| rfid | <code>string</code> | The user's RFID |
-| steve_id | <code>number</code> | The user's OCPP tag primary key in SteVe |
+| Name           | Type                | Description                                             |
+|----------------|---------------------|---------------------------------------------------------|
+| user_id        | <code>string</code> | The user's ID                                           |
+| name           | <code>string</code> | The user's name                                         |
+| email          | <code>string</code> | The user's email                                        |
+| odoo_user_id   | <code>number</code> | The user's Odoo ID                                      |
+| partner_id     | <code>number</code> | The user's Odoo partner ID                              |
+| oauth_id       | <code>string</code> | The OAuth ID                                            |
+| rfid           | <code>string</code> | The user's RFID                                         |
+| steve_id       | <code>number</code> | The user's OCPP tag primary key in SteVe                |
+| deactivated_at | <code>Date</code>   | The date and time when the user is (if any) deactivated |
 
 <a name="module_utils/typedef..tx"></a>
 
@@ -692,7 +693,6 @@ Base class for custom application errors
 <a name="config"></a>
 
 ## config : <code>object</code>
-
 Configuration settings for SteVe and Odoo integrations
 
 **Kind**: global namespace  
