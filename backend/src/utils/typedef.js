@@ -15,6 +15,7 @@
  * @property {string} oauth_id - The OAuth ID
  * @property {string} rfid - The user's RFID
  * @property {number} steve_id - The user's OCPP tag primary key in SteVe
+ * @property {Date} deactivated_at - The date and time when the user is (if any) deactivated
  */
 
 

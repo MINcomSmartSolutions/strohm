@@ -41,6 +41,9 @@ const userOperations = async (oidc_user) => {
         await createOdooUser(createdUser);
         await createSteveUser(createdUser);
         user = await db.getUserUnique({user_id: createdUser.user_id});
+    } else if (user && user.deactivated_at !== null && user.deactivated_at !== undefined) {
+        //TODO: Deactivated user show error message on odoo side
+        return Promise.reject(new Error('User is deactivated'));
     } else if (user && !user.odoo_user_id) {
         // User exists but doesn't have an Odoo ID
         await createOdooUser(user);
