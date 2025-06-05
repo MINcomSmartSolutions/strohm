@@ -42,7 +42,7 @@ if (process.env.NODE_ENV !== 'production') {
     logger.add(new winston.transports.Console({
         format: format.combine(
             format.colorize(),
-            format.timestamp({format: 'HH:mm:ss'}),
+            format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
             format.printf(({timestamp, level, message, file, line, label, ...meta}) => {
                 let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
                 let envLabel = label ? `[${label.toUpperCase()}]` : '';

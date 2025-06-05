@@ -9,7 +9,7 @@ const logger = require('../services/logger');
 const ExceptionCodes = Object.freeze({
     // Authentication errors (1000-1099)
     AUTH: Object.freeze({
-        KEY_MISSING: {code: 1000, status: 401, message: 'Token not found'},
+        KEY_MISSING: {code: 1000, status: 401, message: 'Key is missing'},
         KEY_EXPIRED: {code: 1001, status: 401, message: 'Expired token'},
         KEY_INVALID: {code: 1002, status: 401, message: 'Invalid token'},
         KEY_NOT_YET_VALID: {code: 1003, status: 401, message: 'Token is not valid yet'},
