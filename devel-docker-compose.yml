@@ -61,7 +61,7 @@ services:
   odoo:
     container_name: strohm_odoo
     build:
-      context: ./odoo-strohm/odoo
+      context: ./doodba/odoo
       args:
         DB_VERSION: "16"
         ODOO_VERSION: "18.0"
@@ -78,6 +78,7 @@ services:
     #      retries: 5           # retry 5 times before marking unhealthy
     #      start_period: 60s    # allow 60 seconds for Odoo to start
     environment:
+      DOODBA_ENV: "devel"
       ODOO_ENV: "dev"
       LIST_DB: "true"
       PGHOST: db
@@ -101,8 +102,8 @@ services:
       - "127.0.0.1:18069:8069"
       - "127.0.0.1:18072:8072"
     volumes:
-      - ./odoo-strohm/odoo/custom:/opt/odoo/custom:ro,z
-      - ./odoo-strohm/odoo/auto:/opt/odoo/auto:rw,z
+      - ./doodba/odoo/custom:/opt/odoo/custom:ro,z
+      - ./doodba/odoo/auto:/opt/odoo/auto:rw,z
       - odoo-web-data:/var/lib/odoo:z
     depends_on:
       db:

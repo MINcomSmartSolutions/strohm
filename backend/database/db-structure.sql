@@ -438,7 +438,6 @@ CREATE TABLE public.users (
     first_name character varying(255),
     email character varying(255) NOT NULL,
     rfid character varying(255),
-    active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp without time zone,
@@ -450,7 +449,8 @@ CREATE TABLE public.users (
     address character varying(255),
     odoo_partner_id integer,
     name character varying,
-    steve_id integer
+    steve_id integer,
+    deactivated_at timestamp with time zone
 );
 
 
