@@ -7,65 +7,56 @@ if ! command -v restic &> /dev/null; then
 fi
 
 
+echo -e "\033[34mBacking up Odoo database and filestore...\033[0m"
 echo "Please select the environment:"
 echo "1) Development"
 echo "2) Production"
 echo "3) Staging"
 
-read -p "Enter your choice (1-3): " choice
+read -r -p "Enter your choice (1-3): " choice
 
 case $choice in
     1)
         ENV="development"
         ;;
-   2)
+    2)
+        ENV="production"
+        ;;
+    3)
         ENV="staging"
         ;;
-   3)
-         ENV="production"
-         ;;
-   *)
+    *)
         echo "Invalid choice. Exiting..."
         exit 1
         ;;
 esac
-
 echo "Selected environment: $ENV"
 
 DOCKER_NAME="strohm_odoo"
 DOCKER_NAME_DB="strohm_db"
-
-CURRENT_DIR=$(pwd)
+ODOO_DB="odoo"
+DB_USER="postgres"
 
 readonly DB_BACKUP_DIR=/tmp/backup_odoo
 
 RESTIC_REPOSITORY="/home/resticuser/backups-strohm/$ENV/odoo"
 
-RESTIC_PASSWORD=$RESTIC_PASSWORD
 
 #check if restic remote is set
 if ! restic -r sftp:restic-backup-host:$RESTIC_REPOSITORY snapshots;
 then
   echo "Restic remote connection could not be established. Exiting..."
+  echo "Are you sure the restic remote is set up correctly, host is reachable?"
+  echo "Do not forget to set RESTIC_PASSWORD environment variable before running this script."
   exit 1
 fi
 
 
-mkdir -p $DB_BACKUP_DIR
+mkdir -p "$DB_BACKUP_DIR"
 
-source ../../.env
-ODOO_DB_USER=$ODOO_DB_USER
-ODOO_DB=$ODOO_DB
-ODOO_DB_DEVELOPMENT_PASSWORD=$ODOO_DB_DEVELOPMENT_PASSWORD
-
-#check the parameters if they are set
-if [ -z "$ODOO_DB" ] || [ -z "$ODOO_DB_DEVELOPMENT_PASSWORD" ]; then
-    echo "Please set the ODOO_DB and ODOO_DB_DEVELOPMENT_PASSWORD in the .env file. Exiting..."
-    exit 1
-fi
 
 # pg_dump the database
-if ! docker exec -t $DOCKER_NAME_DB pg_dump $ODOO_DB -U $ODOO_DB_USER --clean > $DB_BACKUP_DIR/odoo_db.sql; then
+if ! docker exec -t $DOCKER_NAME_DB pg_dump $ODOO_DB -U $DB_USER --clean > $DB_BACKUP_DIR/odoo_db.sql; then
     echo "Database backup failed. Exiting..."
     exit 1
 fi
@@ -88,6 +79,8 @@ then
 fi
 
 # Cleanup
-rm -rf $DB_BACKUP_DIR
+if [ -d "$DB_BACKUP_DIR" ]; then
+    rm -rf "$DB_BACKUP_DIR"
+fi
 
 echo -e "\033[32mSuccessfully backed up Odoo database and filestore to restic repository\033[0m"

@@ -11,17 +11,17 @@ echo "1) Development"
 echo "2) Production"
 echo "3) Staging"
 
-read -p "Enter your choice (1-3): " choice
+read -r -p "Enter your choice (1-3): " choice
 
 case $choice in
     1)
         ENV="development"
         ;;
     2)
-        ENV="staging"
+        ENV="production"
         ;;
     3)
-        ENV="production"
+        ENV="staging"
         ;;
     *)
         echo "Invalid choice. Exiting..."
@@ -36,76 +36,110 @@ CURRENT_DIR=$(pwd)
 DOCKER_NAME="strohm_odoo"
 DOCKER_NAME_DB="strohm_db"
 
-# This is the directory where the backup was created
-readonly BACKUP_DIR=/tmp/backup_odoo
+# This is the directory where the backup will be restored
+readonly BACKUP_DIR="/tmp/backup_odoo"
 
-RESTORE_DIR="$CURRENT_DIR$BACKUP_DIR"
-RESTIC_REPOSITORY="/home/resticuser/backups-strohm/$ENV/odoo"
+# Make sure RESTORE_DIR is an absolute path
+RESTORE_DIR="${BACKUP_DIR}"
+RESTIC_REPOSITORY="/home/resticuser/backups-strohm/${ENV}/odoo"
 
-BACKUP_FILE="$RESTORE_DIR/odoo_db.sql"
+# The actual backup file might be in a nested directory structure
+BACKUP_FILE="${RESTORE_DIR}/odoo_db.sql"
+NESTED_BACKUP_FILE="${RESTORE_DIR}/tmp/backup_odoo/odoo_db.sql"
 
 # Check if restic remote is accessible
 # Show available snapshots
 echo "Available snapshots:"
-if ! restic -r sftp:restic-backup-host:$RESTIC_REPOSITORY snapshots; then
+if ! restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots; then
     echo "Restic remote connection could not be established. Exiting..."
     exit 1
 fi
 
-read -p "Enter snapshot ID to restore: " SNAPSHOT_ID
+read -r -p "Enter snapshot ID to restore: " SNAPSHOT_ID
 
 
 # Restore from selected snapshot
-if ! restic -r sftp:restic-backup-host:$RESTIC_REPOSITORY restore $SNAPSHOT_ID --target $CURRENT_DIR; then
+mkdir -p "${RESTORE_DIR}"
+if ! restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" restore "${SNAPSHOT_ID}" --target "${RESTORE_DIR}"; then
     echo "Restore failed. Exiting..."
     exit 1
 fi
 
 source ../../.env
-ODOO_DB=$ODOO_DB
-ODOO_DB_USER=$ODOO_DB_USER
+ODOO_DB="${ODOO_DB}"
+ODOO_DB_USER="${ODOO_DB_USER}"
 
 # Check environment variables
-if [ -z "$ODOO_DB" ]; then
+if [ -z "${ODOO_DB}" ]; then
     echo "Please set the ODOO_DB and ODOO_DB_DEVELOPMENT_PASSWORD in the .env file. Exiting..."
     exit 1
 fi
 
 # Check if backup file exists
-if [ ! -f "$BACKUP_FILE" ]; then
-    echo "Backup file not found at $BACKUP_FILE. Exiting..."
+if [ ! -f "${BACKUP_FILE}" ] && [ ! -f "${NESTED_BACKUP_FILE}" ]; then
+    echo "Backup file not found at ${BACKUP_FILE} or ${NESTED_BACKUP_FILE}. Exiting..."
     exit 1
 fi
 
 # Stop Odoo container
 echo "Stopping Odoo container..."
-docker stop $DOCKER_NAME
-
-# Restore database
-echo "Restoring database from file $BACKUP_FILE..."
-docker exec -i "$DOCKER_NAME_DB" psql -U $ODOO_DB_USER -d $ODOO_DB < $BACKUP_FILE;
-if [ $? -ne 0 ]; then
-    echo "Database restore failed. Exiting..."
-    docker start $DOCKER_NAME
+if ! docker stop "${DOCKER_NAME}"; then
+    echo "Failed to stop Odoo container. Exiting..."
     exit 1
 fi
 
-docker start $DOCKER_NAME
+# Restore database
+echo "Restoring database from file ${BACKUP_FILE}..."
+if ! docker exec -i "${DOCKER_NAME_DB}" psql -U "${ODOO_DB_USER}" -d "${ODOO_DB}" < "${BACKUP_FILE}" && ! docker exec -i "${DOCKER_NAME_DB}" psql -U "${ODOO_DB_USER}" -d "${ODOO_DB}" < "${NESTED_BACKUP_FILE}"; then
+    echo "Database restore failed. Starting Odoo container and exiting..."
+    docker start "${DOCKER_NAME}" || echo "Failed to start Odoo container"
+    exit 1
+fi
 
 # Restore filestore
 echo "Restoring filestore..."
-if [ -d "$RESTORE_DIR/filestore" ]; then
-    if [ -z "$(ls -A $RESTORE_DIR/filestore)" ]; then
-        echo "Filestore directory exists but is empty, skipping..."
-    else
-        docker exec -u root -i $DOCKER_NAME rm -rf /var/lib/ODOO_CONFIG/filestore
-        if ! docker cp $RESTORE_DIR/filestore $DOCKER_NAME:/var/lib/ODOO_CONFIG/; then
-            echo "Filestore restore failed. Exiting..."
-            docker start $DOCKER_NAME
+# Check for filestore in both regular and nested location
+if [ -d "${RESTORE_DIR}/filestore" ] || [ -d "${RESTORE_DIR}/tmp/backup_odoo/filestore" ]; then
+    FILESTORE_PATH="${RESTORE_DIR}/filestore"
+
+    # If not in the expected location, use the nested path
+    if [ ! -d "${FILESTORE_PATH}" ] || [ -z "$(ls -A "${FILESTORE_PATH}")" ]; then
+        FILESTORE_PATH="${RESTORE_DIR}/tmp/backup_odoo/filestore"
+    fi
+
+    if [ -d "${FILESTORE_PATH}" ] && [ ! -z "$(ls -A "${FILESTORE_PATH}")" ]; then
+        echo "Found filestore at ${FILESTORE_PATH}"
+
+        # Start the container first before attempting to interact with it
+        echo "Starting Odoo container for filestore operations..."
+        if ! docker start "${DOCKER_NAME}"; then
+            echo "Failed to start Odoo container. Cannot restore filestore. Exiting..."
             exit 1
         fi
-        # set filestore permissions
-        docker exec -u root -i $DOCKER_NAME chown -R ODOO_CONFIG:ODOO_CONFIG /var/lib/ODOO_CONFIG/filestore
+
+        # Give the container a moment to fully start
+        sleep 3
+
+        if ! docker exec -u root -i "${DOCKER_NAME}" rm -rf /var/lib/odoo/filestore; then
+            echo "Failed to remove existing filestore. The operation will continue but there might be issues."
+        fi
+
+        if ! docker cp "${FILESTORE_PATH}" "${DOCKER_NAME}:/var/lib/odoo/"; then
+            echo "Filestore restore failed. Exiting..."
+            exit 1
+        fi
+
+        # Set filestore permissions
+        echo "Setting filestore permissions..."
+        if ! docker exec -u root -i "${DOCKER_NAME}" chown -R odoo:odoo /var/lib/odoo/filestore; then
+            echo "Failed to set filestore permissions. This may cause issues."
+        fi
+
+        # Stop the container to restart it cleanly later
+        echo "Stopping container for clean restart..."
+        docker stop "${DOCKER_NAME}"
+    else
+        echo "Filestore directory exists but is empty, skipping..."
     fi
 else
     echo "No filestore found in backup, skipping..."
@@ -113,8 +147,15 @@ fi
 
 # Start Odoo container
 echo "Starting Odoo container..."
+if ! docker start "${DOCKER_NAME}"; then
+    echo "Failed to start Odoo container. Please check the container status manually."
+    exit 1
+fi
 
 # Cleanup
-rm -r "$CURRENT_DIR"/tmp
+echo "Cleaning up temporary files..."
+if [ -d "${RESTORE_DIR}" ]; then
+    rm -rf "${RESTORE_DIR}"
+fi
 
-echo -e "\033[32mSuccessfully restored Odoo database and filestore from snapshot $SNAPSHOT_ID\033[0m"
+echo -e "\033[32mSuccessfully restored Odoo database and filestore from snapshot ${SNAPSHOT_ID}\033[0m"
