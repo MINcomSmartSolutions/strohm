@@ -32,7 +32,6 @@ ALTER DATABASE strohm OWNER TO strohm_admin;
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -123,7 +122,7 @@ ALTER SEQUENCE public.access_logs_id_seq OWNED BY public.access_logs.id;
 CREATE TABLE public.activity_log (
     id integer NOT NULL,
     user_id integer,
-    datetime timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
     reason character varying,
     event_type character varying,
     rfid character varying(255) NOT NULL,

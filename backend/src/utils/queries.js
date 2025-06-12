@@ -48,7 +48,8 @@ const createUser = async (oauth_id, name, email, rfid) => {
         const created_user = result.rows[0];
         await client.query('COMMIT');
 
-        recordActivityLog(created_user.user_id, 'CREATE USER', 'DB', rfid);
+        // Since recordActivityLog is now async, await it
+        await recordActivityLog(created_user.user_id, 'CREATE USER', 'DB', rfid);
         return created_user;
     } catch (error) {
         await client.query('ROLLBACK');
@@ -98,44 +99,47 @@ const getUsers = async (filters = {}, options = {}) => {
     }
 
     // Add ORDER BY, LIMIT, OFFSET if provided in options
-    if (options.orderBy) {
-        // whitelist of allowed column names
-        const allowedColumns = [
-            'user_id',
-            'oauth_id',
-            'name',
-            'email',
-            'rfid',
-            'odoo_user_id',
-            'odoo_partner_id',
-            'steve_id',
-            'created_at',
-            'updated_at',
-        ];
+    if (options) {
+        if (options.orderBy) {
+            // whitelist of allowed column names
+            const allowedColumns = [
+                'user_id',
+                'oauth_id',
+                'name',
+                'email',
+                'rfid',
+                'odoo_user_id',
+                'odoo_partner_id',
+                'steve_id',
+                'created_at',
+                'updated_at',
+            ];
 
-        // Validate that the orderBy parameter is in the whitelist
-        if (!allowedColumns.includes(options.orderBy)) {
-            throw new ValidationError(
-                ErrorCodes.VALIDATION.INVALID_PARAMETERS,
-                `Invalid orderBy parameter: ${options.orderBy}`,
-            );
+            // Validate that the orderBy parameter is in the whitelist
+            if (!allowedColumns.includes(options.orderBy)) {
+                throw new ValidationError(
+                    ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                    `Invalid orderBy parameter: ${options.orderBy}`,
+                );
+            }
+
+            const direction = options.orderDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+            query += ` ORDER BY ${options.orderBy} ${direction}`;
         }
 
-        const direction = options.orderDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-        query += ` ORDER BY ${options.orderBy} ${direction}`;
+        if (options.limit) {
+            query += ` LIMIT $${paramIndex}`;
+            values.push(options.limit);
+            paramIndex++;
+        }
+
+        if (options.offset) {
+            query += ` OFFSET $${paramIndex}`;
+            values.push(options.offset);
+            paramIndex++;
+        }
     }
 
-    if (options.limit) {
-        query += ` LIMIT $${paramIndex}`;
-        values.push(options.limit);
-        paramIndex++;
-    }
-
-    if (options.offset) {
-        query += ` OFFSET $${paramIndex}`;
-        values.push(options.offset);
-        paramIndex++;
-    }
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -383,20 +387,51 @@ const setSteveUserParamaters = async (user, steve_id) => {
 /**
  * Records an activity event for a user in the activity log.
  *
- * @param {number} user_id - The user's ID.
- * @param {string} event_type - The type of event (e.g., 'Create', 'Block').
+ * @param {number|null} user_id - The user's ID.
+ * @param {string} event_type - The type of event (e.g., 'CREATE', 'BLOCK').
  * @param {string} target - The target system or entity (e.g., 'DB', 'SteVe').
  * @param {string} rfid - The user's RFID.
+ * @param {string|null} reason
+ * @returns {Promise<void>}
  */
-const recordActivityLog = (user_id, event_type, target, rfid) => {
-    try {
-        const activity_log_query = `
-            INSERT INTO activity_log (user_id, event_type, target, rfid)
-            VALUES ($1, $2, $3::varchar, $4)
+const recordActivityLog = async (user_id, event_type, target, rfid, reason = null) => {
+    // If user_id is null or undefined, don't attempt to insert a record
+    // This prevents foreign key constraint violations
+    if (!user_id) {
+        logger.warn(`Attempted to record activity log without valid user_id: ${event_type}, ${target}, ${rfid}`);
+        return;
+    }
+
+    // Validate required parameters
+    if (!event_type || !target || !rfid) {
+        logger.warn(`Attempted to record activity log with missing required parameters: ${event_type}, ${target}, ${rfid}`);
+        return;
+    }
+
+    let activity_log_query = `
+        INSERT INTO activity_log (user_id, event_type, target, rfid)
+        VALUES ($1, $2, $3::varchar, $4)
+    `;
+    let values = [user_id, event_type, target, rfid];
+
+    if (reason) {
+        activity_log_query = `
+            INSERT INTO activity_log (user_id, event_type, target, rfid, reason)
+            VALUES ($1, $2, $3::varchar, $4, $5::varchar)
         `;
-        pool.query(activity_log_query, [user_id, event_type, target, rfid]);
+        values = [user_id, event_type, target, rfid, reason];
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query(activity_log_query, values);
+        await client.query('COMMIT');
     } catch (error) {
+        await client.query('ROLLBACK');
         handleQueryError(error, 'recordActivityLog');
+    } finally {
+        client.release();
     }
 };
 
@@ -404,7 +439,7 @@ const recordActivityLog = (user_id, event_type, target, rfid) => {
 /**
  * Record a transaction record into the `charging_transactions` table.
  * If transaction already exists and is complete, returns it without modification.
- * Otherwise, inserts a new record with proper user association.
+ * Otherwise, inserts a new record with proper user association or updates existing one.
  *
  * @async
  * @param {Object} tx - Transaction from Steve system
@@ -431,15 +466,42 @@ async function recordTransaction(tx) {
             // Check if transaction is complete and matches incoming data
             if (existingTx.stop_timestamp !== null &&
                 DateTime.fromJSDate(existingTx.stop_timestamp).toUTC().toMillis() === DateTime.fromISO(tx.stopTimestamp).toMillis()
-                // DateTime.fromJSDate(existingTx.stop_timestamp).toUTC().equals(DateTime.fromISO(tx.stopTimestamp))
             ) {
-                logger.info('Returned');
+                logger.info('Transaction already exists with matching stop timestamp - returning existing record');
                 await client.query('COMMIT');
                 return existingTx;
             }
+
+            // Transaction exists but needs updating
+            logger.info(`Updating existing transaction ${existingTx.id} (Steve ID: ${tx.id})`);
+            const updateQuery = `
+                UPDATE charging_transactions
+                SET ocpp_id_tag     = $1,
+                    start_timestamp = $2,
+                    stop_timestamp  = $3,
+                    start_value     = $4::numeric,
+                    stop_value      = $5::numeric,
+                    stop_reason     = $6::varchar
+                WHERE tx_steve_id = $7::integer
+                RETURNING *
+            `;
+
+            const updateValues = [
+                tx.ocppIdTag,
+                tx.startTimestamp,
+                tx.stopTimestamp,
+                tx.startValue,
+                tx.stopValue,
+                tx.stopReason,
+                tx.id,
+            ];
+
+            const updateResult = await client.query(updateQuery, updateValues);
+            await client.query('COMMIT');
+            return updateResult.rows[0];
         }
 
-        // Transaction doesn't exist or values differ, proceed with user lookup
+        // Transaction doesn't exist, proceed with user lookup
         const userCrossCheckQuery = `
             SELECT user_id
             FROM users
