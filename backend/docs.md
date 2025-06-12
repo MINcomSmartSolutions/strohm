@@ -122,6 +122,7 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <a name="module_services/cron"></a>
 
 ## services/cron
+
 Cron job service for periodic transaction fetching.
 
 - Schedules a job to run every 20 second.
@@ -131,11 +132,13 @@ Cron job service for periodic transaction fetching.
 <a name="module_services/logger"></a>
 
 ## services/logger : <code>winston</code>
+
 Logger service using winston with file rotation and enhanced console output
 
 <a name="module_services/network"></a>
 
 ## services/network
+
 Network service module for external API clients.
 
 - Exports pre-configured Axios instances for Odoo and SteVe APIs.
@@ -144,10 +147,10 @@ Network service module for external API clients.
 <a name="module_services/odoo"></a>
 
 ## services/odoo
+
 Odoo Integration Service
 
 It is responsible for user creation, login, key rotation, and invoicing with Odoo via REST API.
-
 
 * [services/odoo](#module_services/odoo)
     * [~createOdooUser(user)](#module_services/odoo..createOdooUser)
@@ -160,6 +163,7 @@ It is responsible for user creation, login, key rotation, and invoicing with Odo
 <a name="module_services/odoo..createOdooUser"></a>
 
 ### services/odoo~createOdooUser(user)
+
 Creates a new Odoo user.
 
 - Throws if the user already has an Odoo user ID.
@@ -176,6 +180,7 @@ Creates a new Odoo user.
 <a name="module_services/odoo..getOdooPortalLogin"></a>
 
 ### services/odoo~getOdooPortalLogin(user) ⇒ <code>string</code>
+
 Generates a secure Odoo portal login URL for the given user.
 
 - Validates the user object.
@@ -192,6 +197,7 @@ Generates a secure Odoo portal login URL for the given user.
 <a name="module_services/odoo..rotateOdooUserAuth"></a>
 
 ### services/odoo~rotateOdooUserAuth(user) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Rotates the Odoo user API key for the given user.
 
 - Validates the user object.
@@ -209,6 +215,7 @@ Rotates the Odoo user API key for the given user.
 <a name="module_services/odoo..createOdooTxnInvoice"></a>
 
 ### services/odoo~createOdooTxnInvoice(db_txn) ⇒ <code>Promise.&lt;string&gt;</code>
+
 Creates a bill/invoice in Odoo for a given transaction.
 
 Request payload to Odoo:
@@ -239,6 +246,7 @@ lines_data (list[dict]): Invoice line data dict with the following fields:
 <a name="module_services/odoo..checkValidPaymentMethod"></a>
 
 ### services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Checks if the given user has a valid payment method in Odoo.
 
 - Validates the user object.
@@ -256,6 +264,7 @@ Checks if the given user has a valid payment method in Odoo.
 <a name="module_services/steve_transactions"></a>
 
 ## services/steve\_transactions
+
 SteVe Transactions Service
 
 Incremental fetch of STOPPED transactions since last high‑water mark (T0).
@@ -266,7 +275,6 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 • No overlap or reprocessing of already handled transactions.
 • No gaps: even if a transaction ends just after T0, it will be fetched next run.
 • Linear, efficient incremental retrieval without maintaining complex windows.
-
 
 * [services/steve_transactions](#module_services/steve_transactions)
     * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
@@ -282,6 +290,7 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 <a name="module_services/steve_transactions..fetchSince"></a>
 
 ### services/steve_transactions~fetchSince(since) ⇒ <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code>
+
 Fetch STOPPED transactions since a given timestamp (exclusive)
 If no timestamp is provided, fetch all transactions
 
@@ -290,6 +299,7 @@ If no timestamp is provided, fetch all transactions
 <a name="module_services/steve_transactions..processSince"></a>
 
 ### services/steve_transactions~processSince(txns) ⇒ <code>Promise.&lt;DateTime&gt;</code>
+
 Record and create bills for transactions/charging sessions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -301,12 +311,14 @@ Record and create bills for transactions/charging sessions
 <a name="module_services/steve_transactions..runIncremental"></a>
 
 ### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+
 Run incremental billing cycle: fetch and process since last T0
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
 ### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+
 Fetches all transactions from Steve, processes them, and updates the high-water mark.
 Use for a full sync (no time filter).
 
@@ -314,22 +326,24 @@ Use for a full sync (no time filter).
 <a name="module_services/steve_transactions..runToday"></a>
 
 ### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+
 Fetch and process all of today's transactions and updates the high-water mark.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_user"></a>
 
 ## services/steve\_user
+
 SteVe User Service
 
 Provides functions to create, fetch, block, and unblock users in the SteVe OCPP backend.
+
 - createSteveUser: Creates a new user in SteVe with the given RFID.
 - getSteveUser: Fetches a user from SteVe by RFID.
 - blockSteveUser: Blocks a user in SteVe (sets maxActiveTransactionCount to 0).
 - unblockSteveUser: Unblocks a user in SteVe (sets maxActiveTransactionCount to 1).
 
 All functions validate input and handle errors using custom error types.
-
 
 * [services/steve_user](#module_services/steve_user)
     * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
@@ -342,7 +356,9 @@ All functions validate input and handle errors using custom error types.
 <a name="module_services/steve_user..createSteveUser"></a>
 
 ### services/steve_user~createSteveUser(user, [blocked]) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Creates a new user in SteVe with the given RFID.
+
 - Checks if the user already exists.
 - Creates the user with the specified block status.
 - Validates the response and stores the steve_id in the database.
@@ -357,6 +373,7 @@ Creates a new user in SteVe with the given RFID.
 <a name="module_services/steve_user..getSteveUser"></a>
 
 ### services/steve_user~getSteveUser(user_rfid) ⇒ <code>Promise.&lt;(Array.&lt;Object&gt;\|null)&gt;</code>
+
 Fetches a user from SteVe by RFID.
 Returns null if not found, throws if multiple found or on error.
 Validates the user data.
@@ -370,6 +387,7 @@ Validates the user data.
 <a name="module_services/steve_user..blockSteveUser"></a>
 
 ### services/steve_user~blockSteveUser(user)
+
 Blocks a user in SteVe by setting their maxActiveTransactionCount to 0.
 Validates input, updates the user, checks the block status, and logs the action.
 
@@ -381,6 +399,7 @@ Validates input, updates the user, checks the block status, and logs the action.
 <a name="module_services/steve_user..unblockSteveUser"></a>
 
 ### services/steve_user~unblockSteveUser(user)
+
 Unblocks a user in SteVe by setting their maxActiveTransactionCount to 1.
 Validates input, updates the user, checks the unblock status, and logs the action.
 
@@ -392,11 +411,13 @@ Validates input, updates the user, checks the unblock status, and logs the actio
 <a name="module_services/user_operations"></a>
 
 ## services/user\_operations
+
 Service for checking overall user integrity and creating users with proper links to external systems.
 
 <a name="module_services/user_operations..userOperations"></a>
 
 ### services/user_operations~userOperations(oidc_user) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Handles user creation and linking with external systems.
 
 - Checks if a user exists by OIDC ID.
@@ -409,6 +430,7 @@ Handles user creation and linking with external systems.
 <a name="module_utils/oidc_config"></a>
 
 ## utils/oidc\_config
+
 OIDC configuration for authentication middleware.
 
 - Uses environment variables for secrets and endpoints.
@@ -418,8 +440,8 @@ OIDC configuration for authentication middleware.
 <a name="module_utils/queries"></a>
 
 ## utils/queries
-Global database queries
 
+Global database queries
 
 * [utils/queries](#module_utils/queries)
     * [~handleQueryError(error, operation)](#module_utils/queries..handleQueryError)
@@ -432,7 +454,8 @@ Global database queries
       Promise.&lt;boolean&gt;</code>
     * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
       Object\|undefined)&gt;</code>
-    * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog)
+  * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>
+    Promise.&lt;void&gt;</code>
     * [~recordTransaction(tx)](#module_utils/queries..recordTransaction) ⇒ <code>Promise.&lt;Object&gt;</code>
     * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
       Promise.&lt;void&gt;</code>
@@ -445,6 +468,7 @@ Global database queries
 <a name="module_utils/queries..handleQueryError"></a>
 
 ### utils/queries~handleQueryError(error, operation)
+
 Handles query errors.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -455,6 +479,7 @@ Handles query errors.
 <a name="module_utils/queries..getUsers"></a>
 
 ### utils/queries~getUsers(filters, options) ⇒ <code>Promise.&lt;Array&gt;</code>
+
 Gets users based on dynamic filter parameters.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -466,13 +491,31 @@ Gets users based on dynamic filter parameters.
 **Example**
 
 ```js
-getUsers({ first_name: 'John' }) - Get all users named John
-getUsers({ active: true }, { limit: 10, offset: 20 }) - Get 10 active users, skipping first 20
-getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users ordered by creation date descending
+getUsers({first_name: 'John'}) - Get
+all
+users
+named
+John
+getUsers({active: true}, {limit: 10, offset: 20}) - Get
+10
+active
+users, skipping
+first
+20
+getUsers({}, {orderBy: 'created_at', orderDirection: 'DESC'}) - Get
+all
+users
+ordered
+by
+creation
+date
+descending
 ```
+
 <a name="module_utils/queries..getUserUnique"></a>
 
 ### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code>
+
 Gets a single user with uniqueness validation.
 Throws an error if multiple users match the criteria.
 
@@ -486,6 +529,7 @@ Throws an error if multiple users match the criteria.
 <a name="module_utils/queries..getUserOdooCredentials"></a>
 
 ### utils/queries~getUserOdooCredentials(user_id) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+
 Retrieves the latest valid Odoo API key credentials for a user.
 Returns null if no credentials are found.
 
@@ -498,6 +542,7 @@ Returns null if no credentials are found.
 <a name="module_utils/queries..rotateOdooUserKey"></a>
 
 ### utils/queries~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Rotates a user's Odoo API key.
 Revokes the old key and inserts a new one for the user.
 
@@ -510,6 +555,7 @@ Revokes the old key and inserts a new one for the user.
 <a name="module_utils/queries..setSteveUserParamaters"></a>
 
 ### utils/queries~setSteveUserParamaters(user, steve_id) ⇒ <code>Promise.&lt;(Object\|undefined)&gt;</code>
+
 Sets the SteVe user ID for a user in the database.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -521,22 +567,25 @@ Sets the SteVe user ID for a user in the database.
 
 <a name="module_utils/queries..recordActivityLog"></a>
 
-### utils/queries~recordActivityLog(user_id, event_type, target, rfid, reason)
+### utils/queries~recordActivityLog(user_id, event_type, target, rfid, reason) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Records an activity event for a user in the activity log.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..recordTransaction"></a>
 
 ### utils/queries~recordTransaction(tx) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Record a transaction record into the `charging_transactions` table.
 If transaction already exists and is complete, returns it without modification.
-Otherwise, inserts a new record with proper user association.
+Otherwise, inserts a new record with proper user association or updates existing one.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Returns**: <code>Promise.&lt;Object&gt;</code> - db_txn - The transaction record from database  
 <a name="module_utils/queries..setLastStopTimestamp"></a>
 
 ### utils/queries~setLastStopTimestamp(new_watermark) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Sets the last stop timestamp watermark.
 Inserts or updates the `watermark` table with the given timestamp.
 
@@ -544,6 +593,7 @@ Inserts or updates the `watermark` table with the given timestamp.
 <a name="module_utils/queries..getLastStopTimestamp"></a>
 
 ### utils/queries~getLastStopTimestamp() ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
+
 Retrieves the most recent `last_stop_timestamp` from the watermark table.
 Returns a Luxon DateTime if found, otherwise null.
 
@@ -556,6 +606,7 @@ Returns a Luxon DateTime if found, otherwise null.
 <a name="module_utils/queries..saveInvoiceId"></a>
 
 ### utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Updates the `invoice_ref` field for a transaction in `charging_transactions`.
 This is used to link a transaction to an invoice in Odoo.
 
@@ -567,6 +618,7 @@ This is used to link a transaction to an invoice in Odoo.
 <a name="module_utils/queries..getCurrentElectricityPrice"></a>
 
 ### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code>
+
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
 
@@ -575,12 +627,15 @@ If a `specified_datetime` is provided, it will return the price valid at that ti
 <a name="module_utils/steve"></a>
 
 ## utils/steve
+
 Utility functions for Steve user data.
 
 <a name="module_utils/steve..validateSteveUser"></a>
 
 ### utils/steve~validateSteveUser(response_data, userRfid)
+
 Validates Steve user response data.
+
 - Checks structure using Joi schema.
 - Ensures idTag matches the expected RFID.
 
@@ -592,8 +647,8 @@ Validates Steve user response data.
 <a name="module_utils/typedef"></a>
 
 ## utils/typedef
-Type definitions
 
+Type definitions
 
 * [utils/typedef](#module_utils/typedef)
     * [~User](#module_utils/typedef..User) : <code>Object</code>
@@ -604,6 +659,7 @@ Type definitions
 <a name="module_utils/typedef..User"></a>
 
 ### utils/typedef~User : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -622,27 +678,29 @@ Type definitions
 <a name="module_utils/typedef..tx"></a>
 
 ### utils/typedef~tx : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
-| Name | Type | Description |
-| --- | --- | --- |
-| id | <code>number</code> | PK of the transaction |
-| connectorId | <code>number</code> | Connector ID of the charge box at which the transaction took place |
-| chargeBoxPk | <code>number</code> | PK of the charge box at which the transaction took place |
-| ocppTagPk | <code>number</code> | PK of the OCPP tag used in the transaction |
-| chargeBoxId | <code>string</code> | The identifier of the charge box at which the transaction took place |
-| ocppIdTag | <code>string</code> | The Ocpp Tag used in the transaction |
-| startTimestamp | <code>Date</code> | The timestamp at which the transaction started |
-| stopTimestamp | <code>Date</code> \| <code>null</code> | The timestamp at which the transaction ended |
-| startValue | <code>string</code> | The meter value reading at the start of the transaction |
-| stopValue | <code>string</code> \| <code>null</code> | The meter value reading at the end of the transaction |
-| stopReason | <code>string</code> \| <code>null</code> | The reason for the transaction being stopped |
-| stopEventActor | <code>&#x27;station&#x27;</code> \| <code>&#x27;manual&#x27;</code> \| <code>null</code> | The actor who stopped the transaction |
+| Name           | Type                                                                                     | Description                                                          |
+|----------------|------------------------------------------------------------------------------------------|----------------------------------------------------------------------|
+| id             | <code>number</code>                                                                      | PK of the transaction                                                |
+| connectorId    | <code>number</code>                                                                      | Connector ID of the charge box at which the transaction took place   |
+| chargeBoxPk    | <code>number</code>                                                                      | PK of the charge box at which the transaction took place             |
+| ocppTagPk      | <code>number</code>                                                                      | PK of the OCPP tag used in the transaction                           |
+| chargeBoxId    | <code>string</code>                                                                      | The identifier of the charge box at which the transaction took place |
+| ocppIdTag      | <code>string</code>                                                                      | The Ocpp Tag used in the transaction                                 |
+| startTimestamp | <code>Date</code>                                                                        | The timestamp at which the transaction started                       |
+| stopTimestamp  | <code>Date</code> \| <code>null</code>                                                   | The timestamp at which the transaction ended                         |
+| startValue     | <code>string</code>                                                                      | The meter value reading at the start of the transaction              |
+| stopValue      | <code>string</code> \| <code>null</code>                                                 | The meter value reading at the end of the transaction                |
+| stopReason     | <code>string</code> \| <code>null</code>                                                 | The reason for the transaction being stopped                         |
+| stopEventActor | <code>&#x27;station&#x27;</code> \| <code>&#x27;manual&#x27;</code> \| <code>null</code> | The actor who stopped the transaction                                |
 
 <a name="module_utils/typedef..db_txn"></a>
 
 ### utils/typedef~db\_txn : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -668,6 +726,7 @@ Type definitions
 <a name="module_utils/typedef..electricity_price"></a>
 
 ### utils/typedef~electricity\_price : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -682,17 +741,20 @@ Type definitions
 <a name="module_app"></a>
 
 ## app
+
 Express app instance.
 
 <a name="AppError"></a>
 
 ## AppError
+
 Base class for custom application errors
 
 **Kind**: global class  
 <a name="config"></a>
 
 ## config : <code>object</code>
+
 Configuration settings for SteVe and Odoo integrations
 
 **Kind**: global namespace  
@@ -723,6 +785,7 @@ Configuration settings for SteVe and Odoo integrations
 <a name="logger"></a>
 
 ## logger
+
 Application Error Codes
 
 This module defines standardized error codes and messages for the application.
@@ -732,6 +795,7 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <a name="generateOdooHash"></a>
 
 ## generateOdooHash(message, secret) ⇒ <code>string</code>
+
 Generate HMAC signature matching Odoo implementation
 
 **Kind**: global function  
@@ -739,6 +803,7 @@ Generate HMAC signature matching Odoo implementation
 <a name="generateSalt"></a>
 
 ## generateSalt(length) ⇒ <code>string</code>
+
 Generate a cryptographically secure random salt
 
 **Kind**: global function  
@@ -746,6 +811,7 @@ Generate a cryptographically secure random salt
 <a name="identifyUser"></a>
 
 ## identifyUser(identifier, options) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Gets a user by either user_id or oauth_id
 
 **Kind**: global function  
@@ -757,12 +823,14 @@ Gets a user by either user_id or oauth_id
 <a name="fmt"></a>
 
 ## fmt(dt, toUTC) ⇒ <code>string</code>
+
 Format a Luxon DateTime into SteVe's expected ISO string (no Z)
 
 **Kind**: global function  
 <a name="createError"></a>
 
 ## createError(errorDef, [customMessage], [originalError]) ⇒ <code>Object</code>
+
 Create an application error with standard format
 
 **Kind**: global function  
@@ -770,6 +838,7 @@ Create an application error with standard format
 <a name="appErrorHandler"></a>
 
 ## appErrorHandler()
+
 Express error handler for AppErrors
 
 **Kind**: global function  
