@@ -17,6 +17,7 @@ const {validateSteveUser} = require('../utils/steve');
 const logger = require('./logger');
 const {db} = require('../utils/queries');
 const {STEVE_CONFIG} = require('../config');
+const {fullyQualifiedUserSchema} = require('../utils/joi');
 
 
 /**
@@ -120,8 +121,9 @@ const getSteveUser = async (user_rfid) => {
  * @throws {ValidationError|Error} If input is invalid or block fails.
  */
 const blockSteveUser = async (user) => {
-    if (!user || !user.rfid || user.rfid.trim() === '') {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
+    const {error} = fullyQualifiedUserSchema.validate(user);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, error.message);
     }
 
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {

@@ -53,6 +53,7 @@ const ExceptionCodes = Object.freeze({
         UNKNOWN_ERROR: {code: 5000, status: 500, message: 'An unknown error occurred'},
         NOT_IMPLEMENTED: {code: 5001, status: 500, message: 'Feature not implemented'},
         SERVICE_UNAVAILABLE: {code: 5002, status: 500, message: 'Service temporarily unavailable'},
+        PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check failed'},
     }),
 
     // Related to user operation errors in backend (6000-6099)

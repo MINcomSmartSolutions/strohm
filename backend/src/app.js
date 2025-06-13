@@ -30,6 +30,16 @@ Settings.defaultZoneName = 'utc';
 axios.defaults.validateStatus = function () {
     return true;
 };
+axios.interceptors.response.use(function (response) {
+    // Optional: Do something with response data
+    return response;
+}, function (error) {
+    // Do whatever you want with the response error here:
+
+    // But, be SURE to return the rejected promise, so the caller still has
+    // the option of additional specialized handling at the call-site:
+    return Promise.reject(error);
+});
 
 // TODO: Seperate to controllers folder
 
@@ -51,11 +61,12 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use(express.urlencoded({extended: true}));
 app.use(express.json());
-app.use(morganMiddleware);
+app.use(morganMiddleware); // Custom logger middleware for request logging
+
+
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 // See: https://github.com/auth0/express-openid-connect
 app.use(auth(oidc_config));
-
 
 // noinspection JSCheckFunctionSignatures
 app.use(hpp());
@@ -133,7 +144,13 @@ app.get('/test', async (req, res) => {
 app.post('/internal/user/sync', verifyApiKey, async (req, res) => {
     try {
         // Destructure expected fields from request body
-        const {timestamp, user_id: req_odoo_userid, partner_id: req_odoo_partnerid, event, data} = req.body;
+        const {
+            timestamp,
+            user_id: req_odoo_userid,
+            partner_id: req_odoo_partnerid,
+            event,
+            data,
+        } = req.body;
 
         try {
             // Verify required fields using Joi (a bit unnecessary here, but good for consistency)
@@ -186,7 +203,6 @@ app.post('/internal/user/sync', verifyApiKey, async (req, res) => {
             const {has_valid_payment_method} = data;
             Joi.assert(has_valid_payment_method, Joi.boolean());
 
-
             return res.status(200).json({success: true});
 
         } else if (event === 'payment_rejected') {
@@ -201,6 +217,7 @@ app.post('/internal/user/sync', verifyApiKey, async (req, res) => {
         appErrorHandler(error, res);
     }
 });
+
 // Start the cron job
 transactionFetchLoop.start();
 

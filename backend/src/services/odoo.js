@@ -15,6 +15,7 @@ const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
 const {dbTransactionSchema, fullyQualifiedUserSchema} = require('../utils/joi');
 const logger = require('../services/logger');
+const {AxiosError} = require('axios');
 
 
 /**
@@ -35,20 +36,24 @@ async function createOdooUser(user) {
     }
 
     const data = {
+        timestamp: fmt(DateTime.utc()),
         name: user.name,
         email: user.email,
+        salt: generateSalt(),
     };
+    const message = `${data.timestamp}${data.name}${data.email}${data.salt}`;
+    data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     const response = await odooAxios.post(ODOO_CONFIG.USER_CREATION_URI, data);
     if (response.status === 201) {
-        const data = response.data;
-        const timestamp = data['timestamp'];
-        const odoo_user_id = data['user_id'];
-        const odoo_partner_id = data['partner_id'];
-        const encrypted_key = data['key'];
-        const key_salt = data['key_salt'];
-        const hash = data['hash'];
-        const salt = data['salt'];
+        const response_data = response.data;
+        const timestamp = response_data['timestamp'];
+        const odoo_user_id = response_data['user_id'];
+        const odoo_partner_id = response_data['partner_id'];
+        const encrypted_key = response_data['key'];
+        const key_salt = response_data['key_salt'];
+        const hash = response_data['hash'];
+        const salt = response_data['salt'];
 
 
         // Verify the hash to ensure data integrity
@@ -73,7 +78,7 @@ async function createOdooUser(user) {
             encrypted_key,
             key_salt,
         );
-        db.recordActivityLog(user.user_id, 'CREATE USER', 'Odoo', user.rfid);
+        db.recordActivityLog(user.user_id, 'CREATE USER', 'ODOO', user.rfid);
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {
@@ -104,12 +109,12 @@ async function getOdooPortalLogin(user) {
     }
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
+    if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {
+        // TODO: Instead of throwing an error, trigger a key rotation process
+        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
+    }
     const {key, key_salt} = odoo_credentials;
     const _salt = generateSalt();
-    if (!odoo_credentials || !key || !key_salt) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
-        //TODO: Instead of throwing an error, ask for a key rotation
-    }
 
     // Construct the Odoo portal login URL
     // Used URL constructor to ensure proper encoding instead of String concatenation
@@ -152,47 +157,63 @@ async function rotateOdooUserAuth(user) {
     }
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
-    const {key_id, key, key_salt} = odoo_credentials;
-    let data = {
-        timestamp: fmt(DateTime.now()),
+    if (!odoo_credentials || !odoo_credentials.key_id || !odoo_credentials.key || !odoo_credentials.key_salt) {
+        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
+    }
+
+    // Prepare request data using the *current* key and key_salt
+    const request_salt = generateSalt();
+    const request_timestamp = fmt(DateTime.now());
+
+    // Create a dedicated request object with old credentials
+    const requestData = {
+        timestamp: request_timestamp,
         user_id: user.odoo_user_id,
-        key: key,
-        key_salt: key_salt,
-        salt: generateSalt(),
+        key: odoo_credentials.key, // old key
+        key_salt: odoo_credentials.key_salt, // old key_salt
+        salt: request_salt,
     };
-    const message = `${data.timestamp}${data.user_id}${data.key}${data.key_salt}${data.salt}`;
-    data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
+    try {
+        // Generate hash for request data
+        const requestMessage = `${requestData.timestamp}${requestData.user_id}${requestData.key}${requestData.key_salt}${requestData.salt}`;
+        requestData.hash = generateOdooHash(requestMessage, ODOO_CONFIG.API_SECRET);
 
-    const response = await odooAxios.post(ODOO_CONFIG.ROTATE_APIKEY_URI, data);
-    if (response.status === 200) {
-        const data = response.data;
-        const timestamp = data['timestamp'];
-        const odoo_user_id = data['user_id'];
-        const new_key = data['key'];
-        const new_key_salt = data['key_salt'];
-        const salt = data['salt'];
-        const hash = data['hash'];
+        // Send request with the *old* key/key_salt
+        // Clone requestData to prevent mutation before Jest matcher evaluates it
+        const response = await odooAxios.post(ODOO_CONFIG.ROTATE_APIKEY_URI, {...requestData});
+        if (response.status === 200) {
+            const respData = response.data;
+            const timestamp = respData['timestamp'];
+            const odoo_user_id = respData['user_id'];
+            const new_key = respData['key'];
+            const new_key_salt = respData['key_salt'];
+            const salt = respData['salt'];
+            const hash = respData['hash'];
 
-        const message = `${timestamp}${user.odoo_user_id}${new_key}${new_key_salt}${salt}`;
-        const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
-        // Compare the calculated hash with the hash received from Odoo
-        if (expected_hash !== hash) {
-            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED, 'Hash verification failed');
+            const message = `${timestamp}${user.odoo_user_id}${new_key}${new_key_salt}${salt}`;
+            const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
+            // Compare the calculated hash with the hash received from Odoo
+            if (expected_hash !== hash) {
+                throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+            }
+
+            if (odoo_user_id !== user.odoo_user_id) {
+                throw new SystemError(ErrorCodes.USER.ODOO_ID_MISMATCH);
+            }
+
+            // Update DB with new key/key_salt
+            await db.rotateOdooUserKey(user.user_id, odoo_credentials.key_id, new_key, new_key_salt);
+
+            db.recordActivityLog(user.user_id, 'ROTATE USER KEY', 'ODOO', user.rfid);
+
+            return db.getUserOdooCredentials(user.user_id);
+        } else {
+            const errorMSG = response.data['error'];
+            logger.error(`Error rotating Odoo user key: ${response.status}, ${errorMSG}`);
+            throw new SystemError(ErrorCodes.ODOO.KEY_ROTATION_FAILED);
         }
-
-        if (odoo_user_id !== user.odoo_user_id) {
-            throw new SystemError(ErrorCodes.User.ODOO_ID_MISMATCH);
-        }
-
-        const db_query = db.rotateOdooUserKey(user.user_id, key_id, new_key, new_key_salt);
-        if (!db_query) {
-            throw new SystemError(ErrorCodes.USER.KEY_ROTATION_FAILED);
-        }
-        db.recordActivityLog(user.user_id, 'ROTATE USER KEY', 'Odoo', user.rfid);
-        return db.getUserOdooCredentials(user.user_id);
-    } else {
-        const errorMSG = response.data['error'];
-        throw new SystemError(ErrorCodes.ODOO.KEY_ROTATION_FAILED, errorMSG);
+    } catch (error) {
+        throw new SystemError(ErrorCodes.ODOO.KEY_ROTATION_FAILED, error.message || 'Unknown error', error);
     }
 }
 
@@ -225,13 +246,18 @@ async function rotateOdooUserAuth(user) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function createOdooTxnInvoice(db_txn) {
-    const {txn_error} = dbTransactionSchema.validate(db_txn);
-    if (txn_error) {
+    const {error} = dbTransactionSchema.validate(db_txn);
+    if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
-            `Invalid transaction ${txn_error.message}`);
+            `Invalid transaction ${error.message}`);
     }
 
-    const {key, key_salt} = await db.getUserOdooCredentials(db_txn.user_id);
+    const odoo_credentials = await db.getUserOdooCredentials(db_txn.user_id);
+    if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {
+        // TODO: Instead of throwing an error, trigger a key rotation process
+        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
+    }
+    const {key, key_salt} = odoo_credentials;
     const user = await db.getUserUnique({user_id: db_txn.user_id});
     const user_error = fullyQualifiedUserSchema.validate(user);
     if (user_error.error) {
@@ -240,14 +266,20 @@ async function createOdooTxnInvoice(db_txn) {
     }
 
     // The price of electricity at the time of transaction started
-    const txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
+    let txn_started_with_electricity_price;
+    try {
+        txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
+    } catch (error) {
+        logger.warn(`Failed to get electricity price from database: ${error.message}`);
+        txn_started_with_electricity_price = 35; // Default price in cents
+    }
 
     const lines_data = [
         {
             'sku': 'standard_charging',
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
-            'price_unit': txn_started_with_electricity_price / 100 ?? 0.35,
+            'price_unit': txn_started_with_electricity_price / 100,
             'quantity': db_txn.delivered_energy_wh / 1000,
         },
     ];
@@ -275,7 +307,7 @@ async function createOdooTxnInvoice(db_txn) {
         throw new SystemError(ErrorCodes.ODOO.INVOICE_CREATE_FAILED, errorMSG);
     }
 
-    db.recordActivityLog(user.user_id, 'CREATE INVOICE', 'ODOO', user.rfid);
+    await db.recordActivityLog(user.user_id, 'CREATE INVOICE', 'ODOO', user.rfid);
     return response.data['bill_id'];
 }
 
@@ -302,43 +334,51 @@ async function checkValidPaymentMethod(user) {
     }
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
-    const {key, key_salt} = odoo_credentials;
+    if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {
+        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
+    }
+
     const salt = generateSalt();
     const data = {
         timestamp: fmt(DateTime.now()),
         user_id: user.odoo_user_id,
         partner_id: user.odoo_partner_id,
-        key: key,
-        key_salt: key_salt,
+        key: odoo_credentials.key,
+        key_salt: odoo_credentials.key_salt,
         salt: salt,
     };
     const message = `${data.timestamp}${data.user_id}${data.partner_id}${data.key}${data.key_salt}${data.salt}`;
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
-    const response = await odooAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
-    if (response.status === 200) {
-        const data = response.data;
-        const timestamp = data['timestamp'];
-        const result = data['result']; // 1 for valid, 0 for invalid
-        const salt = data['salt'];
-        const hash = data['hash'];
+    try {
+        const response = await odooAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
+        if (response.status === 200) {
+            const response_data = response.data;
+            const timestamp = response_data['timestamp'];
+            const result = response_data['result']; // 1 for valid, 0 for invalid
+            const salt = response_data['salt'];
+            const hash = response_data['hash'];
 
-        if (!timestamp || !salt || !hash || result === undefined || result === null) {
-            throw new ResponseError(ErrorCodes.ODOO.INVALID_RESPONSE);
+            if (!timestamp || !salt || !hash || result === undefined || result === null) {
+                throw new ResponseError(ErrorCodes.ODOO.INVALID_RESPONSE);
+            }
+
+            // Verify hash
+            const message = `${timestamp}${result}${salt}`;
+            const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
+            if (expected_hash !== hash) {
+                throw new ResponseError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+            }
+
+            logger.info('Payment method check result: ' + result);
+            return (result === 1);
+        } else {
+            logger.error(`Error checking payment method: ${response.status}, ${response.data}`);
+            throw new SystemError(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
         }
-
-        // Verify hash
-        const message = `${timestamp}${result}${salt}`;
-        const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
-        if (expected_hash !== hash) {
-            throw new ResponseError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
-        }
-
-        logger.info('Payment method check result: ' + result);
-        return (result === 1);
-    } else {
-        logger.error(`Error checking payment method: ${response.status}, ${response.data}`);
-        throw new SystemError(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
+    } catch (error) {
+        logger.error(`Failed to check payment method: ${error.message}`);
+        throw new SystemError(ErrorCodes.SYSTEM.PAYMENT_METHOD_VALIDITY_CHECK_FAILED, error.message || 'Unknown error', error);
     }
 }
 

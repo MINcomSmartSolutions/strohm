@@ -316,7 +316,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
         await client.query('BEGIN');
 
         const result = await client.query(query, [user_id, old_key_id]);
-        if (result.rowCount === 0) {
+        if (result.rows.length === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
                 `${user_id}'s old key is already revoked or does not exist. Cannot rotate key. Request a new one.`,
@@ -324,15 +324,14 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
         }
 
         const insertResult = await client.query(insertQuery, [user_id, new_key, new_key_salt]);
-        if (insertResult.rowCount === 0) {
+        if (insertResult.rows.length === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
                 `Failed to insert new key for user ID ${user_id}.`,
             );
         }
 
-        await client.query('COMMIT');
-        return true; // Rotation successful
+        return await client.query('COMMIT');
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'rotateOdooUserKey');
@@ -394,7 +393,7 @@ const setSteveUserParamaters = async (user, steve_id) => {
  * @param {string|null} reason
  * @returns {Promise<void>}
  */
-const recordActivityLog = async (user_id, event_type, target, rfid, reason = null) => {
+async function recordActivityLog(user_id, event_type, target, rfid, reason = null) {
     // If user_id is null or undefined, don't attempt to insert a record
     // This prevents foreign key constraint violations
     if (!user_id) {
