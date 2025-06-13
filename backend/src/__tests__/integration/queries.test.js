@@ -621,8 +621,8 @@ describe('Database Queries Integration Tests', () => {
             const client = await pool.connect();
             try {
                 await client.query(
-                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
-                     VALUES ($1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 day')`,
+                    `INSERT INTO electricity_prices (price, valid_from, valid_till) 
+           VALUES ($1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 day')`,
                     [25],
                 );
 
