@@ -74,7 +74,7 @@ jobs:
 
     - name: Run unit tests
       working-directory: ./backend
-      run: npm test -- --testPathPattern=unit --verbose
+      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
 
     - name: Run integration tests
       working-directory: ./backend
