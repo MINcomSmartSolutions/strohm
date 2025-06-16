@@ -1,6 +1,10 @@
 #!/bin/bash
 # Script to initialize the test database with the schema
 
+# Start the test database container if it's not already running
+echo "Starting test database container..."
+docker run --name db-test -e POSTGRES_USER=testuser -e POSTGRES_PASSWORD=testpassword -e POSTGRES_DB=testdb -p 5433:5432 -d postgres:16.6
+
 # Wait for database to be ready
 echo "Waiting for database to be ready..."
 attempt=0
@@ -63,4 +67,3 @@ PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -c "
 "
 
 echo "Database setup completed successfully!"
-

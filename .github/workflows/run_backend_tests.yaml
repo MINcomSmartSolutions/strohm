@@ -23,7 +23,7 @@ jobs:
         env:
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpassword
-          POSTGRES_DB: strohm
+          POSTGRES_DB: testdb
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -67,22 +67,9 @@ jobs:
         DB_USER: testuser
         DB_PASSWORD: testpassword
       run: |
-        # Make the database initialization script executable
+        # Make the database initialization script executable and run it
         chmod +x ./src/__tests__/helpers/db-init.sh
-        
-        # Run the database initialization script
-        # Note: The script expects 'testdb' but we're using 'strohm', so we'll modify the script call
-        # First, run global database objects if they exist
-        if [ -f "database/db-etc.sql" ]; then
-          echo "Applying global database objects from db-etc.sql..."
-          PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d strohm -f database/db-etc.sql
-        fi
-        
-        # Then run the main database structure
-        if [ -f "database/db-structure.sql" ]; then
-          echo "Applying database structure from db-structure.sql..."
-          PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d strohm -f database/db-structure.sql
-        fi
+        ./src/__tests__/helpers/db-init.sh
 
     - name: Run unit tests
       working-directory: ./backend

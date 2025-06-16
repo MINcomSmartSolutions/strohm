@@ -17,13 +17,8 @@ const setupTestDatabase = async () => {
         throw new Error('Database environment variables are not set. Please check your test.env file.');
     }
 
-    // Start the test database container if it's not already running
+    // Database initialization is now fully handled by db-init.sh
     try {
-        console.log('Starting test database container...');
-        execSync('docker-compose -f docker-compose.test.yml up -d db-test', {
-            stdio: 'inherit',
-        });
-
         // Make sure the initialization script is executable
         execSync('chmod +x ./src/__tests__/helpers/db-init.sh', {
             stdio: 'inherit',

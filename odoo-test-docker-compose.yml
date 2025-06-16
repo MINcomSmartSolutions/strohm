@@ -1,0 +1,60 @@
+version: '3'
+
+services:
+  db-test:
+    container_name: odoo_test_db
+    image: postgres:16.6
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U odoo_admin -d postgres'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    environment:
+      POSTGRES_USER: odoo_admin
+      POSTGRES_DB: odoo_test
+      POSTGRES_PASSWORD: "testpassword"
+
+  odoo-test:
+    container_name: odoo_test
+    build:
+      context: ./odoo-strohm/odoo
+      args:
+        DB_VERSION: "16"
+        ODOO_VERSION: "18.0"
+        AGGREGATE: "false"
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+        PIP_INSTALL_ODOO: true
+        CLEAN: true
+        COMPILE: true
+    environment:
+      ODOO_ENV: "test"
+      LIST_DB: true
+      PGHOST: db-test
+      PGDATABASE: odoo_test
+      PGUSER: odoo_admin
+      PGPASSWORD: "testpassword"
+      ADMIN_PASSWORD: admin
+      PYTHONDONTWRITEBYTECODE: 1
+      ODOO_API_SECRET: "test_secret"
+      INITIAL_LANG: "de_DE"
+      WITHOUT_DEMO: false  # Include demo data for testing
+      PROXY_MODE: false
+    tty: true
+    volumes:
+      - ./odoo-strohm/odoo/custom:/opt/odoo/custom:ro,z
+      - ./odoo-strohm/odoo/auto:/opt/odoo/auto:rw,z
+    depends_on:
+      db-test:
+        condition: service_healthy
+    command:
+      - odoo
+      - -i base,base_automation,portal,account,payment,payment_stripe,sale,l10n_de
+      - --test-enable
+      - --test-tags=/base,/base_automation,/portal,/payment,/payment_stripe,/account,/l10n_de,/sale
+      - --stop-after-init
+
+
+networks:
+  default:
