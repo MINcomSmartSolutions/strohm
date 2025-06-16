@@ -4,15 +4,19 @@
 const {Pool} = require('pg');
 const {execSync} = require('child_process');
 const path = require('path');
-const fs = require('fs');
 
 // Load test environment variables
-require('dotenv').config({path: path.resolve(__dirname, '../../../../test.env')});
+require('dotenv').config({path: path.resolve(__dirname, '../../../test.env')});
 
 /**
  * Initialize a clean test database for integration tests
  */
 const setupTestDatabase = async () => {
+
+    if (!process.env.DB_USER || !process.env.DB_HOST || !process.env.DB_NAME || !process.env.DB_PASSWORD || !process.env.DB_PORT) {
+        throw new Error('Database environment variables are not set. Please check your test.env file.');
+    }
+
     // Start the test database container if it's not already running
     try {
         console.log('Starting test database container...');
@@ -21,12 +25,12 @@ const setupTestDatabase = async () => {
         });
 
         // Make sure the initialization script is executable
-        execSync('chmod +x ./src/__tests__/integration/utils/db-init.sh', {
+        execSync('chmod +x ./src/__tests__/helpers/db-init.sh', {
             stdio: 'inherit',
         });
 
         console.log('Running database initialization script...');
-        execSync('./src/__tests__/integration/utils/db-init.sh', {
+        execSync('./src/__tests__/helpers/db-init.sh', {
             stdio: 'inherit',
         });
 

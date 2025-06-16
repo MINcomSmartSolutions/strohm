@@ -11,7 +11,7 @@ const {
     insertElectricityPrice,
     closePool,
     teardownTestEnvironment,
-} = require('./utils/db-setup');
+} = require('../helpers/db-setup');
 
 // Create a mock pool that will be properly initialized in beforeAll
 let mockPool;
@@ -310,7 +310,7 @@ describe('Database Queries Integration Tests', () => {
 
         test('rotateOdooUserKey should revoke old key and create new one', async () => {
             // First, set initial credentials
-            await db.setUserOdooCredentials(
+            const first_key_id = await db.setUserOdooCredentials(
                 testUser,
                 1234,
                 5678,
@@ -318,13 +318,10 @@ describe('Database Queries Integration Tests', () => {
                 'initial_salt',
             );
 
-            // Get initial credentials
-            const initialCreds = await db.getUserOdooCredentials(testUser.user_id);
-
             // Rotate key
             await db.rotateOdooUserKey(
                 testUser.user_id,
-                initialCreds.key_id,
+                first_key_id,
                 'rotated_key',
                 'rotated_salt',
             );
@@ -335,14 +332,14 @@ describe('Database Queries Integration Tests', () => {
             expect(newCreds).toBeDefined();
             expect(newCreds.key).toBe('rotated_key');
             expect(newCreds.key_salt).toBe('rotated_salt');
-            expect(newCreds.key_id).not.toBe(initialCreds.key_id);
+            expect(newCreds.key_id).not.toBe(first_key_id);
 
             // Verify old key is revoked
             const client = await pool.connect();
             try {
                 const result = await client.query(
                     'SELECT revoked_at FROM odoo_apikeys WHERE id = $1',
-                    [initialCreds.key_id],
+                    [first_key_id],
                 );
                 expect(result.rows.length).toBe(1);
                 expect(result.rows[0].revoked_at).not.toBeNull();

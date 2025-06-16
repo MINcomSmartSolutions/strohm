@@ -220,14 +220,22 @@ const setUserOdooCredentials = async (user, odoo_user_id, odoo_partner_id, encry
     const odooUserKeyQuery = `
         INSERT INTO odoo_apikeys (user_id, key, salt)
         VALUES ($1::integer, $2::varchar, $3::varchar)
+        RETURNING id
     `;
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         await client.query(userTableQuery, [odoo_user_id, odoo_partner_id, user.user_id]);
-        await client.query(odooUserKeyQuery, [user.user_id, encrypted_key, salt]);
+        const key_id = await client.query(odooUserKeyQuery, [user.user_id, encrypted_key, salt]);
+        if (key_id.rowCount === 0) {
+            throw new ValidationError(
+                ErrorCodes.USER.ODOO_NO_CREDENTIALS,
+                `Failed to insert Odoo API key for user ID ${user.user_id}.`,
+            );
+        }
         await client.query('COMMIT');
+        return key_id.rows[0].id; // Return the inserted key ID
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'setUserOdooCredentials');
@@ -308,7 +316,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
 
     const insertQuery = `
         INSERT INTO odoo_apikeys (user_id, key, salt)
-        VALUES ($1::integer, $2, $3)
+        VALUES ($1::integer, $2::varchar, $3::varchar)
     `;
 
     const client = await pool.connect();
@@ -316,7 +324,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
         await client.query('BEGIN');
 
         const result = await client.query(query, [user_id, old_key_id]);
-        if (result.rows.length === 0) {
+        if (result.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
                 `${user_id}'s old key is already revoked or does not exist. Cannot rotate key. Request a new one.`,
@@ -324,7 +332,7 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
         }
 
         const insertResult = await client.query(insertQuery, [user_id, new_key, new_key_salt]);
-        if (insertResult.rows.length === 0) {
+        if (insertResult.rowCount === 0) {
             throw new ValidationError(
                 ErrorCodes.USER.ODOO_NO_CREDENTIALS,
                 `Failed to insert new key for user ID ${user_id}.`,

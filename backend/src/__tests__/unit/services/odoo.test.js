@@ -108,24 +108,32 @@ describe('Odoo Service', () => {
                     timestamp: '2025-06-12T10:00:00Z',
                     user_id: 789,
                     partner_id: 101112,
-                    key: 'encrypted_key_123',
-                    key_salt: 'key_salt_123',
-                    salt: 'salt_123',
-                    hash: 'valid_hash_123',
+                    key: 'test_key',
+                    key_salt: 'test_key_salt',
+                    salt: 'test_salt',
+                    hash: 'response_hash',
                 },
             };
 
             odooAxios.post.mockResolvedValue(mockResponse);
 
+            generateSalt.mockReturnValue('test_salt');
+
             // Mock hash verification
-            generateOdooHash.mockReturnValue('valid_hash_123');
+            generateOdooHash.mockReturnValue('response_hash');
 
             await createOdooUser(userWithoutOdooId);
 
             // Verify that the API was called with the correct data
             expect(odooAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.USER_CREATION_URI,
-                {name: userWithoutOdooId.name, email: userWithoutOdooId.email},
+                expect.objectContaining({
+                    timestamp: expect.any(String),
+                    name: userWithoutOdooId.name,
+                    email: userWithoutOdooId.email,
+                    salt: 'test_salt',
+                    hash: 'response_hash',
+                }),
             );
 
             // Verify that credentials were stored in database
@@ -133,8 +141,8 @@ describe('Odoo Service', () => {
                 userWithoutOdooId,
                 789,
                 101112,
-                'encrypted_key_123',
-                'key_salt_123',
+                'test_key',
+                'test_key_salt',
             );
 
             // Verify activity was logged
