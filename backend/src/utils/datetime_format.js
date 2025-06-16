@@ -1,19 +1,24 @@
 /**
  * @file DateTime formatting utilities
+ * If no time relation information is given with a timezone representation, the time is assumed to be in UTC time.
+ * Z = Zulu = UTC ~= GMT(+0)
  */
 
 
 const {DateTime} = require('luxon');
-// Define ISO format without timezone (matching SteVe expectation)
 const ISO_NO_ZONE = 'yyyy-MM-dd\'T\'HH:mm:ss';
 
 /**
- * Format a Luxon DateTime into SteVe's expected ISO string (no Z)
+ * Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)
  * @param {DateTime} dt
  * @param toUTC
  * @returns {string}
  */
 function fmt(dt, toUTC = true) {
+    if (!dt || !dt.isValid) {
+        throw new Error('Invalid DateTime object provided');
+    }
+
     const dateTime = toUTC ? dt.toUTC() : dt;
     return dateTime.toFormat(ISO_NO_ZONE);
 }

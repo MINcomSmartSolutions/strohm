@@ -17,6 +17,7 @@ const ExceptionCodes = Object.freeze({
         USER_INVALID: {code: 1011, status: 200, message: 'ungültiger Benutzer'},
         USER_DELETED: {code: 1012, status: 200, message: 'ungültiger Benutzer'},
         USER_MISMATCH: {code: 1013, status: 401, message: 'ungültiger Benutzer'},
+        USER_NOT_AUTHORIZED: {code: 1014, status: 401, message: 'User is not authorized'},
     }),
 
     // Validation errors (2000-2099)
@@ -94,6 +95,15 @@ const ExceptionCodes = Object.freeze({
 
     STEVE: Object.freeze({
         USER_EXISTS: {code: 9000, status: 500, message: 'User already exists in Steve'},
+        USER_NOT_FOUND: {code: 9001, status: 500, message: 'User not found in Steve'},
+        USER_CREATE_FAILED: {code: 9002, status: 500, message: 'User creation in Steve failed'},
+        USER_UPDATE_FAILED: {code: 9003, status: 500, message: 'User update in Steve failed'},
+        USER_DELETE_FAILED: {code: 9004, status: 500, message: 'User deletion in Steve failed'},
+        USER_MULTIPLE_FOUND: {code: 9005, status: 500, message: 'Multiple users found with the same RFID in Steve'},
+        USER_BLOCK_FAILED: {code: 9006, status: 500, message: 'User block in Steve failed'},
+        USER_UNBLOCK_FAILED: {code: 9007, status: 500, message: 'User unblock in Steve failed'},
+        USER_GET_FAILED: {code: 9008, status: 500, message: 'User retrieval from Steve failed'},
+        NO_RESPONSE: {code: 9008, status: 500, message: 'No response from SteVe'},
     }),
 });
 
