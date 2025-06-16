@@ -76,7 +76,7 @@ jobs:
       env:
         NODE_ENV: test
         LOG_LEVEL: error
-      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/unit --verbose
+      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/unit --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
 
     - name: Debug environment variables
       working-directory: ./backend
@@ -125,13 +125,7 @@ jobs:
         SERVER_OIDC_CLIENT_SECRET: mock_client_secret
         SERVER_OIDC_ISSUER_BASE_URL: http://localhost:9000
       run: |
-        export NODE_ENV=test
-        export DB_HOST=localhost
-        export DB_PORT=5433
-        export DB_NAME=strohm
-        export DB_USER=testuser
-        export DB_PASSWORD=testpassword
-        npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/integration --verbose
+        npx jest --config=jest.config.js src/__tests__/integration --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
 
     - name: Run all tests with coverage
       working-directory: ./backend
@@ -160,28 +154,6 @@ jobs:
         SERVER_OIDC_CLIENT_SECRET: mock_client_secret
         SERVER_OIDC_ISSUER_BASE_URL: http://localhost:9000
       run: |
-        export NODE_ENV=test
-        export DB_HOST=localhost
-        export DB_PORT=5433
-        export DB_NAME=strohm
-        export DB_USER=testuser
-        export DB_PASSWORD=testpassword
-        export LOG_LEVEL=error
-        export STEVE_HOST=mock
-        export STEVE_PORT=8080
-        export STEVE_AUTH_USERNAME=mockuser
-        export STEVE_API_PASSWORD=mockpass
-        export ODOO_HOST=mock
-        export ODOO_PORT=8069
-        export ODOO_EXTERNAL_HOST=mock
-        export ODOO_EXTERNAL_PORT=8069
-        export ODOO_API_SECRET=mock_secret
-        export ODOO_ADMIN_API_KEY=mock_api_key
-        export SERVER_OIDC_SECRET=mock_oidc_secret
-        export SERVER_OIDC_BASE_URL=http://localhost:3000
-        export SERVER_OIDC_CLIENT_ID=mock_client_id
-        export SERVER_OIDC_CLIENT_SECRET=mock_client_secret
-        export SERVER_OIDC_ISSUER_BASE_URL=http://localhost:9000
         npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --verbose --coverage --coverageReporters=text --coverageReporters=lcov
 
     - name: Upload coverage reports to Codecov
