@@ -67,13 +67,28 @@ jobs:
         DB_USER: testuser
         DB_PASSWORD: testpassword
       run: |
-        # Run any database setup scripts if they exist
+        # Make the database initialization script executable
+        chmod +x ./src/__tests__/helpers/db-init.sh
+        
+        # Run the database initialization script
+        # Note: The script expects 'testdb' but we're using 'strohm', so we'll modify the script call
+        # First, run global database objects if they exist
+        if [ -f "database/db-etc.sql" ]; then
+          echo "Applying global database objects from db-etc.sql..."
+          PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d strohm -f database/db-etc.sql
+        fi
+        
+        # Then run the main database structure
         if [ -f "database/db-structure.sql" ]; then
+          echo "Applying database structure from db-structure.sql..."
           PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d strohm -f database/db-structure.sql
         fi
 
     - name: Run unit tests
       working-directory: ./backend
+      env:
+        NODE_ENV: test
+        LOG_LEVEL: error
       run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/unit --verbose
 
     - name: Run integration tests
