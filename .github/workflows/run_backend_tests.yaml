@@ -74,7 +74,7 @@ jobs:
 
     - name: Run unit tests
       working-directory: ./backend
-      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPattern=unit --verbose
+      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/unit --verbose
 
     - name: Run integration tests
       working-directory: ./backend
@@ -102,7 +102,7 @@ jobs:
         SERVER_OIDC_CLIENT_ID: mock_client_id
         SERVER_OIDC_CLIENT_SECRET: mock_client_secret
         SERVER_OIDC_ISSUER_BASE_URL: http://localhost:9000
-      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPattern=integration --verbose
+      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/integration --verbose
 
     - name: Run all tests with coverage
       working-directory: ./backend
