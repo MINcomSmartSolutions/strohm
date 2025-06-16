@@ -10,6 +10,7 @@ const logger = require('../services/logger');
 const pool = require('../services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
+const {steveTransactionSchema} = require('./joi');
 
 
 /**
@@ -31,7 +32,7 @@ const handleQueryError = (error, operation) => {
 
 const createUser = async (oauth_id, name, email, rfid) => {
     if (!oauth_id || !name || !email || !rfid) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'Missing required parameters: oauth_id, name, email or rfid.');
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
     }
 
     const query = `
@@ -145,7 +146,7 @@ const getUsers = async (filters = {}, options = {}) => {
         await client.query('BEGIN');
         const result = await client.query(query, values);
         await client.query('COMMIT');
-        return result.rows;
+        return result.rows; // rowCount?
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'getUsers');
@@ -194,19 +195,31 @@ const getUserUnique = async (filters) => {
 };
 
 
+/**
+ * Sets Odoo credentials for a user in the database.
+ * Updates the users table with Odoo IDs and stores encrypted API key information.
+ *
+ * @async
+ * @param {Object} user - User object containing user_id
+ * @param {number} odoo_user_id - Odoo system user ID
+ * @param {number} odoo_partner_id - Odoo system partner ID
+ * @param {string} encrypted_key - Encrypted Odoo API key
+ * @param {string} salt - Salt used for key encryption
+ * @returns {Promise<number>} - The ID of the inserted API key record
+ * @throws {ValidationError} - If parameters are missing or invalid
+ * @throws {DatabaseError} - If database operations fail
+ */
 const setUserOdooCredentials = async (user, odoo_user_id, odoo_partner_id, encrypted_key, salt) => {
 
     if (!user || !odoo_user_id || !odoo_partner_id || !encrypted_key || !salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`,
         );
     }
 
     if (!Number.isInteger(user.user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(odoo_partner_id)) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
-            `Invalid parameters.`,
         );
     }
 
@@ -258,7 +271,6 @@ const getUserOdooCredentials = async (user_id) => {
     if (!user_id) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`,
         );
     }
 
@@ -302,7 +314,6 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
     if (!user_id || !old_key_id || !new_key || !new_key_salt) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`,
         );
     }
 
@@ -363,7 +374,6 @@ const setSteveUserParamaters = async (user, steve_id) => {
     if (!user || !user.user_id || !steve_id) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`,
         );
     }
 
@@ -453,6 +463,14 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
  * @returns {Promise<Object>} db_txn - The transaction record from database
  */
 async function recordTransaction(tx) {
+    const {transactionError} = steveTransactionSchema.validate(tx);
+    if (transactionError) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            `Invalid transaction data: ${transactionError.message}`,
+        );
+    }
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
