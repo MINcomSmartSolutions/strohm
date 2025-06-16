@@ -78,16 +78,36 @@ jobs:
         LOG_LEVEL: error
       run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/unit --verbose
 
-    - name: Run integration tests
+    - name: Debug environment variables
       working-directory: ./backend
       env:
         NODE_ENV: test
+        LOG_LEVEL: error
         DB_HOST: localhost
         DB_PORT: 5433
         DB_NAME: strohm
         DB_USER: testuser
         DB_PASSWORD: testpassword
+      run: |
+        echo "Environment variables:"
+        echo "NODE_ENV=$NODE_ENV"
+        echo "DB_HOST=$DB_HOST"
+        echo "DB_PORT=$DB_PORT"
+        echo "DB_NAME=$DB_NAME"
+        echo "DB_USER=$DB_USER"
+        echo "DB_PASSWORD=$DB_PASSWORD"
+
+    - name: Run integration tests
+      working-directory: ./backend
+      env:
+        NODE_ENV: test
         LOG_LEVEL: error
+        # Database configuration
+        DB_HOST: localhost
+        DB_PORT: 5433
+        DB_NAME: strohm
+        DB_USER: testuser
+        DB_PASSWORD: testpassword
         # Mock external services for integration tests
         STEVE_HOST: mock
         STEVE_PORT: 8080
@@ -104,7 +124,14 @@ jobs:
         SERVER_OIDC_CLIENT_ID: mock_client_id
         SERVER_OIDC_CLIENT_SECRET: mock_client_secret
         SERVER_OIDC_ISSUER_BASE_URL: http://localhost:9000
-      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/integration --verbose
+      run: |
+        export NODE_ENV=test
+        export DB_HOST=localhost
+        export DB_PORT=5433
+        export DB_NAME=strohm
+        export DB_USER=testuser
+        export DB_PASSWORD=testpassword
+        npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns=src/__tests__/integration --verbose
 
     - name: Run all tests with coverage
       working-directory: ./backend
@@ -132,7 +159,30 @@ jobs:
         SERVER_OIDC_CLIENT_ID: mock_client_id
         SERVER_OIDC_CLIENT_SECRET: mock_client_secret
         SERVER_OIDC_ISSUER_BASE_URL: http://localhost:9000
-      run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --verbose --coverage --coverageReporters=text --coverageReporters=lcov
+      run: |
+        export NODE_ENV=test
+        export DB_HOST=localhost
+        export DB_PORT=5433
+        export DB_NAME=strohm
+        export DB_USER=testuser
+        export DB_PASSWORD=testpassword
+        export LOG_LEVEL=error
+        export STEVE_HOST=mock
+        export STEVE_PORT=8080
+        export STEVE_AUTH_USERNAME=mockuser
+        export STEVE_API_PASSWORD=mockpass
+        export ODOO_HOST=mock
+        export ODOO_PORT=8069
+        export ODOO_EXTERNAL_HOST=mock
+        export ODOO_EXTERNAL_PORT=8069
+        export ODOO_API_SECRET=mock_secret
+        export ODOO_ADMIN_API_KEY=mock_api_key
+        export SERVER_OIDC_SECRET=mock_oidc_secret
+        export SERVER_OIDC_BASE_URL=http://localhost:3000
+        export SERVER_OIDC_CLIENT_ID=mock_client_id
+        export SERVER_OIDC_CLIENT_SECRET=mock_client_secret
+        export SERVER_OIDC_ISSUER_BASE_URL=http://localhost:9000
+        npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --verbose --coverage --coverageReporters=text --coverageReporters=lcov
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
