@@ -2,9 +2,7 @@
  * @file Unit tests for Steve transactions service
  */
 const {DateTime} = require('luxon');
-const {
-    runIncremental,
-} = require('../../../services/steve_transactions');
+const {runIncremental} = require('../../../services/steve_transactions');
 const {steveAxios} = require('../../../services/network');
 const {db} = require('../../../utils/queries');
 const {fmt} = require('../../../utils/datetime_format');
