@@ -173,25 +173,21 @@ const getUserUnique = async (filters) => {
             `Missing required filters.`,
         );
     }
-    try {
-        const users = await getUsers(filters, {limit: 2});
+    const users = await getUsers(filters, {limit: 2});
 
-        if (users.length > 1) {
-            logger.warn(`Multiple users found for filters: ${JSON.stringify(filters)}`);
-            throw new ValidationError(
-                ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY,
-                `Multiple users match the criteria, expected unique result.`,
-            );
-        }
-        if (users.length === 0) {
-            return null; // No user found
-        }
-
-        // Return the users details
-        return users[0];
-    } catch (error) {
-        handleQueryError(error, 'getUserUnique');
+    if (users.length > 1) {
+        logger.warn(`Multiple users found for filters: ${JSON.stringify(filters)}`);
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY,
+            `Multiple users match the criteria, expected unique result.`,
+        );
     }
+    if (users.length === 0) {
+        return null; // No user found
+    }
+
+    // Return the users details
+    return users[0];
 };
 
 
@@ -677,7 +673,7 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
     if (specified_datetime && !specified_datetime.isValid) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
-            `Invalid specified datetime: ${specified_datetime}`,
+            `Invalid specified datetime`,
         );
     }
 
