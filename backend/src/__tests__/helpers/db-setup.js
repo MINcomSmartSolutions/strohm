@@ -83,14 +83,32 @@ const insertTestUser = async (pool) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        // Insert a test user with predefined values
+        const fullQualifiedUser = {
+            user_id: 123,
+            name: 'Test User',
+            email: 'test@example.com',
+            odoo_user_id: 789,
+            odoo_partner_id: 101112,
+            oauth_id: 'oauth123',
+            rfid: 'test_rfid',
+            steve_id: 999,
+        };
 
-        // Insert a test user
         const userResult = await client.query(`
-            INSERT INTO users (oauth_id, name, email, rfid)
-            VALUES ('test_oauth_id', 'Test User', 'test@example.com', 'test_rfid')
+            INSERT INTO users (user_id, name, email, odoo_user_id, odoo_partner_id, oauth_id, rfid, steve_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
-        `);
-
+        `, [
+            fullQualifiedUser.user_id,
+            fullQualifiedUser.name,
+            fullQualifiedUser.email,
+            fullQualifiedUser.odoo_user_id,
+            fullQualifiedUser.odoo_partner_id,
+            fullQualifiedUser.oauth_id,
+            fullQualifiedUser.rfid,
+            fullQualifiedUser.steve_id,
+        ]);
         const user = userResult.rows[0];
 
         await client.query('COMMIT');
@@ -225,8 +243,9 @@ const closePool = async (pool) => {
  */
 const teardownTestEnvironment = async () => {
     try {
-        // Optional: Stop the test database container
-        // execSync('docker-compose -f docker-compose.test.yml down', { stdio: 'inherit' });
+        execSync('docker stop db-test', {
+            stdio: 'inherit',
+        });
     } catch (error) {
         console.error('Error tearing down test environment:', error);
     }

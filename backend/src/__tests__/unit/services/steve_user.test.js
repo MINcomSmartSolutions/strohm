@@ -72,6 +72,7 @@ describe('Steve User Service', () => {
         steve_id: null, // Invalid because steve_id is empty
     };
 
+
     beforeEach(() => {
         jest.clearAllMocks();
     });
@@ -83,6 +84,30 @@ describe('Steve User Service', () => {
                 expect(err.errorDef.code).toBe(ErrorCodes.VALIDATION.INVALID_PARAMETERS.code);
             });
         });
+
+        // it('should throw error if user has invalid ocppTagPk parameter', async () => {
+        //     const userWithInvalidEmail =  { ...fullQualifiedUser, steve_id: 'not-a-number' };
+        //
+        //     steveAxios.get.mockResolvedValue({
+        //         status: 200,
+        //         data: [{
+        //             ocppTagPk: 999,
+        //             idTag: 'test_rfid',
+        //             maxActiveTransactionCount: 0,
+        //             blocked: true,
+        //         }],
+        //     });
+        //
+        //     // The new service will call getSteveUser, which will return a response, but the test must also mock the second get call to avoid 'No response received from SteVe'
+        //     // So, mock the second call as well
+        //     steveAxios.get.mockResolvedValueOnce({status: 200, data: [{ocppTagPk: 'not-a-number', idTag: 'test_rfid'}]});
+        //
+        //
+        //     await expect(createSteveUser(userWithInvalidEmail)).rejects.toThrow(ValidationError);
+        //     await createSteveUser(userWithInvalidEmail).catch(err => {
+        //         expect(err.errorDef.code).toBe(ErrorCodes.VALIDATION.INVALID_PARAMETERS.code);
+        //     });
+        // });
 
         it('should throw error if user is missing', async () => {
             await expect(createSteveUser(undefined)).rejects.toThrow(ValidationError);

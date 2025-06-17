@@ -32,10 +32,21 @@ jest.mock('../../services/db_conn', () => {
 // Import queries after mocking the database connection
 const {db} = require('../../utils/queries');
 const {ValidationError, ErrorCodes} = require('../../utils/errors');
+const {fullyQualifiedUserSchema} = require('../../utils/joi');
 
 describe('Database Queries Integration Tests', () => {
     let pool;
     let testUser;
+    const fullQualifiedUser = {
+        user_id: 123,
+        name: 'Test User',
+        email: 'test@example.com',
+        odoo_user_id: 789,
+        odoo_partner_id: 101112,
+        oauth_id: 'oauth123',
+        rfid: 'test_rfid',
+        steve_id: 999,
+    };
 
     beforeAll(async () => {
         // Initialize the database and assign the pool to our mockPool
@@ -142,6 +153,27 @@ describe('Database Queries Integration Tests', () => {
                 .rejects.toThrow(ValidationError);
         });
 
+        test('getUsers should handle null steve_id value filter correctly', async () => {
+            // Create a user with null steve_id
+            await db.createUser(
+                'test_oauth_id999',
+                'Test User 2',
+                'test@email.com',
+                'test_rfid999',
+            );
+            await db.createUser(
+                'test_oauth_id1000',
+                'Test User 3',
+                'test2@email.com',
+                'test_rfid1000',
+            );
+
+            // Test retrieving users with null steve_id
+            const usersWithNullSteveId = await db.getUsers({steve_id: null});
+            expect(usersWithNullSteveId.length).toBeGreaterThanOrEqual(2);
+            expect(usersWithNullSteveId[0].steve_id).toBeNull();
+        });
+
         test('getUserUnique should return a single user or null', async () => {
             // Test with existing user by user_id
             const uniqueUserById = await db.getUserUnique({user_id: testUser.user_id});
@@ -172,24 +204,43 @@ describe('Database Queries Integration Tests', () => {
         });
 
         test('getUserUnique should throw if multiple users match', async () => {
+            //FIXME: Not deterministic, so this test is disabled
+
             // Create users with the same email for testing
             await db.createUser(
                 'duplicate1',
                 'Duplicate User 1',
                 'duplicate@example.com',
-                'rfid1',
+                'test_rfid1',
             );
 
             await db.createUser(
                 'duplicate2',
                 'Duplicate User 2',
                 'duplicate@example.com',
-                'rfid2',
+                'test_rfid2',
             );
 
             // Should throw because multiple users have the same email
             await expect(db.getUserUnique({email: 'duplicate@example.com'}))
-                .rejects.toThrow();
+                .rejects.toThrow(ValidationError);
+            await expect(db.getUserUnique({email: 'duplicate@example.com'}))
+                .rejects.toMatchObject({
+                    errorDef: {code: ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY.code},
+                });
+
+        });
+
+        test('getUserUnique should return null user with null filter', async () => {
+
+            expect(await db.getUserUnique({steve_id: null})).toBeNull();
+
+            // Create a user with null steve_id
+            await pool.query('INSERT INTO users (oauth_id, name, email, rfid, steve_id) VALUES ($1, $2, $3, $4, $5)',
+                ['test_oauth_id10012', 'Test User 4', 'test_user9991@email.com', 'test_rfid1001', null]);
+
+            expect(await db.getUserUnique({steve_id: null})).not.toBeNull();
+            expect(await db.getUserUnique({steve_id: null})).toBeDefined();
         });
 
         test('deactivateUser should set deactivated_at timestamp', async () => {
@@ -618,8 +669,8 @@ describe('Database Queries Integration Tests', () => {
             const client = await pool.connect();
             try {
                 await client.query(
-                    `INSERT INTO electricity_prices (price, valid_from, valid_till) 
-           VALUES ($1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 day')`,
+                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
+                     VALUES ($1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 day')`,
                     [25],
                 );
 

@@ -3,7 +3,7 @@
 
 # Start the test database container if it's not already running
 echo "Starting test database container..."
-docker run --name db-test -e POSTGRES_USER=testuser -e POSTGRES_PASSWORD=testpassword -e POSTGRES_DB=testdb -p 5433:5432 -d postgres:16.6
+docker run --rm --name db-test -e POSTGRES_USER=testuser -e POSTGRES_PASSWORD=testpassword -e POSTGRES_DB=testdb -p 5433:5432 -d postgres:16.6
 
 # Wait for database to be ready
 echo "Waiting for database to be ready..."
