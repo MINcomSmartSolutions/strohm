@@ -1,25 +1,14 @@
 services:
-  sso:
-    image: ghcr.io/navikt/mock-oauth2-server:2.2.1
-    container_name: sso_auth
-    ports:
-      - "8081:8080"
-    environment:
-      TZ: Europe/Berlin
-    command: [ "-issuer-id", "default", "-port", "8080" ]
-
   db:
     image: postgres:16.6
-    container_name: odoo_user_test_db
+    container_name: strohm_user_test_db
     volumes:
-      - ./database/db-etc.sql:/docker-entrypoint-initdb.d/db-etc.sql:ro
-      - ./database/db-structure-strohm.sql:/docker-entrypoint-initdb.d/db-structure-strohm.sql:ro
-      - ./database/db-odoo-init.sql:/docker-entrypoint-initdb.d/db-odoo-init.sql:ro
+      - ./database/init.d/postgresql/clean:/docker-entrypoint-initdb.d:ro
       - strohm-user-test-db-data:/var/lib/postgresql/data
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_DB: postgres
-      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: "admin"
+      POSTGRES_PASSWORD: "testpassword"
     healthcheck:
       test: [ "CMD-SHELL", "sh -c 'pg_isready -U admin -d postgres'" ]
       interval: 10s
@@ -27,43 +16,47 @@ services:
       retries: 3
 
   odoo:
-    image: "ghcr.io/mincomsmartsolutions/odoo:latest"
     container_name: odoo_user_test
+    image: ghcr.io/mincomsmartsolutions/odoo:latest
     environment:
-      ODOO_ENV: prod
-      LIST_DB: true
+      DB_VERSION: "16"
+      ODOO_VERSION: "18.0"
+      AGGREGATE: "true"
+      UID: "${UID:-1000}"
+      GID: "${GID:-1000}"
+      PIP_INSTALL_ODOO: 1
+      CLEAN: "true"
+      COMPILE: "false"
       PGHOST: db
-      INITIAL_LANG: de_DE
+      INITIAL_LANG: "de_DE"
       PGDATABASE: odoo
       PGUSER: odoo_admin
       PGPASSWORD: ${ODOO_DB_DEVELOPMENT_PASSWORD}
       ADMIN_PASSWORD: admin
       PYTHONDONTWRITEBYTECODE: 1
       ODOO_API_SECRET: "user_test_secret"
-      WITHOUT_DEMO: false
+      WITHOUT_DEMO: true
       PROXY_MODE: false
-    tty: true
     volumes:
       - odoo-user-test-web-data:/var/lib/odoo:z
+    tty: true
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "18069:8069"
     command:
       - odoo
-  #      - --load-language=de_DE
-  #      - -i l10n_de,base,base_automation,portal,account,payment,sale,l10n_de,strohm_addon
+      - -i base,base_automation,portal,account,payment,sale,l10n_de,strohm_addon \
+      - --load-language=de_DE
+
 
   steve-db:
     image: mariadb:10.4.30
     container_name: steve_user_test_db
-    ports:
-      - "3306:3306"
     volumes:
       - steve-user-test-db-data:/var/lib/mysql
     environment:
-      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_ROOT_PASSWORD: changeme
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
       MYSQL_DATABASE: stevedb
       MYSQL_USER: steve
       MYSQL_PASSWORD: changeme
@@ -71,6 +64,8 @@ services:
   steve:
     build: ./steve
     container_name: steve_user_test
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8180 || exit 1" ]
     links:
       - "steve-db:mariadb"
     depends_on:
@@ -86,10 +81,7 @@ services:
       - steve-user-test-jars:/root/.m2
 
   ocpp-wallbox-sim:
-    image: nginx:alpine
-    container_name: ocpp_wallbox_sim
-    volumes:
-      - ./ocpp-wallbox-sim/ocpp-simulator-simple.html:/usr/share/nginx/html/index.html:ro
+    image: ghcr.io/mincomsmartsolutions/ocppwallboxsim:latest
     ports:
       - "8090:80"
 
@@ -103,10 +95,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      odoo:
-        condition: service_started
       steve:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./backend:/usr/src/app
     environment:
@@ -118,10 +108,10 @@ services:
       SERVER_OIDC_CLIENT_SECRET: test_oidc_client_secret
       STEVE_HOST: steve
       STEVE_PORT: 8180
-      STEVE_AUTH_USERNAME: test_steve_user
-      STEVE_API_PASSWORD: test_steve_password
+      STEVE_AUTH_USERNAME: admin
+      STEVE_API_PASSWORD: 1234api
       ODOO_ADMIN_API_KEY: ${ODOO_DEVELOPMENT_ADMIN_API_KEY}
-      ODOO_API_SECRET: user_test_secret
+      ODOO_API_SECRET: "user_test_secret"
       ODOO_HOST: odoo
       ODOO_PORT: 8069
       ODOO_EXTERNAL_HOST: localhost

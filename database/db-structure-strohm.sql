@@ -16,7 +16,6 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-DROP DATABASE strohm;
 --
 -- Name: strohm; Type: DATABASE; Schema: -; Owner: strohm_admin
 --

@@ -32,13 +32,13 @@ fi
 echo "Global database objects applied successfully."
 
 echo "Restoring database schema with psql..."
-# Check if db-structure.sql exists
-if [ ! -f ./database/db-structure.sql ]; then
+# Check if db-structure-strohm.sql exists
+if [ ! -f ./database/db-structure-strohm.sql ]; then
   echo "Error: ./database/db-structure.sql not found."
   exit 1
 fi
 
-PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -f ./database/db-structure.sql
+PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -f ./database/db-structure-strohm.sql
 restore_status=$?
 
 if [ $restore_status -ne 0 ]; then
