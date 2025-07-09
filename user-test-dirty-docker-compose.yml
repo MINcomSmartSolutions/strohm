@@ -3,8 +3,8 @@ services:
     image: postgres:16.6
     container_name: strohm_user_test_db
     volumes:
-      - ./database/init.d/postgresql/clean:/docker-entrypoint-initdb.d:ro
-      - strohm-user-test-db-data:/var/lib/postgresql/data
+      - ./database/init.d/postgresql/dirty:/docker-entrypoint-initdb.d:ro
+      - strohm-user-test-db-data-dirty:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: "postgres"
       POSTGRES_USER: "admin"
@@ -22,12 +22,9 @@ services:
       ODOO_ENV: "test"
       DB_VERSION: "16"
       ODOO_VERSION: "18.0"
-      AGGREGATE: "true"
       UID: "${UID:-1000}"
       GID: "${GID:-1000}"
       PIP_INSTALL_ODOO: 1
-      CLEAN: "true"
-      COMPILE: "false"
       PGHOST: db
       INITIAL_LANG: "de_DE"
       PGDATABASE: odoo
@@ -36,13 +33,14 @@ services:
       ADMIN_PASSWORD: admin
       PYTHONDONTWRITEBYTECODE: 1
       ODOO_API_SECRET: "user_test_secret"
-      WITHOUT_DEMO: true
+      WITHOUT_DEMO: false
       PROXY_MODE: false
       BACKEND_PORT: 3000
       BACKEND_HOST: server
-    volumes:
-      - odoo-user-test-web-data:/var/lib/odoo:z
     tty: true
+    volumes:
+      - ./database/init.d/odoo/dirty/odoo_filestore:/filestore:ro,z
+      - odoo-user-test-web-data-dirty:/var/lib/odoo:z
     ports:
       - "127.0.0.1:18069:8069"
     depends_on:
@@ -50,15 +48,14 @@ services:
         condition: service_healthy
     command:
       - odoo
-      - -i base,base_automation,portal,account,payment,sale,l10n_de,strohm_addon \
-      - --load-language=de_DE
-
+      - -i strohm_addon
 
   steve-db:
     image: mariadb:10.4.30
     container_name: steve_user_test_db
     volumes:
-      - steve-user-test-db-data:/var/lib/mysql
+      - ./database/init.d/mariadb/dirty:/docker-entrypoint-initdb.d:ro
+      - steve-user-test-db-data-dirty:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: changeme
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
@@ -100,8 +97,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      steve:
-        condition: service_healthy
+    #      steve:
+    #        condition: service_healthy
     volumes:
       - ./backend:/usr/src/app
     environment:
@@ -131,9 +128,9 @@ services:
 
 volumes:
   steve-user-test-jars:
-  steve-user-test-db-data:
-  strohm-user-test-db-data:
-  odoo-user-test-web-data:
+  steve-user-test-db-data-dirty:
+  strohm-user-test-db-data-dirty:
+  odoo-user-test-web-data-dirty:
 
 networks:
   default:

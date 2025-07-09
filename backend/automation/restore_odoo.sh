@@ -6,6 +6,71 @@ if ! command -v restic &> /dev/null; then
     exit 1
 fi
 
+# Parse command line arguments
+ODOO_DB=""
+ODOO_DB_USER=""
+DB_HOST="localhost"
+DB_PORT="5432"
+DOCKER_NAME="strohm_odoo"
+DOCKER_NAME_DB="strohm_db"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --db)
+            ODOO_DB="$2"
+            shift 2
+            ;;
+        --db-user)
+            ODOO_DB_USER="$2"
+            shift 2
+            ;;
+        --host)
+            DB_HOST="$2"
+            shift 2
+            ;;
+        --port)
+            DB_PORT="$2"
+            shift 2
+            ;;
+        --db-container-name)
+            DOCKER_NAME_DB="$2"
+            shift 2
+            ;;
+        --odoo-container-name)
+            DOCKER_NAME="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Usage: $0 --db DATABASE_NAME --db-user DATABASE_USER [--host HOST] [--port PORT]"
+            echo "  --db          Database name (required)"
+            echo "  --db-user     Database user (required)"
+            echo "  --host        Database host (default: localhost)"
+            echo "  --port        Database port (default: 5432)"
+            echo "  --db-container-name  Name of the database container (default: strohm_db)"
+            echo "  --odoo-container-name Name of the Odoo container (default: strohm_odoo)"
+            echo "  -h, --help    Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Check required parameters
+if [ -z "${ODOO_DB}" ] || [ -z "${ODOO_DB_USER}" ]; then
+    echo "Error: --db and --db-user parameters are required."
+    echo "Usage: $0 --db DATABASE_NAME --db-user DATABASE_USER [--host HOST] [--port PORT]"
+    echo "Use --help for more information"
+    exit 1
+fi
+
+echo "Using database: ${ODOO_DB} with user: ${ODOO_DB_USER} on ${DB_HOST}:${DB_PORT}"
+
+
+
 echo "Please select the environment:"
 echo "1) Development"
 echo "2) Production"
@@ -33,8 +98,6 @@ echo "Selected environment: $ENV"
 
 CURRENT_DIR=$(pwd)
 
-DOCKER_NAME="strohm_odoo"
-DOCKER_NAME_DB="strohm_db"
 
 # This is the directory where the backup will be restored
 readonly BACKUP_DIR="/tmp/backup_odoo"
@@ -65,15 +128,6 @@ if ! restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" restore "${SNAPSHO
     exit 1
 fi
 
-source ../../.env
-ODOO_DB="${ODOO_DB}"
-ODOO_DB_USER="${ODOO_DB_USER}"
-
-# Check environment variables
-if [ -z "${ODOO_DB}" ]; then
-    echo "Please set the ODOO_DB and ODOO_DB_DEVELOPMENT_PASSWORD in the .env file. Exiting..."
-    exit 1
-fi
 
 # Check if backup file exists
 if [ ! -f "${BACKUP_FILE}" ] && [ ! -f "${NESTED_BACKUP_FILE}" ]; then

@@ -271,7 +271,7 @@ detect_containers() {
             fi
         done
 
-        for container in "odoo" "odoo_container"; do
+        for container in "odoo" "strohm_odoo"; do
             if docker ps --format "table {{.Names}}" | grep -q "^${container}$"; then
                 ODOO_CONTAINER="$container"
                 break
@@ -721,6 +721,24 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO odoo_admin;
 EOF
 }
 
+backup_odoo_initd_dirty() {
+    local backup_dir=$1
+
+    print_status "Creating filestore copy of Odoo"
+
+    #  filestore
+    docker cp "${ODOO_CONTAINER}":/var/lib/odoo "${backup_dir}/odoo_filestore"
+
+
+    if [ $? -eq 0 ]; then
+        print_success "Odoo filestore copy completed: ${backup_dir}/odoo_filestore"
+        return 0
+    else
+        print_error "Failed to create Odoo filestore copy"
+        return 1
+    fi
+}
+
 # Function to create MariaDB backup for init.d (with data)
 backup_maria_initd_dirty() {
     local db_name=$1
@@ -838,9 +856,9 @@ create_initd_backup() {
         # Backup with data
         backup_postgres_initd_dirty "${STROHM_DB}" "${pg_backup_dir}"
         backup_maria_initd_dirty "${STEVE_DB}" "${maria_backup_dir}"
-        backup_postgres_initd_dirty "${ODOO_DB}" "${odoo_backup_dir}"
+        backup_postgres_initd_dirty "${ODOO_DB}" "${pg_backup_dir}"
 
-        #TODO: Backup Odoo filestore
+        backup_odoo_initd_dirty "${odoo_backup_dir}"
 
         create_maria_initd_script "${backup_type}" "${maria_backup_dir}"
 
