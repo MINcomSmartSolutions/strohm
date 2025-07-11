@@ -1,6 +1,7 @@
 FROM node:lts-bookworm-slim as base
-WORKDIR /app
+WORKDIR /usr/src/app
 RUN apt-get -y update && apt-get install -y python3 build-essential gcc
+
 
 FROM base as dev
 RUN --mount=type=bind,source=package.json,target=package.json \
