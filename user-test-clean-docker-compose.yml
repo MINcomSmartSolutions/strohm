@@ -100,8 +100,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      steve:
-        condition: service_healthy
     volumes:
       - ./backend:/usr/src/app
       - /usr/src/app/node_modules  # Preserve node_modules from Docker build
