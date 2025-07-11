@@ -9,6 +9,8 @@ services:
       POSTGRES_DB: "postgres"
       POSTGRES_USER: "admin"
       POSTGRES_PASSWORD: "testpassword"
+    ports:
+      - "5432:5432"  # For development only, in production we don't need to expose the port
     healthcheck:
       test: [ "CMD-SHELL", "sh -c 'pg_isready -U admin -d postgres'" ]
       interval: 10s
