@@ -104,6 +104,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/usr/src/app
+      - /usr/src/app/node_modules  # Preserve node_modules from Docker build
     environment:
       NODE_ENV: development
       SERVER_OIDC_SECRET: ${SERVER_DEVELOPMENT_OIDC_SECRET}
