@@ -15,7 +15,6 @@ const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
 const {dbTransactionSchema, fullyQualifiedUserSchema} = require('../utils/joi');
 const logger = require('../services/logger');
-const {AxiosError} = require('axios');
 
 
 /**
@@ -372,7 +371,7 @@ async function checkValidPaymentMethod(user) {
             logger.info('Payment method check result: ' + result);
             return (result === 1);
         } else {
-            logger.error(`Error checking payment method: ${response.status}, ${response.data}`);
+            logger.error(`Error checking payment method: ${response.status}, json: ${JSON.stringify(response.data)}`);
             throw new SystemError(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
         }
     } catch (error) {
