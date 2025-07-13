@@ -1,16 +1,16 @@
-name: Backend Tests
+name: Backend Tests and Build Image
 
 on:
   push:
     branches: [ main, master ]
     paths:
       - 'backend/**'
-      - 'run_backend_tests_and_build_image.yaml'
+      - './.github/workflows/run_backend_tests_and_build_image.yaml'
   pull_request:
     branches: [ main, master ]
     paths:
       - 'backend/**'
-      - 'run_backend_tests_and_build_image.yaml'
+      - './.github/workflows/run_backend_tests_and_build_image.yaml'
 
 jobs:
   test:
