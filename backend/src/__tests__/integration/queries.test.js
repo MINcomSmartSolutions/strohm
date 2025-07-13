@@ -478,7 +478,7 @@ describe('Database Queries Integration Tests', () => {
         });
     });
 
-    describe('Transaction Operations', () => {
+    describe('SteVe Transaction Operations', () => {
         beforeEach(async () => {
             // Update user with Steve ID for transaction association
             await pool.query(

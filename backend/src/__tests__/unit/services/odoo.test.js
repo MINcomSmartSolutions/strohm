@@ -201,10 +201,8 @@ describe('Odoo Service', () => {
             // Return a different hash to simulate verification failure
             generateOdooHash.mockReturnValue('calculated_hash_456');
 
-            await createOdooUser(userWithoutOdooId);
-
-            // In non-production, it should log errors but not throw
-            expect(logger.error).toHaveBeenCalledTimes(4);
+            await expect(createOdooUser(userWithoutOdooId)).rejects.toThrow(SystemError);
+            await expect(createOdooUser(userWithoutOdooId)).rejects.toThrow(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
 
             // Restore NODE_ENV
             process.env.NODE_ENV = originalNodeEnv;
