@@ -25,11 +25,11 @@ echo "Database is ready."
 echo "Applying global database objects from db-etc.sql..."
 PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -f ./database/db-etc.sql
 if [ $? -ne 0 ]; then
-  echo "Failed to apply global database objects. Exiting."
+  echo "Failed to create database roles. Exiting."
   exit 1
 fi
 
-echo "Global database objects applied successfully."
+echo "Database roles created successfully."
 
 echo "Restoring database schema with psql..."
 # Check if db-structure-strohm.sql exists
