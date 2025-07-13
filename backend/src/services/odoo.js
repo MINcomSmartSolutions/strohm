@@ -62,14 +62,11 @@ async function createOdooUser(user) {
 
         // Compare the calculated hash with the hash received from Odoo
         if (calculatedHash !== hash) {
-            if (process.env.NODE_ENV !== 'production') {
-                // FIXME
-                logger.error('Hash verification failed');
-                logger.error('Message: ', message.toString());
-                logger.error(`Calculated: ${calculatedHash}`);
-                logger.error(`Received: ${hash}`);
-            }
-            // throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+            logger.error('Hash verification failed');
+            logger.error('Message: ', message.toString());
+            logger.error(`Calculated: ${calculatedHash}`);
+            logger.error(`Received: ${hash}`);
+            throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
         }
 
         await db.setUserOdooCredentials(user,
@@ -78,7 +75,9 @@ async function createOdooUser(user) {
             encrypted_key,
             key_salt,
         );
-        db.recordActivityLog(user.user_id, 'CREATE USER', 'ODOO', user.rfid);
+
+        logger.info('User create in Odoo with ID: ' + odoo_user_id + ' and partner ID: ' + odoo_partner_id);
+        await db.recordActivityLog(user.user_id, 'CREATE USER', 'ODOO', user.rfid);
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {

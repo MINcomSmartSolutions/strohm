@@ -170,7 +170,6 @@ const getUserUnique = async (filters) => {
     if (!filters || typeof filters !== 'object' || Object.keys(filters).length === 0) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required filters.`,
         );
     }
     const users = await getUsers(filters, {limit: 2});

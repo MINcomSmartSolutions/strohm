@@ -71,6 +71,7 @@ const createSteveUser = async (user, blocked = true) => {
         throw new SystemError(ErrorCodes.STEVE.USER_NOT_FOUND, `User with RFID ${user.rfid} not found after creation in SteVe`);
     }
 
+    logger.debug('User created in SteVe with RFID: ' + user.rfid + ' and steve_id: ' + create_check_query.ocppTagPk);
     await db.recordActivityLog(user.user_id, 'CREATE USER', 'SteVe', user.rfid);
     if (blocked) {
         await db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid);
