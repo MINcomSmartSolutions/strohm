@@ -17,94 +17,17 @@ services:
       timeout: 3s
       retries: 3
 
-  odoo:
-    container_name: odoo_user_test
-    image: ghcr.io/mincomsmartsolutions/odoo:latest
-    environment:
-      ODOO_ENV: "test"
-      DB_VERSION: "16"
-      ODOO_VERSION: "18.0"
-      AGGREGATE: "true"
-      UID: "${UID:-1000}"
-      GID: "${GID:-1000}"
-      PIP_INSTALL_ODOO: 1
-      CLEAN: "true"
-      COMPILE: "false"
-      PGHOST: db
-      INITIAL_LANG: "de_DE"
-      PGDATABASE: odoo
-      PGUSER: odoo_admin
-      PGPASSWORD: ${ODOO_DB_DEVELOPMENT_PASSWORD}
-      ADMIN_PASSWORD: admin
-      PYTHONDONTWRITEBYTECODE: 1
-      ODOO_API_SECRET: "user_test_secret"
-      WITHOUT_DEMO: true
-      PROXY_MODE: false
-      BACKEND_PORT: 3000
-      BACKEND_HOST: server
-    volumes:
-      - odoo-user-test-web-data:/var/lib/odoo:z
-    tty: true
-    ports:
-      - "127.0.0.1:18069:8069"
-    depends_on:
-      db:
-        condition: service_healthy
-    command:
-      - odoo
-      - -i base,base_automation,portal,account,payment,sale,l10n_de,strohm_addon \
-      - --load-language=de_DE
-
-
-  steve-db:
-    image: mariadb:10.4.30
-    container_name: steve_user_test_db
-    volumes:
-      - steve-user-test-db-data:/var/lib/mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: changeme
-      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-      MYSQL_DATABASE: stevedb
-      MYSQL_USER: steve
-      MYSQL_PASSWORD: changeme
-
-  steve:
-    build: ./steve
-    container_name: steve_user_test
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8180 || exit 1" ]
-    links:
-      - "steve-db:mariadb"
-    depends_on:
-      - steve-db
-    environment:
-      DB_HOST: steve-db
-      DB_NAME: stevedb
-      DB_USER: steve
-      DB_PASSWORD: changeme
-    ports:
-      - "8180:8180"
-    volumes:
-      - steve-user-test-jars:/root/.m2
-
-  ocpp-wallbox-sim:
-    image: ghcr.io/mincomsmartsolutions/ocppwallboxsim:latest
-    ports:
-      - "8090:80"
-
   server:
-    build: ./backend
-    container_name: user_test_backend
-    working_dir: /usr/src/app
+    image: ghcr.io/mincomsmartsolutions/strohm_backend:latest
+    container_name: strohm_user_test_backend
     ports:
       - "3000:3000"
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    volumes:
-      - ./backend:/usr/src/app
-      - /usr/src/app/node_modules  # Preserve node_modules from Docker build
+    #      steve:
+    #        condition: service_healthy
     environment:
       NODE_ENV: development
       SERVER_OIDC_SECRET: ${SERVER_DEVELOPMENT_OIDC_SECRET}
@@ -128,7 +51,87 @@ services:
       DB_USER: strohm_admin
       DB_PASSWORD: ${STROHM_DB_PASSWORD}
       DB_PORT: 5432
-    command: npx nodemon server.js
+
+
+  odoo:
+    container_name: strohm_user_test_odoo
+    image: ghcr.io/mincomsmartsolutions/odoo:latest
+    environment:
+      ODOO_ENV: "test"
+      DB_VERSION: "16"
+      DB_FILTER: "^odoo$"
+      LIST_DB: "true"
+      ODOO_VERSION: "18.0"
+      AGGREGATE: "true"
+      UID: "${UID:-1000}"
+      GID: "${GID:-1000}"
+      PIP_INSTALL_ODOO: 1
+      CLEAN: true
+      COMPILE: false
+      PGHOST: db
+      INITIAL_LANG: "de_DE"
+      PGDATABASE: odoo
+      PGUSER: odoo_admin
+      PGPASSWORD: ${ODOO_DB_DEVELOPMENT_PASSWORD}
+      ADMIN_PASSWORD: admin
+      PYTHONDONTWRITEBYTECODE: 1
+      ODOO_API_SECRET: "user_test_secret"
+      WITHOUT_DEMO: all
+      PROXY_MODE: false
+      BACKEND_PORT: 3000
+      BACKEND_HOST: server
+    volumes:
+      - odoo-user-test-web-data:/var/lib/odoo:z
+    tty: true
+    ports:
+      - "127.0.0.1:18069:8069"
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - odoo
+      - --database=odoo
+      - --db-filter=^odoo$
+      - --init=base,base_automation,portal,account,payment,sale,l10n_de,strohm_addon
+      - --load-language=de_DE
+
+
+  steve-db:
+    image: mariadb:10.4.30
+    container_name: strohm_user_test_steve_db
+    volumes:
+      - steve-user-test-db-data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: stevedb
+      MYSQL_USER: steve
+      MYSQL_PASSWORD: changeme
+
+  steve:
+    build: ./steve
+    container_name: strohm_user_test_steve
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8180 || exit 1" ]
+    links:
+      - "steve-db:mariadb"
+    depends_on:
+      - steve-db
+    environment:
+      DB_HOST: steve-db
+      DB_NAME: stevedb
+      DB_USER: steve
+      DB_PASSWORD: changeme
+    ports:
+      - "8180:8180"
+    volumes:
+      - steve-user-test-jars:/root/.m2
+
+  ocpp-wallbox-sim:
+    image: ghcr.io/mincomsmartsolutions/ocppwallboxsim:latest
+    ports:
+      - "8090:80"
+
 
 volumes:
   steve-user-test-jars:

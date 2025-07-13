@@ -4,7 +4,7 @@
 # This is specifically for local dirty backups, not restic-based backups
 
 # Default values
-DOCKER_NAME="odoo_user_test"
+DOCKER_NAME="strohm_user_test_odoo"
 DIRTY_FILESTORE_PATH="./database/init.d/odoo/dirty/odoo_filestore"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
