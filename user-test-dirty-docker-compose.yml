@@ -2,6 +2,7 @@ services:
   db:
     image: postgres:16.6
     container_name: strohm_user_test_db
+    restart: unless-stopped
     volumes:
       - ./database/init.d/postgresql/dirty:/docker-entrypoint-initdb.d:ro
       - strohm-user-test-db-data-dirty:/var/lib/postgresql/data
@@ -10,7 +11,7 @@ services:
       POSTGRES_USER: "admin"
       POSTGRES_PASSWORD: "testpassword"
     ports:
-      - "5432:5432"  # For development only, in production we don't need to expose the port
+      - "${STROHM_DB_PORT:-5432}:${STROHM_DB_PORT:-5432}"  # For development only, in production we don't need to expose the port
     healthcheck:
       test: [ "CMD-SHELL", "sh -c 'pg_isready -U admin -d postgres'" ]
       interval: 10s
@@ -20,42 +21,43 @@ services:
   server:
     image: ghcr.io/mincomsmartsolutions/strohm_backend:latest
     container_name: strohm_user_test_backend
-    ports:
-      - "3000:3000"
     restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
     depends_on:
       db:
         condition: service_healthy
       steve:
         condition: service_healthy
     environment:
-      NODE_ENV: development
+      NODE_ENV: test
+      NODE_PORT: ${SERVER_PORT:-3000}
       SERVER_OIDC_SECRET: ${SERVER_DEVELOPMENT_OIDC_SECRET}
       SERVER_OIDC_CLIENT_ID: ${SERVER_DEVELOPMENT_OIDC_CLIENT_ID}
       SERVER_OIDC_ISSUER_BASE_URL: ${SERVER_DEVELOPMENT_OIDC_ISSUER_BASE_URL}
       SERVER_OIDC_BASE_URL: ${SERVER_DEVELOPMENT_BASE_URL}
       SERVER_OIDC_CLIENT_SECRET: ${SERVER_DEVELOPMENT_OIDC_CLIENT_SECRET}
       DB_HOST: db
-      DB_NAME: strohm
-      DB_USER: strohm_admin
+      DB_NAME: ${STROHM_DB}
+      DB_USER: ${STROHM_DB_USER}
       DB_PASSWORD: ${STROHM_DB_PASSWORD}
-      DB_PORT: 5432
+      DB_PORT: ${STROHM_DB_PORT}
       STEVE_HOST: steve
-      STEVE_PORT: 8180
-      STEVE_AUTH_USERNAME: admin
-      STEVE_API_PASSWORD: 1234api
+      STEVE_PORT: ${STEVE_HTTP_PORT:-8180}
+      STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME}
+      STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD}
       ODOO_ADMIN_API_KEY: ${ODOO_DEVELOPMENT_ADMIN_API_KEY}
-      ODOO_API_SECRET: "anothersecret" # This should match where the snapshot of odoo is taken
+      ODOO_API_SECRET: "anothersecret" # This should match when the snapshot of odoo is taken
       ODOO_HOST: odoo
-      ODOO_PORT: 8069
+      ODOO_PORT: ${ODOO_PORT:-8069}
       ODOO_EXTERNAL_HOST: localhost
-      ODOO_EXTERNAL_PORT: 18069
-      WEBHOOK_API_KEY: test_webhook_api_key
+      ODOO_EXTERNAL_PORT: ${ODOO_EXTERNAL_PORT:-18069}
 
 
   odoo:
     container_name: strohm_user_test_odoo
     image: ghcr.io/mincomsmartsolutions/odoo:latest
+    restart: unless-stopped
     environment:
       ODOO_ENV: "test"
       DB_VERSION: "16"
@@ -66,21 +68,21 @@ services:
       PGHOST: db
       INITIAL_LANG: "de_DE"
       PGDATABASE: odoo
-      PGUSER: odoo_admin
+      PGUSER: ${ODOO_DB_USER}
       PGPASSWORD: ${ODOO_DB_DEVELOPMENT_PASSWORD}
       ADMIN_PASSWORD: admin
       PYTHONDONTWRITEBYTECODE: 1
       ODOO_API_SECRET: "anothersecret"
       WITHOUT_DEMO: false
       PROXY_MODE: false
-      BACKEND_PORT: 3000
+      BACKEND_PORT: ${NODE_PORT:-3000}
       BACKEND_HOST: server
     tty: true
     volumes:
       - ./database/init.d/odoo/dirty/odoo_filestore:/filestore:ro,z
       - odoo-user-test-web-data-dirty:/var/lib/odoo:z
     ports:
-      - "127.0.0.1:18069:8069"
+      - "127.0.0.1:${ODOO_EXTERNAL_PORT:-18069}:8069"
     depends_on:
       db:
         condition: service_healthy
@@ -91,6 +93,7 @@ services:
   steve-db:
     image: mariadb:10.4.30
     container_name: strohm_user_test_steve_db
+    restart: unless-stopped
     volumes:
       - ./database/init.d/mariadb/dirty:/docker-entrypoint-initdb.d:ro
       - steve-user-test-db-data-dirty:/var/lib/mysql
@@ -104,8 +107,12 @@ services:
   steve:
     build: ./steve
     container_name: strohm_user_test_steve
+    restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8180 || exit 1" ]
+      test: [ "CMD-SHELL", "curl -f http://localhost:${STEVE_HTTP_PORT:-8180} || exit 1" ]
+      interval: 8s
+      timeout: 3s
+      retries: 40
     links:
       - "steve-db:mariadb"
     depends_on:
@@ -116,12 +123,14 @@ services:
       DB_USER: steve
       DB_PASSWORD: changeme
     ports:
-      - "8180:8180"
+      - "${STEVE_HTTP_PORT:-8180}:${STEVE_HTTP_PORT:-8180}"
     volumes:
       - steve-user-test-jars:/root/.m2
 
   ocpp-wallbox-sim:
     image: ghcr.io/mincomsmartsolutions/ocppwallboxsim:latest
+    container_name: strohm_user_test_ocpp_wallbox_sim
+    restart: unless-stopped
     ports:
       - "8090:80"
 
