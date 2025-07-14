@@ -26,11 +26,22 @@ const {AuthError, ErrorCodes} = require('../utils/errors');
  */
 const userOperations = async (oidc_user) => {
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
+    const env = process.env.NODE_ENV || 'prod';
 
     if (!user) {
         // Use random RFID for development
-        const rfid = Math.random().toString(36).substring(2, 10);
+        let rfid = Math.random().toString(36).substring(2, 10);
+
         // const rfid = oidc_user.rfid,
+        if (env === 'dev' || env === 'test') {
+            if (oidc_user.email === "tester@tester2.com") {
+                rfid = "4doiy7pg"
+            } else if (oidc_user.email === "test@mincom.com") {
+                rfid = "ov2x0v02"
+            } else if (oidc_user.email === "pontoon.scour_1g@icloud.com") {
+                rfid = "n7ok4apd"
+            }
+        }
 
         const createdUser = await db.createUser(
             oidc_user.sub,
@@ -38,6 +49,8 @@ const userOperations = async (oidc_user) => {
             oidc_user.email,
             rfid,
         );
+
+        logger.debug('User is created in DB with email: ' + createdUser.email + ' , OIDC ID: ' + createdUser.oauth_id + ' and RFID: ' + createdUser.rfid);
 
         await createOdooUser(createdUser);
         await createSteveUser(createdUser);
@@ -59,6 +72,7 @@ const userOperations = async (oidc_user) => {
     if (!has_valid_payment_method) {
         logger.warn('User does not have a valid payment method');
     }
+
     return user;
 
 
