@@ -19,7 +19,7 @@ services:
       retries: 3
 
   server:
-    image: ghcr.io/mincomsmartsolutions/strohm_backend:latest
+    image: ghcr.io/mincomsmartsolutions/strohm_backend:latest # The image is built for production env
     container_name: strohm_user_test_backend
     restart: unless-stopped
     ports:
@@ -44,8 +44,8 @@ services:
       DB_PORT: ${STROHM_DB_PORT}
       STEVE_HOST: steve
       STEVE_PORT: ${STEVE_HTTP_PORT:-8180}
-      STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME}
-      STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD}
+      STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME:-admin}
+      STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD:-1234api}
       ODOO_ADMIN_API_KEY: ${ODOO_DEVELOPMENT_ADMIN_API_KEY}
       ODOO_API_SECRET: "anothersecret" # This should match when the snapshot of odoo is taken
       ODOO_HOST: odoo

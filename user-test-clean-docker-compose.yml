@@ -44,8 +44,8 @@ services:
       DB_PORT: ${STROHM_DB_PORT}
       STEVE_HOST: steve
       STEVE_PORT: ${STEVE_HTTP_PORT:-8180}
-      STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME}
-      STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD}
+      STEVE_AUTH_USERNAME: ${STEVE_DEVELOPMENT_AUTH_USERNAME:-admin}
+      STEVE_API_PASSWORD: ${STEVE_DEVELOPMENT_API_PASSWORD:-1234api}
       ODOO_ADMIN_API_KEY: key_here
       ODOO_API_SECRET: "user_test_secret" # This should match when the snapshot of odoo is taken
       ODOO_HOST: odoo
