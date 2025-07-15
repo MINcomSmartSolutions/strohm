@@ -29,11 +29,11 @@ const {fullyQualifiedUserSchema} = require('../utils/joi');
  *
  * @async
  * @param {Object} user - The user object (must include rfid).
- * @param {boolean} [blocked=true] - Whether the user should be created `blocked`.
+ * @param {boolean} [blocked=false] - Whether the user should be created `blocked`.
  * @returns {Promise<Object>} The created user data from SteVe.
  * @throws {ValidationError|Error} If validation fails or creation fails.
  */
-const createSteveUser = async (user, blocked = true) => {
+const createSteveUser = async (user, blocked = false) => {
     if (!user || !user.rfid || user.rfid.trim() === '') {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
