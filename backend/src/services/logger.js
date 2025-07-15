@@ -13,8 +13,8 @@ const morgan = require('morgan');
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'silly',
     format: format.combine(
-        format.label({label: process.env.NODE_ENV}),
         format.timestamp(),
+        format.label({label: process.env.NODE_ENV}),
         format.errors({stack: true}),
         format.splat(),
         format.json(),
@@ -46,7 +46,7 @@ if (process.env.NODE_ENV !== 'production') {
             format.printf(({timestamp, level, message, file, line, label, ...meta}) => {
                 let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
                 let envLabel = label ? `[${label.toUpperCase()}]` : '';
-                return `[${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${envLabel}`.trim();
+                return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr}`.trim();
             }),
         ),
     }));
