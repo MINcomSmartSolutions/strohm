@@ -49,7 +49,7 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
 })
     .then(response => {
         if (response.status !== 200) {
-            logger.error('Error connecting to SteVe:' + response.data.toJSON());
+            logger.error('Error connecting to SteVe: "' + response.status + '" returned. Response: ' + JSON.stringify(response.data));
             throw new Error('Failed to connect to SteVe');
         } else {
             logger.info('Steve connection successful');
@@ -60,11 +60,11 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
     });
 
 // Test the connection to Odoo
-// FIXME: Create a test endpoint in Odoo to check the connection. This check is merely to see if the server is reachable.
-odooAxios.get('/')
+odooAxios.get('/internal/admin/connection-check')
     .then(response => {
         if (response.status !== 200) {
-            logger.error(`Error connecting to Odoo:"${response}"`);
+            logger.error(`Error connecting to Odoo: "${response.status} returned. Response: ${JSON.stringify(response.data)}"`);
+            throw new Error('Failed to connect to Odoo');
         } else {
             logger.info('Odoo connection successful');
         }
