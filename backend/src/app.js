@@ -172,8 +172,7 @@ app.post('/internal/user/sync', verifyApiKey, async (req, res) => {
         }
 
         // console log body for debugging
-        logger.info(`Odoo webhook request body: ${JSON.stringify(req.body)}`);
-        logger.info(`Received Odoo webhook event: ${event}`, {data});
+        logger.debug(`Received Odoo webhook event: ${event}`, {data});
 
         // Fetch user by Odoo user and partner IDs
         const user = await db.getUserUnique({odoo_user_id: req_odoo_userid, odoo_partner_id: req_odoo_partnerid});
@@ -185,9 +184,10 @@ app.post('/internal/user/sync', verifyApiKey, async (req, res) => {
         // Handle deletion events
         if (event === 'user_deleted' || event === 'partner_deleted') {
             logger.info(`Handling deletion for user ${user.user_id}`);
-            db.recordActivityLog(user.user_id, 'DELETE USER', 'ODOO', user.rfid);
             await db.deactivateUser(user);
             await blockSteveUser(user);
+            await db.recordActivityLog(user.user_id, 'DELETE USER', 'ODOO', user.rfid);
+            return res.status(200).json({success: true});
         } else if (event === 'user_changed' || event === 'partner_changed') {
             logger.info(`Handling user change for user ${user.user_id}`);
             // TODO: Handle user update, the main details comes from partner_updated event

@@ -725,19 +725,28 @@ async function deactivateUser(user) {
         );
     }
 
-    const query = `
+    const deactivate_user_query = `
         UPDATE users
         SET deactivated_at = now()
         WHERE user_id = $1::integer
     `;
 
+    const revoke_user_api_key_query = `
+        UPDATE odoo_apikeys
+        SET revoked_at = now()
+        WHERE user_id = $1::integer
+          AND revoked_at IS NULL
+    `;
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const result = await client.query(query, [user.user_id]);
+        const result = await client.query(deactivate_user_query, [user.user_id]);
         if (result.rowCount === 0) {
             throw new Error('Could not deactivate user');
         }
+
+        await client.query(revoke_user_api_key_query, [user.user_id]);
         await client.query('COMMIT');
         await recordActivityLog(user.user_id, 'DEACTIVATE USER', 'DB', user.rfid);
     } catch (error) {
