@@ -13,7 +13,7 @@ const {odooAxios, odooUserAxios} = require('./network');
 const {DateTime} = require('luxon');
 const {fmt} = require('../utils/datetime_format');
 const {ODOO_CONFIG} = require('../config');
-const {dbTransactionSchema, fullyQualifiedUserSchema} = require('../utils/joi');
+const {dbTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('../utils/joi');
 const logger = require('../services/logger');
 
 
@@ -268,7 +268,7 @@ async function createOdooTxnInvoice(db_txn) {
     try {
         txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
     } catch (error) {
-        logger.warn(`Failed to get electricity price from database: ${error.message}`);
+        logger.warn(`Failed to get electricity price from database: ${error.message}, using default price`);
         txn_started_with_electricity_price = 35; // Default price in cents
     }
 
@@ -325,11 +325,7 @@ async function createOdooTxnInvoice(db_txn) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function checkValidPaymentMethod(user) {
-    const {error} = fullyQualifiedUserSchema.validate(user);
-    if (error) {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
-            `Invalid user ${error.message}`);
-    }
+    validateUser(user);
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
     if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {

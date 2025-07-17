@@ -3,6 +3,7 @@
  * @file Joi validation schemas
  */
 const Joi = require('joi');
+const {ValidationError, ErrorCodes} = require("./errors");
 //TODO: Implement input sanitization. Validation is done by the JOI
 
 const userSchema = Joi.object({
@@ -88,6 +89,12 @@ const dbTransactionSchema = Joi.object({
     ocpp_id_tag: Joi.string().required(),
 }).unknown(true);
 
+const validateUser = (user) => {
+    const {error} = fullyQualifiedUserSchema.validate(user);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid user ${error.message}`);
+    }
+};
 
 module.exports = {
     userSchema,
@@ -95,4 +102,5 @@ module.exports = {
     steveUserSchema,
     steveTransactionSchema,
     dbTransactionSchema,
+    validateUser,
 };
