@@ -731,13 +731,6 @@ async function deactivateUser(user) {
         WHERE user_id = $1::integer
     `;
 
-    const revoke_user_api_key_query = `
-        UPDATE odoo_apikeys
-        SET revoked_at = now()
-        WHERE user_id = $1::integer
-          AND revoked_at IS NULL
-    `;
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -745,13 +738,43 @@ async function deactivateUser(user) {
         if (result.rowCount === 0) {
             throw new Error('Could not deactivate user');
         }
-
-        await client.query(revoke_user_api_key_query, [user.user_id]);
         await client.query('COMMIT');
         await recordActivityLog(user.user_id, 'DEACTIVATE USER', 'DB', user.rfid);
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'deactivateUser');
+    } finally {
+        client.release();
+    }
+}
+
+
+async function revokeUserOdooCredentials(user) {
+    if (!user || !user.user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const query = `
+        UPDATE odoo_apikeys
+        SET revoked_at = NOW()
+        WHERE user_id = $1::integer
+          AND revoked_at IS NULL
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(query, [user.user_id]);
+        if (result.rowCount === 0) {
+            logger.warn('No Odoo credentials found to revoke for user', {user_id: user.user_id});
+        }
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'revokeUserOdooCredentials');
     } finally {
         client.release();
     }
@@ -779,5 +802,6 @@ module.exports = {
         saveInvoiceId,
         getCurrentElectricityPrice,
         deactivateUser,
+        revokeUserOdooCredentials,
     },
 };
