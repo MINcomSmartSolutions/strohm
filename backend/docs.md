@@ -1,6 +1,12 @@
 ## Modules
 
 <dl>
+<dt><a href="#module_controllers/auth">controllers/auth</a></dt>
+<dd><p>Controller for handling user authentication and logout.</p>
+</dd>
+<dt><a href="#module_controllers/odoo">controllers/odoo</a></dt>
+<dd><p>Controller for handling Odoo internal user sync webhooks.</p>
+</dd>
 <dt><a href="#module_services/cron">services/cron</a></dt>
 <dd><p>Cron job service for periodic transaction fetching.</p>
 <ul>
@@ -109,7 +115,7 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <dd><p>Gets a user by either user_id or oauth_id</p>
 </dd>
 <dt><a href="#fmt">fmt(dt, toUTC)</a> ⇒ <code>string</code></dt>
-<dd><p>Format a Luxon DateTime into SteVe&#39;s expected ISO string (no Z)</p>
+<dd><p>Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)</p>
 </dd>
 <dt><a href="#createError">createError(errorDef, [customMessage], [originalError])</a> ⇒ <code>Object</code></dt>
 <dd><p>Create an application error with standard format</p>
@@ -118,6 +124,18 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <dd><p>Express error handler for AppErrors</p>
 </dd>
 </dl>
+
+<a name="module_controllers/auth"></a>
+
+## controllers/auth
+
+Controller for handling user authentication and logout.
+
+<a name="module_controllers/odoo"></a>
+
+## controllers/odoo
+
+Controller for handling Odoo internal user sync webhooks.
 
 <a name="module_services/cron"></a>
 
@@ -269,15 +287,16 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 
 
 * [services/steve_transactions](#module_services/steve_transactions)
-    * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
-      Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-    * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;DateTime&gt;</code>
-    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
-    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
+  * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
+    Promise.&lt;Array.&lt;Object&gt;&gt;</code>
+  * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+    processedCount: number}&gt;</code>
+  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+    high\_water\_mark: DateTime}&gt;</code>
+  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark:
+    DateTime}&gt;</code>
+  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
+    high\_water\_mark: DateTime}&gt;</code>
 
 <a name="module_services/steve_transactions..fetchSince"></a>
 
@@ -289,11 +308,12 @@ If no timestamp is provided, fetch all transactions
 **Returns**: <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> - Array of transactions  
 <a name="module_services/steve_transactions..processSince"></a>
 
-### services/steve_transactions~processSince(txns) ⇒ <code>Promise.&lt;DateTime&gt;</code>
+### services/steve_transactions~processSince(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number}&gt;</code>
 Record and create bills for transactions/charging sessions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;DateTime&gt;</code> - The new high‑water mark (max stopTimestamp)  
+**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedCount: number}&gt;</code> - The new high‑water mark (max
+stopTimestamp) and count of unique processed  
 **Throws**:
 
 - <code>ValidationError</code> If any transaction does not match the expected schema
@@ -332,10 +352,10 @@ All functions validate input and handle errors using custom error types.
 
 
 * [services/steve_user](#module_services/steve_user)
-    * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
-      Promise.&lt;Object&gt;</code>
-    * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
-      Array.&lt;Object&gt;\|null)&gt;</code>
+  * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
+    Promise.&lt;Object&gt;</code>
+  * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
+    Array.&lt;Object&gt;\|null)&gt;</code>
     * [~blockSteveUser(user)](#module_services/steve_user..blockSteveUser)
     * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser)
 
@@ -489,7 +509,6 @@ Throws an error if multiple users match the criteria.
 <a name="module_utils/queries..setUserOdooCredentials"></a>
 
 ### utils/queries~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt) ⇒ <code>Promise.&lt;number&gt;</code>
-
 Sets Odoo credentials for a user in the database.
 Updates the users table with Odoo IDs and stores encrypted API key information.
 
@@ -774,7 +793,8 @@ Gets a user by either user_id or oauth_id
 <a name="fmt"></a>
 
 ## fmt(dt, toUTC) ⇒ <code>string</code>
-Format a Luxon DateTime into SteVe's expected ISO string (no Z)
+
+Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)
 
 **Kind**: global function  
 <a name="createError"></a>
