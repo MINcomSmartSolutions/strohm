@@ -10,7 +10,8 @@ const {createOdooUser, checkValidPaymentMethod} = require('./odoo');
 const {db} = require('../utils/queries');
 const {createSteveUser} = require('./steve_user');
 const logger = require('../services/logger');
-const {AuthError, ErrorCodes} = require('../utils/errors');
+const {AuthError, ErrorCodes, ValidationError} = require('../utils/errors');
+const {fullyQualifiedUserSchema, validateUser} = require("../utils/joi");
 
 /**
  * Handles user creation and linking with external systems.
@@ -26,12 +27,11 @@ const {AuthError, ErrorCodes} = require('../utils/errors');
  */
 const userOperations = async (oidc_user) => {
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
-    const env = process.env.NODE_ENV || 'prod';
+    const env = process.env.NODE_ENV || 'production';
 
     if (!user) {
         // Use random RFID for development
         let rfid = Math.random().toString(36).substring(2, 10);
-
         // const rfid = oidc_user.rfid,
         if (env === 'dev' || env === 'test') {
             if (oidc_user.email === "tester@tester2.com") {
@@ -52,21 +52,17 @@ const userOperations = async (oidc_user) => {
 
         logger.debug('User is created in DB with email: ' + createdUser.email + ' , OIDC ID: ' + createdUser.oauth_id + ' and RFID: ' + createdUser.rfid);
 
-        await createOdooUser(createdUser);
-        await createSteveUser(createdUser);
-        user = await db.getUserUnique({user_id: createdUser.user_id});
-    } else if (user && user.deactivated_at !== null && user.deactivated_at !== undefined) {
+        user = await updateUserFromExternalSystems(createdUser);
+    } else if (user.deactivated_at !== null) {
         //TODO: Deactivated user show error message on odoo side
-        return Promise.reject(new AuthError(ErrorCodes.AUTH.USER_INACTIVE));
-    } else if (user && !user.odoo_user_id) {
-        // User exists but doesn't have an Odoo ID
-        await createOdooUser(user);
-        user = await db.getUserUnique({user_id: user.user_id});
-    } else if (user && user.odoo_user_id && !user.steve_id) {
-        // User exists and has an Odoo ID but not a Steve ID
-        await createSteveUser(user);
-        user = await db.getUserUnique({user_id: user.user_id});
+        throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
+    } else {
+        user = await updateUserFromExternalSystems(user);
     }
+
+    // Only fully qualified users are allowed to move further
+    //TODO: If this fails show error message to user and end the session (logout)
+    validateUser(user);
 
     const has_valid_payment_method = await checkValidPaymentMethod(user);
     if (!has_valid_payment_method) {
@@ -88,6 +84,16 @@ const userOperations = async (oidc_user) => {
     //         throw new ValidationError(ErrorCodes.USER.RFID_NOT_FOUND);
     //     }
 
+};
+
+const updateUserFromExternalSystems = async (user) => {
+    if (!user.odoo_user_id) {
+        await createOdooUser(user);
+    }
+    if (!user.steve_id) {
+        await createSteveUser(user);
+    }
+    return db.getUserUnique({user_id: user.user_id});
 };
 
 
