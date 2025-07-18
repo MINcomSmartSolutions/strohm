@@ -1,7 +1,8 @@
 {
 	"watch": [
-		"src"
+      "src",
+      "public"
 	],
-	"ext": "js,json",
+  "ext": "js,json,html",
 	"exec": "node server.js"
 }

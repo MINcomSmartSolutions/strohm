@@ -61,6 +61,10 @@ app.use(express.urlencoded({extended: true}));
 app.use(express.json());
 app.use(morganMiddleware); // Custom logger middleware for request logging
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
+
 // noinspection JSCheckFunctionSignatures
 app.use(hpp());
 app.use(helmet());
@@ -100,8 +104,8 @@ app.get('/welcome', async (req, res) => {
         if (req.session.user) {
             res.redirect('/');
         }
-        // TODO: Company banners, logos, etc.
-        return res.send('<a href="/login">Login</a>');
+        // Serve the modern welcome page
+        return res.sendFile('welcome.html', {root: 'public'});
     } catch (error) {
         appErrorHandler(error, res);
     }
