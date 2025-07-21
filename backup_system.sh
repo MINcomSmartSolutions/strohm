@@ -582,10 +582,7 @@ EOF
         # Backup schema only (ONLY PostgreSQL strohm, skip odoo and MariaDB)
         backup_postgres_clean "${STROHM_DB}" "${backup_dir}"
 
-        # Odoo expects a database to initilize
-        odoo_createdb_sql_file "${backup_dir}"
-
-            # Create a manifest file
+        # Create a manifest file
         local manifest_file="${backup_dir}/backup_manifest.txt"
         cat > "${manifest_file}" << EOF
         Backup Type: ${backup_type}
@@ -872,8 +869,6 @@ create_initd_backup() {
      # Backup schema only (ONLY PostgreSQL strohm, skip odoo and MariaDB)
      backup_postgres_initd_clean "${STROHM_DB}" "${pg_backup_dir}"
 
-     odoo_createdb_sql_file "${pg_backup_dir}"
-
      create_postgres_manifest "${backup_type}" "${pg_backup_dir}"
 
      print_success "PostgreSQL backup location: ${pg_backup_dir}"
@@ -996,7 +991,6 @@ This backup contains both PostgreSQL, MariaDB, and Odoo backups separated into t
 - **MariaDB Container**: ${MARIA_CONTAINER}
 - **Odoo Container**: ${ODOO_CONTAINER}
 
-## Directory Structure
 \`\`\`
 ${backup_dir}/
 ├── postgresql/${backup_type}/          # PostgreSQL init.d files
@@ -1009,22 +1003,11 @@ ${backup_dir}/
 │   ├── stevedb_*.sql                  # Steve database
 │   └── README.md                      # MariaDB specific instructions
 ├── odoo/${backup_type}/                # Odoo init.d files (if included)
-│   ├── odoo_*.sql                     # Odoo database
 │   ├── odoo_filestore/                # Odoo filestore (if included)
 │   └── README.md                      # Odoo specific instructions
 └── README.md                          # This file
 \`\`\`
 
-## Usage
-
-
-### Use Combined Setup
-Use both databases together:
-
-\`\`\`bash
-cd ${backup_dir}
-docker-compose -f docker-compose.full-example.yml up
-\`\`\`
 
 ## Important Notes
 
@@ -1062,7 +1045,6 @@ ${backup_dir}/
 ├── postgresql/${backup_type}/          # PostgreSQL init.d files
 │   ├── 00_postgres_globals.sql        # PostgreSQL roles and globals
 │   ├── strohm_*.sql                   # Strohm database
-│   ├── 01_odoo_createdb.sql        # Odoo database creation script
 │   └── README.md                      # PostgreSQL specific instructions
 └── README.md                          # This file
 \`\`\`
