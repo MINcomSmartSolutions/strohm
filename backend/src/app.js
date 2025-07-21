@@ -22,6 +22,7 @@ const {Settings} = require('luxon');
 const {morganMiddleware} = require('./services/logger');
 const auth_controller = require("./controllers/auth");
 const odoo_controller = require("./controllers/odoo");
+const scim_controller = require("./controllers/scim");
 
 Settings.defaultZoneName = 'utc';
 
@@ -114,6 +115,8 @@ app.get('/welcome', async (req, res) => {
 app.use(auth_controller);
 
 app.use(odoo_controller);
+
+app.use(scim_controller);
 
 
 // Start the cron job
