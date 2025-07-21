@@ -11,7 +11,7 @@ const odoo_controller = express();
 const Joi = require("joi");
 const {db} = require('../utils/queries');
 const {blockSteveUser} = require('../services/steve_user');
-const verifyApiKey = require('../middlewares/auth');
+const {verifyOdooApiKey} = require('../middlewares/auth');
 const logger = require('../services/logger');
 const {appErrorHandler} = require("../utils/errors");
 
@@ -35,9 +35,9 @@ const {appErrorHandler} = require("../utils/errors");
  * - For 'payment_rejected': (TODO) handle payment rejection logic.
  * - For 'payment_validity_changed': (TODO) handle payment validity changes.
  * Responds with 200 on success, 400 on invalid input or user not found.
- * Requires API key authentication via verifyApiKey middleware.
+ * Requires API key authentication via verifyOdooApiKey middleware.
  */
-odoo_controller.post('/internal/user/sync', verifyApiKey, async (req, res) => {
+odoo_controller.post('/internal/user/sync', verifyOdooApiKey, async (req, res) => {
     try {
         const {
             timestamp,

@@ -1,4 +1,7 @@
 'use strict';
+/**
+ * @file Helper functions for authentication and security.
+ */
 const crypto = require('crypto');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
 

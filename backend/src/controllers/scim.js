@@ -1,3 +1,11 @@
+'use strict'
+/**
+ * @file SCIM Controller
+ * Handles SCIM protocol operations for user management.
+ * Supports CRUD operations for users, including validation and error handling.
+ *
+ */
+
 const express = require('express');
 const scim_controller = express.Router();
 const SCIMMY = require("scimmy");
@@ -7,7 +15,11 @@ const {userOperations} = require('../services/user_operations');
 const {AuthError, ValidationError, ErrorCodes} = require('../utils/errors');
 const Joi = require('joi');
 const {blockSteveUser} = require("../services/steve_user");
+const {scimAuth} = require('../middlewares/auth');
 
+
+// Apply SCIM authentication middleware to all SCIM routes
+scim_controller.use('/scim/v2', scimAuth);
 
 // SCIM Joi Validation Schemas
 const scimUserPatchSchema = Joi.object({
@@ -444,6 +456,9 @@ scim_controller.get('/scim/v2/ServiceProviderConfig', (req, res) => {
         etag: {
             supported: false
         },
+        // The communication between us and IdP will be inside a VLAN and assumed to be secure.
+        // For this reason we will not be implementing more complex authentication methods like oauthbearertoken or x509certificate
+        // In any case these routes cannot be exposed outside of network TODO: Block here in nginx
         authenticationSchemes: [
             {
                 type: 'httpbasic',
