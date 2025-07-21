@@ -78,8 +78,8 @@ const validateSCIMResource = (resource, schema, operation) => {
         const errorDetails = error.details.map(detail => detail.message).join('; ');
         logger.warn(`SCIM ${operation} validation failed:`, errorDetails);
         throw new ValidationError(
-            `SCIM ${operation} validation failed: ${errorDetails}`,
-            ErrorCodes.VALIDATION.INVALID_PARAMETERS
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            `SCIM ${operation} validation failed: ${errorDetails}`
         );
     }
 
@@ -143,7 +143,7 @@ class SCIMUserHandler {
 
         } catch (error) {
             logger.error('SCIM Users read error:', error);
-            throw new ValidationError('Failed to retrieve users', ErrorCodes.SCIM.READ_ERROR);
+            throw new ValidationError(ErrorCodes.SCIM.READ_ERROR, 'Failed to retrieve users');
         }
     }
 
@@ -170,7 +170,7 @@ class SCIMUserHandler {
             // Check if user already exists
             const existingUser = await db.getUserUnique({email});
             if (existingUser) {
-                throw new ValidationError('User already exists', ErrorCodes.USER.ALREADY_EXISTS);
+                throw new ValidationError(ErrorCodes.USER.ALREADY_EXISTS);
             }
 
             // Create OIDC-like user object for userOperations
@@ -190,7 +190,7 @@ class SCIMUserHandler {
             if (error instanceof ValidationError || error instanceof AuthError) {
                 throw error;
             }
-            throw new ValidationError('Failed to create user', ErrorCodes.SCIM.CREATE_ERROR);
+            throw new ValidationError(ErrorCodes.SCIM.CREATE_ERROR);
         }
     }
 
@@ -208,7 +208,7 @@ class SCIMUserHandler {
 
             const user = await db.getUserUnique({oauth_id: id});
             if (!user) {
-                throw new ValidationError('User not found', ErrorCodes.USER.NOT_FOUND);
+                throw new ValidationError(ErrorCodes.USER.NOT_FOUND);
             }
 
             // Validate resource against SCIM schema
@@ -228,9 +228,8 @@ class SCIMUserHandler {
 
             if (disallowedFields.length > 0) {
                 logger.warn(`SCIM PATCH attempted to modify disallowed fields: ${disallowedFields.join(', ')}`);
-                throw new ValidationError(
-                    `Cannot modify fields: ${disallowedFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`,
-                    ErrorCodes.VALIDATION.INVALID_PARAMETERS
+                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                    `Cannot modify fields: ${disallowedFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`
                 );
             }
 
@@ -253,8 +252,8 @@ class SCIMUserHandler {
 
                 if (nameValidation.error) {
                     throw new ValidationError(
-                        `Name validation failed: ${nameValidation.error.details.map(d => d.message).join('; ')}`,
-                        ErrorCodes.VALIDATION.INVALID_PARAMETERS
+                        ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                        `Name validation failed: ${nameValidation.error.details.map(d => d.message).join('; ')}`
                     );
                 }
 
@@ -296,7 +295,7 @@ class SCIMUserHandler {
             if (error instanceof ValidationError || error instanceof AuthError) {
                 throw error;
             }
-            throw new ValidationError('Failed to update user', ErrorCodes.SCIM.UPDATE_ERROR);
+            throw new ValidationError(ErrorCodes.SCIM.UPDATE_ERROR);
         }
     }
 
@@ -311,7 +310,7 @@ class SCIMUserHandler {
 
             const user = await db.getUserUnique({oauth_id: id});
             if (!user) {
-                throw new ValidationError('User not found', ErrorCodes.USER.NOT_FOUND);
+                throw new ValidationError(ErrorCodes.USER.NOT_FOUND);
             }
 
             // Soft delete or deactivate user instead of hard delete
@@ -334,7 +333,7 @@ class SCIMUserHandler {
             if (error instanceof ValidationError || error instanceof AuthError) {
                 throw error;
             }
-            throw new ValidationError('Failed to delete user', ErrorCodes.SCIM.DELETE_ERROR);
+            throw new ValidationError(ErrorCodes.SCIM.DELETE_ERROR);
         }
     }
 
@@ -395,7 +394,7 @@ SCIMMY.Resources.declare(SCIMMY.Resources.User)
         if (data && data.id) {
             return SCIMUserHandler.delete(data.id);
         }
-        throw new ValidationError('User ID required for delete operation', ErrorCodes.VALIDATION.MISSING_PARAMETERS);
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID required for delete operation',);
     });
 
 /**
