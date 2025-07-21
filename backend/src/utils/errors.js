@@ -73,6 +73,16 @@ const ExceptionCodes = Object.freeze({
         RFID_NOT_FOUND: {code: 6020, message: 'User\'s RFID is not found'},
     }),
 
+    // SCIM-related errors (6100-6199)
+    SCIM: Object.freeze({
+        READ_ERROR: {code: 6100, status: 500, message: 'SCIM read operation failed'},
+        CREATE_ERROR: {code: 6101, status: 500, message: 'SCIM create operation failed'},
+        UPDATE_ERROR: {code: 6102, status: 500, message: 'SCIM update operation failed'},
+        DELETE_ERROR: {code: 6103, status: 500, message: 'SCIM delete operation failed'},
+        INVALID_FILTER: {code: 6104, status: 400, message: 'Invalid SCIM filter'},
+        RESOURCE_NOT_FOUND: {code: 6105, status: 404, message: 'SCIM resource not found'},
+    }),
+
     // Related to Odoo errors (7000-7099)
     ODOO: Object.freeze({
         USER_NOT_FOUND: {code: 7001, message: 'User not found in Odoo'},
