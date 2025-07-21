@@ -44,14 +44,24 @@ jest.mock('../../../utils/queries', () => ({
     },
 }));
 
+
+// Mock the auth middleware to bypass authentication in tests
+jest.mock('../../../middlewares/auth', () => ({
+    scimAuth: (req, res, next) => next(), // Bypass auth for tests
+}));
+
+// Set up test environment variables for SCIM auth
+process.env.SERVER_SCIM_USERNAME = 'testuser';
+process.env.SERVER_SCIM_PASSWORD = 'testpass';
+
 // Create Express app for testing
 const app = express();
 app.use(express.json());
 app.use(scimController);
 
 // SCIM-compliant error handler (matches the one in the controller)
-app.use((err, req, res, next) => {
-    logger.error('SCIM Error:', err);
+app.use((error, req, res, next) => {
+    logger.error('SCIM Error:', error);
 
     let statusCode = 500;
     let scimError = {
@@ -60,15 +70,15 @@ app.use((err, req, res, next) => {
         status: '500'
     };
 
-    if (err instanceof ValidationError) {
+    if (error instanceof ValidationError) {
         statusCode = 400;
-        scimError.detail = err.errorDef;
+        scimError.detail = error.customMessage ? error.customMessage : error.errorDef.message;
         scimError.status = '400';
-    } else if (err instanceof AuthError) {
+    } else if (error instanceof AuthError) {
         statusCode = 401;
-        scimError.detail = err.errorDef;
+        scimError.detail = error.customMessage ? error.customMessage : error.errorDef.message;
         scimError.status = '401';
-    } else if (err.errorDef === 'User not found') {
+    } else if (error.message === 'User not found') {
         statusCode = 404;
         scimError.detail = 'User not found';
         scimError.status = '404';
@@ -127,6 +137,12 @@ describe('SCIM Controller Unit Tests', () => {
             primary: true,
             type: 'work'
         }]
+    };
+
+    // Helper function to create HTTP Basic auth header
+    const createAuthHeader = () => {
+        const credentials = Buffer.from(`${process.env.SERVER_SCIM_USERNAME}:${process.env.SERVER_SCIM_PASSWORD}`).toString('base64');
+        return `Basic ${credentials}`;
     };
 
     beforeEach(() => {
@@ -539,14 +555,14 @@ describe('SCIM Controller Unit Tests', () => {
 
             it('should handle userOperations service errors', async () => {
                 db.getUserUnique.mockResolvedValue(null);
-                userOperations.mockRejectedValue(new ValidationError('Service unavailable', ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE));
+                userOperations.mockRejectedValue(new ValidationError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE));
 
                 const response = await request(app)
                     .post('/scim/v2/Users')
                     .send(validScimUserCreatePayload)
                     .expect(400);
 
-                expect(response.body.detail).toBe('Service unavailable');
+                expect(response.body.detail).toBe('Service temporarily unavailable');
             });
         });
 
@@ -746,7 +762,7 @@ describe('SCIM Controller Unit Tests', () => {
         });
 
         it('should return SCIM-compliant error format', async () => {
-            db.getUserUnique.mockRejectedValue(new ValidationError('Database error', ErrorCodes.DATABASE.CONNECTION_ERROR));
+            db.getUserUnique.mockRejectedValue(new ValidationError(ErrorCodes.DATABASE.CONNECTION_ERROR, 'Database error'));
 
             const response = await request(app)
                 .get('/scim/v2/Users/test')

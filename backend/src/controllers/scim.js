@@ -412,11 +412,11 @@ const scimErrorHandler = (error, req, res, next) => {
 
     if (error instanceof ValidationError) {
         statusCode = 400;
-        scimError.detail = error.errorDef;
+        scimError.detail = error.customMessage ? error.customMessage : error.errorDef.message;
         scimError.status = '400';
     } else if (error instanceof AuthError) {
         statusCode = 401;
-        scimError.detail = error.errorDef;
+        scimError.detail = error.customMessage ? error.customMessage : error.errorDef.message;
         scimError.status = '401';
     } else if (error.errorDef === 'User not found') {
         statusCode = 404;
