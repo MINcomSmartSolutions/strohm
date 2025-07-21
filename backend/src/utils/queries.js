@@ -344,8 +344,8 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
                 `Failed to insert new key for user ID ${user_id}.`,
             );
         }
-
-        return await client.query('COMMIT');
+        await client.query('COMMIT');
+        return true; // Rotation successful
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'rotateOdooUserKey');
@@ -729,6 +729,7 @@ async function deactivateUser(user) {
         UPDATE users
         SET deactivated_at = now()
         WHERE user_id = $1::integer
+          AND deactivated_at IS NULL
     `;
 
     const client = await pool.connect();
@@ -739,7 +740,6 @@ async function deactivateUser(user) {
             throw new Error('Could not deactivate user');
         }
         await client.query('COMMIT');
-        await recordActivityLog(user.user_id, 'DEACTIVATE USER', 'DB', user.rfid);
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'deactivateUser');

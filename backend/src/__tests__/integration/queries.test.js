@@ -261,25 +261,6 @@ describe('Database Queries Integration Tests', () => {
             await expect(db.deactivateUser({}))
                 .rejects.toThrow(ValidationError);
         });
-
-        test('deactivateUser should record activity log entry', async () => {
-            // Deactivate the test user
-            await db.deactivateUser(testUser);
-
-            // Verify activity log entry
-            const client = await pool.connect();
-            try {
-                const result = await client.query(
-                    'SELECT * FROM activity_log WHERE user_id = $1 AND event_type = $2',
-                    [testUser.user_id, 'DEACTIVATE USER'],
-                );
-                expect(result.rows.length).toBe(1);
-                expect(result.rows[0].target).toBe('DB');
-                expect(result.rows[0].rfid).toBe(testUser.rfid);
-            } finally {
-                client.release();
-            }
-        });
     });
 
     describe('Odoo Credentials', () => {
