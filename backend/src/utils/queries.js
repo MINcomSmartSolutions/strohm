@@ -436,16 +436,17 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
 
     const client = await pool.connect();
     try {
+        logger.info(`Recording activity log: user_id=${user_id}, event_type=${event_type}, target=${target}, rfid=${rfid}, reason=${reason || 'N/A'}`);
         await client.query('BEGIN');
         await client.query(activity_log_query, values);
         await client.query('COMMIT');
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'recordActivityLog');
+        logger.error(`Error recording activity log: ${error.message}`, error)
     } finally {
         client.release();
     }
-};
+}
 
 
 /**
