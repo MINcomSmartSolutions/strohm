@@ -8,6 +8,7 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -16,6 +17,7 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+DROP DATABASE strohm;
 --
 -- Name: strohm; Type: DATABASE; Schema: -; Owner: strohm_admin
 --
@@ -30,6 +32,7 @@ ALTER DATABASE strohm OWNER TO strohm_admin;
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -65,56 +68,6 @@ ALTER FUNCTION public.update_timestamp() OWNER TO postgres;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
-
---
--- Name: access_logs; Type: TABLE; Schema: public; Owner: strohm_admin
---
-
-CREATE TABLE public.access_logs
-(
-    id               integer                                            NOT NULL,
-    user_id          integer,
-    ip               character varying(15),
-    method           character varying(10)                              NOT NULL,
-    path             character varying(255)                             NOT NULL,
-    status_code      integer,
-    returned_success boolean,
-    response_time    integer,
-    created_at       timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
-ALTER TABLE public.access_logs
-    OWNER TO strohm_admin;
-
---
--- Name: TABLE access_logs; Type: COMMENT; Schema: public; Owner: strohm_admin
---
-
-COMMENT ON TABLE public.access_logs IS 'Should not be stored in DB, perhaps access.log';
-
-
---
--- Name: access_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
---
-
-CREATE SEQUENCE public.access_logs_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.access_logs_id_seq OWNER TO strohm_admin;
-
---
--- Name: access_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
---
-
-ALTER SEQUENCE public.access_logs_id_seq OWNED BY public.access_logs.id;
-
 
 --
 -- Name: activity_log; Type: TABLE; Schema: public; Owner: strohm_admin
@@ -318,6 +271,49 @@ ALTER SEQUENCE public.charging_events_id_seq OWNED BY public.charging_transactio
 
 
 --
+-- Name: consent_revisions; Type: TABLE; Schema: public; Owner: strohm_admin
+--
+
+CREATE TABLE public.consent_revisions
+(
+    id                 integer                                NOT NULL,
+    version            character varying(50)                  NOT NULL,
+    title              character varying(255)                 NOT NULL,
+    content            text                                   NOT NULL,
+    privacy_policy_url character varying(500),
+    terms_url          character varying(500),
+    created_at         timestamp with time zone DEFAULT now() NOT NULL,
+    is_active          boolean                  DEFAULT true  NOT NULL,
+    expires_at         timestamp with time zone
+);
+
+
+ALTER TABLE public.consent_revisions
+    OWNER TO strohm_admin;
+
+--
+-- Name: consent_revisions_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
+--
+
+CREATE SEQUENCE public.consent_revisions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.consent_revisions_id_seq OWNER TO strohm_admin;
+
+--
+-- Name: consent_revisions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
+--
+
+ALTER SEQUENCE public.consent_revisions_id_seq OWNED BY public.consent_revisions.id;
+
+
+--
 -- Name: electricity_prices; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
@@ -440,6 +436,49 @@ ALTER SEQUENCE public.user_activity_id_seq OWNED BY public.activity_log.id;
 
 
 --
+-- Name: user_consents; Type: TABLE; Schema: public; Owner: strohm_admin
+--
+
+CREATE TABLE public.user_consents
+(
+    id                  integer                                NOT NULL,
+    user_id             bigint                                 NOT NULL,
+    consent_revision_id integer                                NOT NULL,
+    consented_at        timestamp with time zone DEFAULT now() NOT NULL,
+    ip_address          inet,
+    user_agent          character varying,
+    consent_method      character varying(50)    DEFAULT 'web_form'::character varying,
+    is_withdrawn        boolean                  DEFAULT false NOT NULL,
+    withdrawn_at        timestamp with time zone
+);
+
+
+ALTER TABLE public.user_consents
+    OWNER TO strohm_admin;
+
+--
+-- Name: user_consents_id_seq; Type: SEQUENCE; Schema: public; Owner: strohm_admin
+--
+
+CREATE SEQUENCE public.user_consents_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.user_consents_id_seq OWNER TO strohm_admin;
+
+--
+-- Name: user_consents_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: strohm_admin
+--
+
+ALTER SEQUENCE public.user_consents_id_seq OWNED BY public.user_consents.id;
+
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: strohm_admin
 --
 
@@ -551,14 +590,6 @@ ALTER SEQUENCE public.watermark_id_seq OWNED BY public.watermark.id;
 
 
 --
--- Name: access_logs id; Type: DEFAULT; Schema: public; Owner: strohm_admin
---
-
-ALTER TABLE ONLY public.access_logs
-    ALTER COLUMN id SET DEFAULT nextval('public.access_logs_id_seq'::regclass);
-
-
---
 -- Name: activity_log id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
@@ -583,6 +614,14 @@ ALTER TABLE ONLY public.charging_transactions
 
 
 --
+-- Name: consent_revisions id; Type: DEFAULT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.consent_revisions
+    ALTER COLUMN id SET DEFAULT nextval('public.consent_revisions_id_seq'::regclass);
+
+
+--
 -- Name: electricity_prices id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
@@ -599,6 +638,14 @@ ALTER TABLE ONLY public.odoo_apikeys
 
 
 --
+-- Name: user_consents id; Type: DEFAULT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.user_consents
+    ALTER COLUMN id SET DEFAULT nextval('public.user_consents_id_seq'::regclass);
+
+
+--
 -- Name: users user_id; Type: DEFAULT; Schema: public; Owner: strohm_admin
 --
 
@@ -612,14 +659,6 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.watermark
     ALTER COLUMN id SET DEFAULT nextval('public.watermark_id_seq'::regclass);
-
-
---
--- Name: access_logs access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
---
-
-ALTER TABLE ONLY public.access_logs
-    ADD CONSTRAINT access_logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -655,6 +694,22 @@ ALTER TABLE ONLY public.charging_transactions
 
 
 --
+-- Name: consent_revisions consent_revisions_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.consent_revisions
+    ADD CONSTRAINT consent_revisions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: consent_revisions consent_revisions_version_key; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.consent_revisions
+    ADD CONSTRAINT consent_revisions_version_key UNIQUE (version);
+
+
+--
 -- Name: electricity_prices electricity_prices_unique_valid_from; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
 --
 
@@ -676,6 +731,14 @@ ALTER TABLE ONLY public.electricity_prices
 
 ALTER TABLE ONLY public.electricity_prices
     ADD CONSTRAINT exchange_prices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_consents user_consents_pkey; Type: CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.user_consents
+    ADD CONSTRAINT user_consents_pkey PRIMARY KEY (id);
 
 
 --
@@ -711,6 +774,20 @@ ALTER TABLE ONLY public.watermark
 
 
 --
+-- Name: idx_user_consent_lookup; Type: INDEX; Schema: public; Owner: strohm_admin
+--
+
+CREATE INDEX idx_user_consent_lookup ON public.user_consents USING btree (user_id, consent_revision_id);
+
+
+--
+-- Name: idx_user_consents_active; Type: INDEX; Schema: public; Owner: strohm_admin
+--
+
+CREATE INDEX idx_user_consents_active ON public.user_consents USING btree (user_id, is_withdrawn);
+
+
+--
 -- Name: odoo_apikeys_id_uindex; Type: INDEX; Schema: public; Owner: strohm_admin
 --
 
@@ -729,14 +806,6 @@ CREATE UNIQUE INDEX users_oauth_id_index ON public.users USING btree (oauth_id);
 --
 
 CREATE UNIQUE INDEX users_odoo_user_id_uindex ON public.users USING btree (odoo_user_id);
-
-
---
--- Name: access_logs access_logs_ref_fkey; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
---
-
-ALTER TABLE ONLY public.access_logs
-    ADD CONSTRAINT access_logs_ref_fkey FOREIGN KEY (user_id) REFERENCES public.users (user_id);
 
 
 --
@@ -777,6 +846,22 @@ ALTER TABLE ONLY public.charging_transactions
 
 ALTER TABLE ONLY public.odoo_apikeys
     ADD CONSTRAINT odoo_apikeys_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users (user_id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_consents user_consents_consent_revision_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.user_consents
+    ADD CONSTRAINT user_consents_consent_revision_id_fkey FOREIGN KEY (consent_revision_id) REFERENCES public.consent_revisions (id);
+
+
+--
+-- Name: user_consents user_consents_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: strohm_admin
+--
+
+ALTER TABLE ONLY public.user_consents
+    ADD CONSTRAINT user_consents_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users (user_id);
 
 
 --
