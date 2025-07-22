@@ -10,7 +10,6 @@
  * @exports {Object} oidc_config - Configuration object for OIDC authentication.
  */
 const axios = require('axios');
-const {userOperations} = require('../services/user_operations');
 const logger = require('../services/logger');
 
 // noinspection JSUnusedGlobalSymbols
@@ -34,7 +33,8 @@ const oidc_config = {
     /**
      * Handles user session after authentication.
      * - Fetches user info from OIDC provider.
-     * - Attaches user data to session.
+     * - Stores OIDC user info in session (but does NOT create user account yet)
+     * - User account creation happens only after consent is given
      * @param {Object} req - Express request object.
      * @param {Object} res - Express response object.
      * @param {Object} session - OIDC session object.
@@ -52,9 +52,11 @@ const oidc_config = {
                 return {};
             });
 
-        req.session.user = await userOperations(userInfo);
+        // Store OIDC user info in session but do NOT create user account yet
+        // User account will be created only after consent is given in the consent controller
+        req.session.oidc_userinfo = userInfo;
         req.session.save(() => {
-            logger.info('Session saved');
+            logger.info('OIDC user info saved to session (user account not created yet)');
         });
 
         return {

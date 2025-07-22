@@ -23,6 +23,8 @@ const {morganMiddleware} = require('./services/logger');
 const auth_controller = require("./controllers/auth");
 const odoo_controller = require("./controllers/odoo");
 const scim_controller = require("./controllers/scim");
+const consent_controller = require("./controllers/consent");
+const {requireConsent} = require("./middlewares/consent");
 
 Settings.defaultZoneName = 'utc';
 
@@ -75,6 +77,9 @@ app.use(helmet());
 // See: https://github.com/auth0/express-openid-connect
 app.use(auth(oidc_config));
 
+// Add consent middleware after OIDC auth but before protected routes
+app.use(requireConsent);
+
 
 app.get('/health', (req, res) => {
     res.status(200).json({success: true, msg: 'OK'});
@@ -113,6 +118,8 @@ app.get('/welcome', async (req, res) => {
 });
 
 app.use(auth_controller);
+
+app.use(consent_controller);
 
 app.use(odoo_controller);
 

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>{{TITLE}}</title>
+    <link href="/consent/consent.css" rel="stylesheet">
+</head>
+<body>
+<div class="consent-container">
+    <h1>{{TITLE}}</h1>
+
+    <div class="consent-content">
+        {{CONTENT}}
+    </div>
+
+
+    <form action="/consent" id="consentForm" method="POST">
+        <div class="checkbox-group">
+            <input id="consent_checkbox" name="consent_given" required type="checkbox">
+            <label for="consent_checkbox">
+                Ich habe die oben genannten Bedingungen gelesen und stimme ihnen zu. Mir ist bekannt, dass ich meine
+                Zustimmung jederzeit widerrufen kann.
+            </label>
+        </div>
+
+        <div class="button-group">
+            <button class="btn btn-secondary" id="declineBtn" type="button">
+                Ablehnen und Abmelden
+            </button>
+            <button class="btn btn-primary" disabled id="submitBtn" type="submit">
+                Akzeptieren und fortfahren
+            </button>
+
+        </div>
+        <div class="footer">
+            <p class="footer-text">© 2025 MINcom Smart Solutions GmbH. All rights reserved.</p>
+            {{LINKS_SECTION}}
+        </div>
+
+        <div class="error" id="error" style="display: none;"></div>
+    </form>
+</div>
+
+<script src="/consent/consent.js"></script>
+</body>
+</html>
+
