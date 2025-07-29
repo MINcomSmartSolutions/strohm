@@ -47,6 +47,7 @@ const ExceptionCodes = Object.freeze({
         VERIFICATION_FAILED: {code: 4001, status: 401, message: 'OAuth verification failed'},
         SCOPE_INVALID: {code: 4002, status: 403, message: 'Invalid OAuth scope'},
         RFID_NOT_FOUND: {code: 4020, message: 'User\'s RFID is not found on returned data'},
+        NO_SESSION: {code: 4021, status: 401, message: 'No session details found for user'},
     }),
 
     // General application errors (5000-5099)
@@ -55,6 +56,7 @@ const ExceptionCodes = Object.freeze({
         NOT_IMPLEMENTED: {code: 5001, status: 500, message: 'Feature not implemented'},
         SERVICE_UNAVAILABLE: {code: 5002, status: 500, message: 'Service temporarily unavailable'},
         PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check failed'},
+        SESSION_SAVE_FAILED: {code: 5003, status: 500, message: 'Failed to save session'},
     }),
 
     // Related to user operation errors in backend (6000-6099)

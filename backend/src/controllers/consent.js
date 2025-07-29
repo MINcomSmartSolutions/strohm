@@ -1,3 +1,5 @@
+// noinspection JSDeprecatedSymbols
+
 /**
  * @file Controller for handling user consent pages and operations.
  *
@@ -8,18 +10,23 @@
 const express = require('express');
 const consent_controller = express.Router();
 const {getActiveConsentRevision, recordConsent, withdrawConsent, hasLatestConsent} = require('../services/consent');
-const {appErrorHandler, SystemError, ErrorCodes} = require('../utils/errors');
+const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('../utils/errors');
 const logger = require('../services/logger');
 const fs = require('fs');
 const path = require('path');
+const {userOperations} = require("../services/user_operations");
+const {validateOIDCProperties} = require("../helpers/auth");
+
 
 /**
  * Display the consent page
  */
 consent_controller.get('/consent', async (req, res) => {
     try {
-        if (!req.oidc.isAuthenticated()) {
-            return res.redirect('/login');
+        logger.debug('Rendering consent page for user:', req.session.user ? req.session.user.user_id : 'not logged in');
+
+        if (!await validateOIDCProperties(req)) {
+            throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
         }
 
         const activeConsent = await getActiveConsentRevision();
@@ -28,13 +35,24 @@ consent_controller.get('/consent', async (req, res) => {
             throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
         }
 
+        // Get user info from OIDC session (now validated)
+        const oidcUser = req.oidc.user;
+
+        // Check if user already exists
+        const {db} = require('../utils/queries');
+        let user = await db.getUserUnique({oauth_id: oidcUser.sub});
+
+
         // Check if user already has latest consent
-        if (req.session.user) {
-            const hasConsent = await hasLatestConsent(req.session.user.user_id);
-            if (hasConsent) {
-                return res.redirect('/');
+        if (user) {
+            if (req.session.user) {
+                const hasConsent = await hasLatestConsent(req.session.user.user_id);
+                if (hasConsent) {
+                    return res.redirect('/');
+                }
             }
         }
+
 
         // Read the HTML template file
         const templatePath = path.join(__dirname, '../../public/consent/consent.html');
@@ -71,8 +89,8 @@ consent_controller.get('/consent', async (req, res) => {
  */
 consent_controller.post('/consent', async (req, res) => {
     try {
-        if (!req.oidc.isAuthenticated()) {
-            return res.redirect('/login');
+        if (!await validateOIDCProperties(req)) {
+            throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
         }
 
         const {consent_given} = req.body;
@@ -92,26 +110,11 @@ consent_controller.post('/consent', async (req, res) => {
             throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
         }
 
-        // Get user info from OIDC session (stored during afterCallback)
-        const oidcUser = req.session.oidc_userinfo;
-
-        if (!oidcUser || !oidcUser.sub) {
-            logger.error('No OIDC user info found in session');
-            return res.status(500).send('Authentication error. Please try logging in again.');
-        }
+        // Get user info from OIDC session (now validated)
+        const oidcUser = req.oidc.user;
 
         // Check if user already exists
-        const {db} = require('../utils/queries');
-        let user = await db.getUserUnique({oauth_id: oidcUser.sub});
-
-        if (!user) {
-            // Create user ONLY AFTER consent is given
-            logger.info(`Creating new user after consent for OIDC ID: ${oidcUser.sub}`);
-
-            // Create the user first
-            const {userOperations} = require('../services/user_operations');
-            user = await userOperations(oidcUser);
-        }
+        const user = await userOperations(oidcUser);
 
         // Record the consent AFTER user creation (if new user) or for existing user
         const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
@@ -122,6 +125,11 @@ consent_controller.post('/consent', async (req, res) => {
 
         // Store user in session
         req.session.user = user;
+        req.session.save((err) => {
+            if (err) {
+                throw new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED, null, err);
+            }
+        });
 
         logger.info(`Consent recorded and user session created for user ${user.user_id}`);
 

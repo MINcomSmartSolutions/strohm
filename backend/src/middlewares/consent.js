@@ -5,8 +5,12 @@
  * @exports requireConsent
  */
 
-const {hasValidConsent, getActiveConsentRevision, hasLatestConsent} = require('../services/consent');
+const {getActiveConsentRevision, hasLatestConsent} = require('../services/consent');
 const logger = require('../services/logger');
+const {db} = require("../utils/queries");
+const {userOperations} = require("../services/user_operations");
+const {OAuthError, ErrorCodes, AuthError} = require("../utils/errors");
+const {validateOIDCProperties} = require("../helpers/auth");
 
 /**
  * Middleware to check if authenticated user has valid consent
@@ -15,15 +19,10 @@ const logger = require('../services/logger');
 const requireConsent = async (req, res, next) => {
     try {
         // Skip consent check for certain routes
-        const skipRoutes = ['/consent', '/logout', '/health', '/welcome', '/login', '/callback'];
+        const skipRoutes = ['/consent', '/logout', '/health', '/welcome', '/login', '/callback', '/scim', '/assets', '/favicon'];
         const isSkipRoute = skipRoutes.some(route => req.path.startsWith(route));
 
         if (isSkipRoute) {
-            return next();
-        }
-
-        // Only check consent for authenticated users
-        if (!req.oidc.isAuthenticated()) {
             return next();
         }
 
@@ -32,6 +31,16 @@ const requireConsent = async (req, res, next) => {
         if (!activeConsent) {
             logger.warn('No active consent revision found - allowing access without consent check');
             return next();
+        }
+
+        if (!await validateOIDCProperties(req)) {
+            return res.redirect('/logout');
+        }
+
+        const user = await db.getUserUnique({oauth_id: req.oidc.user.sub});
+        if (user) {
+            req.session.user = await userOperations(req.oidc.user)
+            req.session.save();
         }
 
         // If user is in session, check their consent status
@@ -48,11 +57,12 @@ const requireConsent = async (req, res, next) => {
             return res.redirect('/consent');
         }
 
-        next();
+
+        return next();
     } catch (error) {
         logger.error('Error in consent middleware:', error);
         // In case of error, allow the request to proceed to avoid blocking the entire application
-        next();
+        return next();
     }
 };
 
