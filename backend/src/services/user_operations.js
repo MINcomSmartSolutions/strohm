@@ -10,8 +10,8 @@ const {createOdooUser, checkValidPaymentMethod} = require('./odoo');
 const {db} = require('../utils/queries');
 const {createSteveUser} = require('./steve_user');
 const logger = require('../services/logger');
-const {AuthError, ErrorCodes, ValidationError} = require('../utils/errors');
-const {fullyQualifiedUserSchema, validateUser} = require("../utils/joi");
+const {AuthError, ErrorCodes} = require('../utils/errors');
+const {validateUser} = require("../utils/joi");
 
 /**
  * Handles user creation and linking with external systems.
@@ -19,7 +19,7 @@ const {fullyQualifiedUserSchema, validateUser} = require("../utils/joi");
  * - Checks if a user exists by OIDC ID.
  * - If not, creates a new user with a random RFID (for development).
  * - Ensures the user is registered in Odoo and Steve systems.
- * - Returns the up-to-date user object.
+ * - Returns the up-to-date detailed user object.
  *
  * @async
  * @param {Object} oidc_user - OIDC user info.
@@ -52,22 +52,24 @@ const userOperations = async (oidc_user) => {
 
         logger.debug('User is created in DB with email: ' + createdUser.email + ' , OIDC ID: ' + createdUser.oauth_id + ' and RFID: ' + createdUser.rfid);
 
-        user = await updateUserFromExternalSystems(createdUser);
+        await checkANDcreateUserInExternalSystems(createdUser);
+        user = await db.getUserUnique({oauth_id: oidc_user.sub});
     } else if (user.deactivated_at !== null) {
-        //TODO: Deactivated user show error message on odoo side
+        //TODO: Deactivated user show error message
         throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
     } else {
-        user = await updateUserFromExternalSystems(user);
+        await checkANDcreateUserInExternalSystems(user);
+        user = await db.getUserUnique({oauth_id: oidc_user.sub});
     }
 
     // Only fully qualified users are allowed to move further
     //TODO: If this fails show error message to user and end the session (logout)
     validateUser(user);
 
-    const has_valid_payment_method = await checkValidPaymentMethod(user);
-    if (!has_valid_payment_method) {
-        logger.warn('User does not have a valid payment method');
-    }
+    // const has_valid_payment_method = await checkValidPaymentMethod(user);
+    // if (!has_valid_payment_method) {
+    //     logger.warn('User does not have a valid payment method');
+    // }
 
     return user;
 
@@ -86,14 +88,14 @@ const userOperations = async (oidc_user) => {
 
 };
 
-const updateUserFromExternalSystems = async (user) => {
+
+const checkANDcreateUserInExternalSystems = async (user) => {
     if (!user.odoo_user_id) {
         await createOdooUser(user);
     }
     if (!user.steve_id) {
         await createSteveUser(user);
     }
-    return db.getUserUnique({user_id: user.user_id});
 };
 
 

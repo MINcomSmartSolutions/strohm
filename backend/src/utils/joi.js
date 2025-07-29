@@ -92,7 +92,7 @@ const dbTransactionSchema = Joi.object({
 const validateUser = (user) => {
     const {error} = fullyQualifiedUserSchema.validate(user);
     if (error) {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid user ${error.message}`);
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid user ${error.message}`, error);
     }
 };
 

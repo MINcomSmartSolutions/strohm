@@ -68,8 +68,12 @@ app.use(morganMiddleware); // Custom logger middleware for request logging
 app.use(express.static('public'));
 
 
+// Helps prevent HTTP Parameter Pollution attacks
 // noinspection JSCheckFunctionSignatures
 app.use(hpp());
+
+// Helmet helps secure Express apps by setting various HTTP headers
+// See: https://helmetjs.github.io/
 app.use(helmet());
 
 
