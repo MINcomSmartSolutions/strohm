@@ -265,11 +265,11 @@ async function createOdooTxnInvoice(db_txn) {
 
     // The price of electricity at the time of transaction started
     let txn_started_with_electricity_price;
-    try {
-        txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
-    } catch (error) {
-        logger.warn(`Failed to get electricity price from database: ${error.message}, using default price`);
-        txn_started_with_electricity_price = 35; // Default price in cents
+    txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
+    if (!txn_started_with_electricity_price) {
+        const default_price = 35; //in cents/kwh
+        logger.warn(`No price found for period ${db_txn.start_timestamp}, falling back to default price ${default_price}`);
+        txn_started_with_electricity_price = default_price;
     }
 
     const lines_data = [

@@ -613,8 +613,8 @@ describe('Odoo Service', () => {
             // Mock user retrieval
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
-            // Mock electricity price fetch failing
-            db.getCurrentElectricityPrice.mockRejectedValue(new Error('No price available'));
+            // Mock electricity price fetch returning null as no price is available
+            db.getCurrentElectricityPrice.mockResolvedValue(null);
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');

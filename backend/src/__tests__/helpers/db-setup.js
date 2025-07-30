@@ -218,8 +218,8 @@ const insertElectricityPrice = async (pool) => {
 
         await client.query(`
             INSERT INTO electricity_prices (price, valid_from)
-            VALUES (35, NOW() - INTERVAL '1 day')
-        `);
+            VALUES (42, NOW() - INTERVAL '1 day')
+        `); // different price from the original: 35
 
         await client.query('COMMIT');
     } catch (error) {
