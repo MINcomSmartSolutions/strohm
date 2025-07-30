@@ -5,10 +5,10 @@ on:
     branches: [ main, master ]
     paths:
       - 'backend/**'
-  pull_request_review:
-    types: [ submitted ]
+  pull_request:
     paths:
       - 'backend/**'
+      - '.github/workflows/run_backend_tests_and_build_image.yaml'
 
 jobs:
   test:
