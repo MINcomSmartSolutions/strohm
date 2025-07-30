@@ -575,6 +575,13 @@ describe('Database Queries Integration Tests', () => {
     });
 
     describe('Electricity Price', () => {
+        test('getCurrentElectricityPrice should should return null if no records found at the database', async () => {
+            const price = await db.getCurrentElectricityPrice();
+
+            expect(price).toBeDefined();
+            expect(price).toBe(null);
+        });
+
         test('getCurrentElectricityPrice should return current price', async () => {
             // Insert test price
             await insertElectricityPrice(pool);
@@ -582,7 +589,7 @@ describe('Database Queries Integration Tests', () => {
             const price = await db.getCurrentElectricityPrice();
 
             expect(price).toBeDefined();
-            expect(price).toBe(35);
+            expect(price).toBe(42);
         });
 
         test('getCurrentElectricityPrice should return price for specific date', async () => {
@@ -593,13 +600,7 @@ describe('Database Queries Integration Tests', () => {
             const price = await db.getCurrentElectricityPrice(yesterdayDate);
 
             expect(price).toBeDefined();
-            expect(price).toBe(35);
-        });
-
-        test('getCurrentElectricityPrice should throw when no valid price exists', async () => {
-            // No price inserted
-            await expect(db.getCurrentElectricityPrice())
-                .rejects.toThrow();
+            expect(price).toBe(42);
         });
 
         test('getCurrentElectricityPrice should throw with invalid dateTime', async () => {
@@ -625,9 +626,9 @@ describe('Database Queries Integration Tests', () => {
                 const oldPrice = await db.getCurrentElectricityPrice(oldDate);
                 expect(oldPrice).toBe(25);
 
-                // Check current price (should be 35)
+                // Check current price (should be 42)
                 const currentPrice = await db.getCurrentElectricityPrice();
-                expect(currentPrice).toBe(35);
+                expect(currentPrice).toBe(42);
             } finally {
                 client.release();
             }

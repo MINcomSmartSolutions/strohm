@@ -667,10 +667,11 @@ async function saveInvoiceId(txn, invoice_id) {
 /**
  * Retrieves the current electricity price from the database.
  * If a `specified_datetime` is provided, it will return the price valid at that time.
+ * If no price is found, it returns null.
  *
  * @async
  * @param {DateTime|null} specified_datetime - Optional ISO 8601 datetime string to check the price at a specific time.
- * @returns {Promise<number>} The current electricity price in cents per kWh.
+ * @returns {Promise<number>|null} The current electricity price in cents per kWh.
  */
 async function getCurrentElectricityPrice(specified_datetime = null) {
     if (specified_datetime && !specified_datetime.isValid) {
@@ -707,10 +708,7 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
     try {
         const result = await client.query(query, params);
         if (result.rows.length === 0) {
-            throw new DatabaseError(
-                ErrorCodes.DATABASE.RECORD_NOT_FOUND,
-                `No valid electricity price found in the database for given ${specified_datetime.toString()}`,
-            );
+            return null;
         }
         return result.rows[0].price;
     } catch (error) {
