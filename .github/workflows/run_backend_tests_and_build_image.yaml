@@ -12,7 +12,6 @@ on:
 
 jobs:
   test:
-    if: github.event.review.state == 'approved'
     name: Run Backend Tests
     runs-on: ubuntu-latest
 
