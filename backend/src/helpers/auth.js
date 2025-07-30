@@ -1,6 +1,10 @@
 'use strict';
+/**
+ * @file Helper functions for authentication and security.
+ */
 const crypto = require('crypto');
 const {ValidationError, ErrorCodes} = require('../utils/errors');
+const logger = require('../services/logger');
 
 
 /**
@@ -30,8 +34,49 @@ function generateSalt(length = 16) {
     return crypto.randomBytes(length).toString('base64url');
 }
 
+/**
+ * Validates that the OIDC authentication, most of the checks are done by the OIDC library, but we add some little extra checks.
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @returns {boolean} - True if authentication is valid, false otherwise
+ */
+async function validateOIDCProperties(req) {
+    if (!req) return false;
+
+    try {
+        const oidcSet = req.oidc;
+
+        // First check and most important: Is the user trusted by the OIDC library?
+        if (!oidcSet.isAuthenticated()) {
+            return false;
+        }
+
+        let accessToken = oidcSet.accessToken; // OIDC token object, not just the string
+        // Check if the acces token is expired, and if it is refresh it
+        if (accessToken.isExpired()) {
+            accessToken = await accessToken.refresh();
+        }
+
+        if (!accessToken.access_token) {
+            logger.warn('OIDC session missing access_token');
+            return false;
+        }
+
+        if (!oidcSet.user || !oidcSet.user.sub) {
+            logger.warn('OIDC session details are missing user information');
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        logger.error('Error validating OIDC token consistency:', error);
+        return false;
+    }
+}
 
 module.exports = {
     generateOdooHash,
     generateSalt,
+    validateOIDCProperties,
 };

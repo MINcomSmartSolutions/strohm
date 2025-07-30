@@ -47,6 +47,7 @@ const ExceptionCodes = Object.freeze({
         VERIFICATION_FAILED: {code: 4001, status: 401, message: 'OAuth verification failed'},
         SCOPE_INVALID: {code: 4002, status: 403, message: 'Invalid OAuth scope'},
         RFID_NOT_FOUND: {code: 4020, message: 'User\'s RFID is not found on returned data'},
+        NO_SESSION: {code: 4021, status: 401, message: 'No session details found for user'},
     }),
 
     // General application errors (5000-5099)
@@ -55,6 +56,7 @@ const ExceptionCodes = Object.freeze({
         NOT_IMPLEMENTED: {code: 5001, status: 500, message: 'Feature not implemented'},
         SERVICE_UNAVAILABLE: {code: 5002, status: 500, message: 'Service temporarily unavailable'},
         PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check failed'},
+        SESSION_SAVE_FAILED: {code: 5003, status: 500, message: 'Failed to save session'},
     }),
 
     // Related to user operation errors in backend (6000-6099)
@@ -71,6 +73,16 @@ const ExceptionCodes = Object.freeze({
         ODOO_EXISTS: {code: 6014, message: 'User already exists in Odoo'},
         KEY_ROTATION_FAILED: {code: 6015, message: 'User token rotation failed'},
         RFID_NOT_FOUND: {code: 6020, message: 'User\'s RFID is not found'},
+    }),
+
+    // SCIM-related errors (6100-6199)
+    SCIM: Object.freeze({
+        READ_ERROR: {code: 6100, status: 500, message: 'SCIM read operation failed'},
+        CREATE_ERROR: {code: 6101, status: 500, message: 'SCIM create operation failed'},
+        UPDATE_ERROR: {code: 6102, status: 500, message: 'SCIM update operation failed'},
+        DELETE_ERROR: {code: 6103, status: 500, message: 'SCIM delete operation failed'},
+        INVALID_FILTER: {code: 6104, status: 400, message: 'Invalid SCIM filter'},
+        RESOURCE_NOT_FOUND: {code: 6105, status: 404, message: 'SCIM resource not found'},
     }),
 
     // Related to Odoo errors (7000-7099)

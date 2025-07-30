@@ -4,8 +4,66 @@
 <dt><a href="#module_controllers/auth">controllers/auth</a></dt>
 <dd><p>Controller for handling user authentication and logout.</p>
 </dd>
+<dt><a href="#module_controllers/consent">controllers/consent</a></dt>
+<dd><p>Controller for handling user consent pages and operations.</p>
+<p>This controller manages the complete consent workflow including:</p>
+<ul>
+<li>Displaying consent forms to users</li>
+<li>Processing consent submissions</li>
+<li>Handling consent withdrawals</li>
+<li>Validating user authentication and OIDC properties</li>
+</ul>
+<p><strong>ARCHITECTURAL INTEGRATION</strong>: This controller heavily relies on the consent service
+which implements direct database queries instead of the standard <code>db.[query]</code> pattern
+used throughout the rest of the application. The consent service provides specialized
+transaction handling and enhanced audit capabilities required for GDPR compliance.</p>
+<p><strong>SERVICE DEPENDENCIES</strong>: The controller uses several key functions from the consent
+service that bypass the centralized queries.js mechanism:</p>
+<ul>
+<li><code>getActiveConsentRevision()</code> - Direct database query for active consent</li>
+<li><code>recordConsent()</code> - Specialized audit trail recording with transactions</li>
+<li><code>withdrawConsent()</code> - GDPR-compliant consent withdrawal with preservation</li>
+<li><code>hasLatestConsent()</code> - Optimized consent validation queries</li>
+</ul>
+</dd>
 <dt><a href="#module_controllers/odoo">controllers/odoo</a></dt>
 <dd><p>Controller for handling Odoo internal user sync webhooks.</p>
+</dd>
+<dt><a href="#module_middlewares/consent">middlewares/consent</a></dt>
+<dd><p>Middleware for checking user consent status and enforcing consent requirements.</p>
+<p>This middleware ensures that authenticated users have provided valid consent
+before accessing protected routes. It handles consent validation, user session
+management, and automatic redirection to consent pages when needed.</p>
+<p>The middleware integrates with OIDC authentication and maintains an audit
+trail of consent decisions while providing flexible route exclusions.</p>
+<p><strong>ARCHITECTURAL INTEGRATION</strong>: This middleware leverages the consent service
+which uses direct database connections instead of the standard <code>db.[query]</code>
+pattern used elsewhere in the application. This design choice provides
+enhanced audit capabilities and specialized transaction handling for
+GDPR compliance requirements.</p>
+</dd>
+<dt><a href="#module_services/consent">services/consent</a></dt>
+<dd><p>Service for handling user consent operations and consent revision management.</p>
+<p>This service provides a comprehensive API for managing user consent workflows including:</p>
+<ul>
+<li>Active consent revision retrieval and management</li>
+<li>User consent validation and verification</li>
+<li>Consent recording with audit trail capabilities</li>
+<li>Consent withdrawal and history tracking</li>
+<li>Consent revision lifecycle management</li>
+</ul>
+<p><strong>ARCHITECTURAL NOTE</strong>: This service uses direct database connection pooling
+instead of the centralized <code>db.[query]</code> mechanism used throughout the rest of
+the server. While most services utilize the unified queries.js pattern with
+centralized database operations, this consent service implements its own
+database queries for specialized consent management requirements.</p>
+<p>This approach provides:</p>
+<ul>
+<li>Enhanced audit trail capabilities for compliance</li>
+<li>Specialized transaction handling for consent operations</li>
+<li>Fine-grained control over consent-related database operations</li>
+<li>Better separation of concerns for GDPR/privacy compliance features</li>
+</ul>
 </dd>
 <dt><a href="#module_services/cron">services/cron</a></dt>
 <dd><p>Cron job service for periodic transaction fetching.</p>
@@ -59,7 +117,6 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 <ul>
 <li>Uses environment variables for secrets and endpoints.</li>
 <li>Customizes authorization parameters and routes.</li>
-<li>Handles user session after authentication callback.</li>
 </ul>
 </dd>
 <dt><a href="#module_utils/queries">utils/queries</a></dt>
@@ -79,6 +136,10 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 ## Classes
 
 <dl>
+<dt><a href="#SCIMUserHandler">SCIMUserHandler</a></dt>
+<dd><p>SCIM User Resource Handler
+Handles CRUD operations for users via SCIM protocol</p>
+</dd>
 <dt><a href="#AppError">AppError</a></dt>
 <dd><p>Base class for custom application errors</p>
 </dd>
@@ -105,14 +166,27 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 ## Functions
 
 <dl>
+<dt><a href="#validateSCIMResource">validateSCIMResource(resource, schema, operation)</a></dt>
+<dd><p>Validate SCIM resource using Joi and throw appropriate errors</p>
+</dd>
+<dt><a href="#scimErrorHandler">scimErrorHandler()</a></dt>
+<dd><p>SCIM Error Handler Middleware</p>
+</dd>
 <dt><a href="#generateOdooHash">generateOdooHash(message, secret)</a> ⇒ <code>string</code></dt>
 <dd><p>Generate HMAC signature matching Odoo implementation</p>
 </dd>
 <dt><a href="#generateSalt">generateSalt(length)</a> ⇒ <code>string</code></dt>
 <dd><p>Generate a cryptographically secure random salt</p>
 </dd>
+<dt><a href="#validateOIDCProperties">validateOIDCProperties(req)</a> ⇒ <code>boolean</code></dt>
+<dd><p>Validates that the OIDC authentication, most of the checks are done by the OIDC library, but we add some little extra checks.</p>
+</dd>
 <dt><a href="#identifyUser">identifyUser(identifier, options)</a> ⇒ <code>Promise.&lt;Object&gt;</code></dt>
 <dd><p>Gets a user by either user_id or oauth_id</p>
+</dd>
+<dt><a href="#scimAuth">scimAuth(req, res, next)</a></dt>
+<dd><p>SCIM HTTP Basic Authentication Middleware
+Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617</p>
 </dd>
 <dt><a href="#fmt">fmt(dt, toUTC)</a> ⇒ <code>string</code></dt>
 <dd><p>Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)</p>
@@ -128,15 +202,455 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <a name="module_controllers/auth"></a>
 
 ## controllers/auth
-
 Controller for handling user authentication and logout.
+
+<a name="module_controllers/consent"></a>
+
+## controllers/consent
+
+Controller for handling user consent pages and operations.
+
+This controller manages the complete consent workflow including:
+
+- Displaying consent forms to users
+- Processing consent submissions
+- Handling consent withdrawals
+- Validating user authentication and OIDC properties
+
+**ARCHITECTURAL INTEGRATION**: This controller heavily relies on the consent service
+which implements direct database queries instead of the standard `db.[query]` pattern
+used throughout the rest of the application. The consent service provides specialized
+transaction handling and enhanced audit capabilities required for GDPR compliance.
+
+**SERVICE DEPENDENCIES**: The controller uses several key functions from the consent
+service that bypass the centralized queries.js mechanism:
+
+- `getActiveConsentRevision()` - Direct database query for active consent
+- `recordConsent()` - Specialized audit trail recording with transactions
+- `withdrawConsent()` - GDPR-compliant consent withdrawal with preservation
+- `hasLatestConsent()` - Optimized consent validation queries
+
+**See**
+
+- [services/consent](#module_services/consent) For underlying consent operations
+- [middlewares/consent](#module_middlewares/consent) For consent enforcement middleware
 
 <a name="module_controllers/odoo"></a>
 
 ## controllers/odoo
-
 Controller for handling Odoo internal user sync webhooks.
 
+<a name="module_middlewares/consent"></a>
+
+## middlewares/consent
+
+Middleware for checking user consent status and enforcing consent requirements.
+
+This middleware ensures that authenticated users have provided valid consent
+before accessing protected routes. It handles consent validation, user session
+management, and automatic redirection to consent pages when needed.
+
+The middleware integrates with OIDC authentication and maintains an audit
+trail of consent decisions while providing flexible route exclusions.
+
+**ARCHITECTURAL INTEGRATION**: This middleware leverages the consent service
+which uses direct database connections instead of the standard `db.[query]`
+pattern used elsewhere in the application. This design choice provides
+enhanced audit capabilities and specialized transaction handling for
+GDPR compliance requirements.
+
+**See**
+
+- [services/consent](#module_services/consent) For underlying consent operations
+- [controllers/consent](#module_controllers/consent) For consent page handling
+
+<a name="module_middlewares/consent..requireConsent"></a>
+
+### middlewares/consent~requireConsent(req, res, next) ⇒ <code>void</code>
+
+Middleware Flow:
+
+1. **Route Filtering**: Checks if current route should skip consent validation
+    - Skipped routes: /consent, /logout, /health, /welcome, /login, /callback, /scim, /assets, /favicon
+2. **Consent Revision Check**: Uses `getActiveConsentRevision()` to verify system has active consent
+    - If no active revision exists, allows access without consent check
+3. **OIDC Validation**: Validates OIDC authentication properties via `validateOIDCProperties()`
+    - Redirects to /logout if validation fails
+4. **User Resolution**: Queries database directly using `db.getUserUnique()` (standard pattern)
+    - Updates session with user data if user exists via `userOperations()`
+5. **Session Management**: Ensures authenticated users have proper session state
+6. **Consent Validation**: Uses `hasLatestConsent()` to check current consent status
+    - Redirects to /consent page if consent is missing or outdated
+7. **Access Control**: Allows or denies access based on consent status
+
+**Kind**: inner method of [<code>middlewares/consent</code>](#module_middlewares/consent)  
+**Returns**: <code>void</code> - Calls next() to continue middleware chain or redirects user  
+**Throws**:
+
+- <code>Error</code> Logs errors but does not throw to prevent application blocking
+
+**Security**: Security Considerations:
+
+- Always validates OIDC properties before proceeding
+- Gracefully handles errors to prevent application blocking
+- Maintains session integrity during user operations
+- Enforces consent requirements for data protection compliance
+- Provides audit trail through comprehensive logging
+- Integrates with consent service's specialized audit capabilities  
+  **Performance**: Performance Notes:
+- Efficient route filtering prevents unnecessary database calls
+- Caches user data in session to reduce database queries
+- Fails gracefully without blocking application flow
+- Minimal overhead for skipped routes
+- Leverages consent service's optimized consent checking queries  
+  **See**
+
+- [module:services/consent.getActiveConsentRevision](module:services/consent.getActiveConsentRevision) For active
+  consent retrieval
+- [module:services/consent.hasLatestConsent](module:services/consent.hasLatestConsent) For consent validation logic
+
+<a name="module_services/consent"></a>
+
+## services/consent
+
+Service for handling user consent operations and consent revision management.
+
+This service provides a comprehensive API for managing user consent workflows including:
+
+- Active consent revision retrieval and management
+- User consent validation and verification
+- Consent recording with audit trail capabilities
+- Consent withdrawal and history tracking
+- Consent revision lifecycle management
+
+**ARCHITECTURAL NOTE**: This service uses direct database connection pooling
+instead of the centralized `db.[query]` mechanism used throughout the rest of
+the server. While most services utilize the unified queries.js pattern with
+centralized database operations, this consent service implements its own
+database queries for specialized consent management requirements.
+
+This approach provides:
+
+- Enhanced audit trail capabilities for compliance
+- Specialized transaction handling for consent operations
+- Fine-grained control over consent-related database operations
+- Better separation of concerns for GDPR/privacy compliance features
+
+**Requires**: <code>module:
+services/db\_conn</code>, [<code>services/logger</code>](#module_services/logger), [<code>utils/queries</code>](#module_utils/queries)
+
+* [services/consent](#module_services/consent)
+    * [~getActiveConsentRevision()](#module_services/consent..getActiveConsentRevision) ⇒ <code>Promise.&lt;(
+      Object\|null)&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>
+      string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>
+      Date</code> \| <code>Date</code> \| <code>null</code>
+    * [~hasValidConsent(userId)](#module_services/consent..hasValidConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
+    * [~hasLatestConsent(userId)](#module_services/consent..hasLatestConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
+    * [~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod])](#module_services/consent..recordConsent) ⇒ <code>
+      Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>number</code> \| <code>number</code> \| <code>
+      Date</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
+    * [~withdrawConsent(userId)](#module_services/consent..withdrawConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
+    * [~getUserConsentHistory(userId)](#module_services/consent..getUserConsentHistory) ⇒ <code>
+      Promise.&lt;Array.&lt;Object&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>
+      boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>
+      string</code>
+    * [~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt])](#module_services/consent..createConsentRevision) ⇒ <code>
+      Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>
+      string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>
+      Date</code> \| <code>Date</code> \| <code>null</code> \| <code>boolean</code>
+
+<a name="module_services/consent..getActiveConsentRevision"></a>
+
+### services/consent~getActiveConsentRevision() ⇒ <code>Promise.&lt;(Object\|null)&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code>
+
+Query Logic:
+
+1. Filters for revisions marked as active (is_active = true)
+2. Excludes expired revisions (expires_at IS NULL OR expires_at > NOW())
+3. Orders by creation date descending to get the most recent
+4. Limits to 1 result for performance
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;(Object\|null)&gt;</code> - The active consent revision object or null if none
+exists<code>number</code> - returns.id - Unique identifier for the consent revision<code>string</code> -
+returns.version - Version identifier (e.g., "1.0", "2.1.3")<code>string</code> - returns.title - Human-readable title
+for the consent<code>string</code> - returns.content - Full consent text content<code>string</code> \| <code>
+null</code> - returns.privacy_policy_url - URL to privacy policy (optional)<code>string</code> \| <code>null</code> -
+returns.terms_url - URL to terms of service (optional)<code>Date</code> - returns.created_at - Timestamp when revision
+was created<code>Date</code> \| <code>null</code> - returns.expires_at - Expiration timestamp (null for no expiration)  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+<a name="module_services/consent..hasValidConsent"></a>
+
+### services/consent~hasValidConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
+Validation Criteria:
+
+1. User has a consent record (user_consents table)
+2. Consent is linked to an active revision (is_active = true)
+3. Consent has not been withdrawn (is_withdrawn = false)
+4. Consent revision has not expired (expires_at IS NULL OR expires_at > NOW())
+
+**Note**: This function checks for ANY valid consent, not necessarily the latest.
+For ensuring users have the most recent consent, use `hasLatestConsent()` instead.
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;boolean&gt;</code> - True if user has valid consent, false otherwise  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+**See**: [hasLatestConsent](hasLatestConsent) For checking consent to the most recent revision  
+**Example**
+
+```js
+const isValid = await hasValidConsent(123);
+if (isValid) {
+  console.log('User has valid consent');
+} else {
+  console.log('User needs to provide consent');
+}
+```
+
+<a name="module_services/consent..hasLatestConsent"></a>
+
+### services/consent~hasLatestConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
+Validation Process:
+
+1. **Latest Revision Lookup**: Finds the most recent active, non-optional consent revision
+2. **Consent Verification**: Checks if user has specifically consented to this revision
+3. **Withdrawal Check**: Ensures the consent has not been withdrawn
+
+Filtering Criteria for Latest Revision:
+
+- is_active = true (currently active)
+- expires_at IS NULL OR expires_at > NOW() (not expired)
+- optional = false (mandatory consent only)
+- ORDER BY created_at DESC (most recent first)
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;boolean&gt;</code> - True if user has consented to the latest revision, false otherwise  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+**See**: [hasValidConsent](hasValidConsent) For checking any valid consent (not necessarily latest)  
+**Example**
+
+```js
+const hasLatest = await hasLatestConsent(123);
+if (!hasLatest) {
+  // Redirect user to consent page
+  res.redirect('/consent');
+}
+```
+
+**Example**
+
+```js
+// Used in middleware to enforce latest consent
+if (req.session.user) {
+  const hasConsent = await hasLatestConsent(req.session.user.user_id);
+  if (!hasConsent) {
+    return res.redirect('/consent');
+  }
+}
+```
+
+<a name="module_services/consent..recordConsent"></a>
+
+### services/consent~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>number</code> \| <code>number</code> \| <code>Date</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
+
+Audit Trail Features:
+
+- **Immutable Records**: Consent records cannot be modified once created
+- **IP Address Tracking**: Records user's IP for geographical compliance
+- **Device Fingerprinting**: User agent helps identify consent device
+- **Method Tracking**: Records how consent was collected (web_form, api, etc.)
+- **Timestamp Precision**: Exact time of consent for legal requirements
+- **Transaction Safety**: Uses database transactions for data integrity
+
+Supported Consent Methods:
+
+- 'web_form' (default) - HTML form submission
+- 'api' - Direct API call
+- 'import' - Bulk import from external system
+- 'admin' - Administrative action
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - The created consent record with audit information<code>
+number</code> - returns.id - Unique identifier for the consent record<code>number</code> - returns.user_id - User who
+provided consent<code>number</code> - returns.consent_revision_id - Consent revision that was accepted<code>
+Date</code> - returns.consented_at - Timestamp when consent was provided<code>string</code> - returns.ip_address - IP
+address recorded for audit trail<code>string</code> - returns.user_agent - User agent recorded for audit trail<code>
+string</code> - returns.consent_method - Method used to collect consent  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+**Legal**: **Legal Compliance**: This function is designed to meet GDPR Article 7
+requirements for demonstrating consent. All recorded data serves as
+evidence that consent was freely given, specific, informed, and unambiguous.  
+**Example**
+
+```js
+const consentRecord = await recordConsent(
+  123,                    // userId
+  5,                      // consentRevisionId
+  '192.168.1.100',       // ipAddress
+  'Mozilla/5.0...',      // userAgent
+  'web_form'             // consentMethod
+);
+console.log(`Consent recorded with ID: ${consentRecord.id}`);
+```
+
+**Example**
+
+```js
+// Recording consent from Express middleware
+const ipAddress = req.ip || req.connection.remoteAddress;
+const userAgent = req.get('User-Agent');
+await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
+```
+
+<a name="module_services/consent..withdrawConsent"></a>
+
+### services/consent~withdrawConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
+Withdrawal Process:
+
+1. **Transaction Safety**: Uses database transaction for atomic operations
+2. **Batch Update**: Updates all non-withdrawn consent records for the user
+3. **Timestamp Recording**: Records exact time of withdrawal
+4. **Audit Preservation**: Original consent records remain unchanged for compliance
+5. **Return Indication**: Returns boolean indicating if any records were updated
+
+**IMPORTANT**: This function does not delete consent records. It only marks
+them as withdrawn while preserving the original consent data for legal and
+audit purposes. This approach ensures compliance with data protection
+regulations that require maintaining proof of both consent and withdrawal.
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;boolean&gt;</code> - True if consent was withdrawn, false if no active consent found  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+**Legal**: **GDPR Compliance**: Implements Article 7(3) requirement that withdrawal
+must be as easy as giving consent. The function preserves audit trails
+while honoring the user's right to withdraw consent at any time.  
+**Example**
+
+```js
+const wasWithdrawn = await withdrawConsent(123);
+if (wasWithdrawn) {
+  console.log('User consent successfully withdrawn');
+  // Typically followed by session destruction and logout
+} else {
+  console.log('No active consent found to withdraw');
+}
+```
+
+**Example**
+
+```js
+// Used in consent withdrawal endpoint
+const success = await withdrawConsent(req.session.user.user_id);
+if (success) {
+  req.session.destroy();
+  res.json({ success: true, message: 'Consent withdrawn successfully' });
+} else {
+  res.status(404).json({ error: 'No active consent found to withdraw' });
+}
+```
+
+<a name="module_services/consent..getUserConsentHistory"></a>
+
+### services/consent~getUserConsentHistory(userId) ⇒ <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
+
+History Data Includes:
+
+- **Chronological Order**: Most recent consent actions first
+- **Version Tracking**: Which consent version was accepted
+- **Withdrawal Status**: Clear indication of current consent state
+- **Method Attribution**: How each consent was collected
+- **Complete Timeline**: Full audit trail for compliance reporting
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> - Array of consent history records ordered by date (
+newest first)<code>number</code> - returns[].id - Unique identifier for the consent record<code>Date</code> - returns[]
+.consented_at - When consent was originally given<code>boolean</code> - returns[].is_withdrawn - Whether this consent
+has been withdrawn<code>Date</code> \| <code>null</code> - returns[].withdrawn_at - When consent was withdrawn (null if
+not withdrawn)<code>string</code> - returns[].consent_method - Method used to collect consent<code>string</code> -
+returns[].version - Version of the consent revision<code>string</code> - returns[].title - Title of the consent
+revision  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+**Compliance**: **Audit Trail**: This function supports GDPR Article 5(2) accountability
+principle by providing complete documentation of consent lifecycle events.  
+<a name="module_services/consent..createConsentRevision"></a>
+
+### services/consent~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code> \| <code>boolean</code>
+
+Creation Process:
+
+1. **Transaction Start**: Begins database transaction for atomicity
+2. **Deactivation**: Sets all existing active revisions to inactive
+3. **Creation**: Creates new revision with is_active = true
+4. **Transaction Commit**: Ensures atomic activation switch
+
+**IMPORTANT**: This function automatically deactivates all existing active
+consent revisions before creating the new one. This ensures only one consent
+revision is active at any given time, maintaining consistency for user consent
+validation throughout the application.
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - The created consent revision record<code>number</code> - returns.id -
+Unique identifier for the new revision<code>string</code> - returns.version - Version identifier<code>string</code> -
+returns.title - Consent title<code>string</code> - returns.content - Consent content<code>string</code> \| <code>
+null</code> - returns.privacy_policy_url - Privacy policy URL<code>string</code> \| <code>null</code> -
+returns.terms_url - Terms of service URL<code>Date</code> - returns.created_at - Creation timestamp<code>
+Date</code> \| <code>null</code> - returns.expires_at - Expiration timestamp<code>boolean</code> - returns.is_active -
+Always true for newly created revisions  
+**Throws**:
+
+- <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
+
+**Admin**: **Administrative Use**: This function is typically used by administrators
+or automated systems to deploy new consent versions. Consider implementing
+proper authorization checks before calling this function in production.  
+**Versioning**: **Version Strategy**: Consider using semantic versioning (MAJOR.MINOR.PATCH)
+for consent revisions to clearly communicate the significance of changes
+to both users and administrators.  
+**Example**
+
+```js
+const newRevision = await createConsentRevision(
+  "3.0.0",
+  "Updated Data Processing Consent",
+  "By using this service, you agree to our updated terms...",
+  "https://example.com/privacy-v3",
+  "https://example.com/terms-v3",
+  new Date('2026-12-31')  // Optional expiration
+);
+console.log(`Created revision ${newRevision.version} with ID ${newRevision.id}`);
+```
+
+**Example**
+
+```js
+// Create revision without expiration or external URLs
+const revision = await createConsentRevision(
+  "2.1.1",
+  "Minor Update to Consent",
+  "Updated consent with minor clarifications..."
+);
+```
 <a name="module_services/cron"></a>
 
 ## services/cron
@@ -287,16 +801,16 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 
 
 * [services/steve_transactions](#module_services/steve_transactions)
-  * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
-    Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-  * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;{maxStop: DateTime,
-    processedCount: number}&gt;</code>
-  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-    high\_water\_mark: DateTime}&gt;</code>
-  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark:
-    DateTime}&gt;</code>
-  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
-    high\_water\_mark: DateTime}&gt;</code>
+    * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
+      Promise.&lt;Array.&lt;Object&gt;&gt;</code>
+    * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+      processedCount: number}&gt;</code>
+    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
 
 <a name="module_services/steve_transactions..fetchSince"></a>
 
@@ -352,10 +866,10 @@ All functions validate input and handle errors using custom error types.
 
 
 * [services/steve_user](#module_services/steve_user)
-  * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
-    Promise.&lt;Object&gt;</code>
-  * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
-    Array.&lt;Object&gt;\|null)&gt;</code>
+    * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
+      Promise.&lt;Object&gt;</code>
+    * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
+      Array.&lt;Object&gt;\|null)&gt;</code>
     * [~blockSteveUser(user)](#module_services/steve_user..blockSteveUser)
     * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser)
 
@@ -422,7 +936,7 @@ Handles user creation and linking with external systems.
 - Checks if a user exists by OIDC ID.
 - If not, creates a new user with a random RFID (for development).
 - Ensures the user is registered in Odoo and Steve systems.
-- Returns the up-to-date user object.
+- Returns the up-to-date detailed user object.
 
 **Kind**: inner method of [<code>services/user\_operations</code>](#module_services/user_operations)  
 **Returns**: <code>Promise.&lt;Object&gt;</code> - User object from the database.  
@@ -433,7 +947,6 @@ OIDC configuration for authentication middleware.
 
 - Uses environment variables for secrets and endpoints.
 - Customizes authorization parameters and routes.
-- Handles user session after authentication callback.
 
 <a name="module_utils/queries"></a>
 
@@ -464,6 +977,7 @@ Global database queries
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
   * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
     Promise.&lt;number&gt;</code>
+  * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
 
@@ -608,6 +1122,13 @@ If a `specified_datetime` is provided, it will return the price valid at that ti
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Returns**: <code>Promise.&lt;number&gt;</code> - The current electricity price in cents per kWh.  
+<a name="module_utils/queries..getUsersCount"></a>
+
+### utils/queries~getUsersCount(filters) ⇒ <code>Promise.&lt;number&gt;</code>
+Get total count of users matching the given filters
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;number&gt;</code> - Total count of matching users  
 <a name="module_utils/steve"></a>
 
 ## utils/steve
@@ -720,6 +1241,57 @@ Type definitions
 ## app
 Express app instance.
 
+<a name="SCIMUserHandler"></a>
+
+## SCIMUserHandler
+SCIM User Resource Handler
+Handles CRUD operations for users via SCIM protocol
+
+**Kind**: global class
+
+* [SCIMUserHandler](#SCIMUserHandler)
+    * [.read(request)](#SCIMUserHandler.read) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [.write(resource)](#SCIMUserHandler.write) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [.patch(id, resource)](#SCIMUserHandler.patch) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [.delete(id)](#SCIMUserHandler.delete) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [.toSCIMUser(user)](#SCIMUserHandler.toSCIMUser) ⇒ <code>Object</code>
+
+<a name="SCIMUserHandler.read"></a>
+
+### SCIMUserHandler.read(request) ⇒ <code>Promise.&lt;Object&gt;</code>
+Retrieve users with optional filtering and pagination
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - SCIM response with users  
+<a name="SCIMUserHandler.write"></a>
+
+### SCIMUserHandler.write(resource) ⇒ <code>Promise.&lt;Object&gt;</code>
+NOT TESTED
+Create a new user via SCIM. Should not be used since users are created via OIDC.
+Does not trigger Odoo or SteVe user creation.
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - Created SCIM user  
+<a name="SCIMUserHandler.patch"></a>
+
+### SCIMUserHandler.patch(id, resource) ⇒ <code>Promise.&lt;Object&gt;</code>
+Update an existing user via SCIM
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - Updated SCIM user  
+<a name="SCIMUserHandler.delete"></a>
+
+### SCIMUserHandler.delete(id) ⇒ <code>Promise.&lt;void&gt;</code>
+Delete a user via SCIM
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+<a name="SCIMUserHandler.toSCIMUser"></a>
+
+### SCIMUserHandler.toSCIMUser(user) ⇒ <code>Object</code>
+Convert database user to SCIM user format
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Object</code> - SCIM user object  
 <a name="AppError"></a>
 
 ## AppError
@@ -765,6 +1337,18 @@ This module defines standardized error codes and messages for the application.
 Errors are grouped by category and include codes, HTTP status codes, and messages.
 
 **Kind**: global constant  
+<a name="validateSCIMResource"></a>
+
+## validateSCIMResource(resource, schema, operation)
+Validate SCIM resource using Joi and throw appropriate errors
+
+**Kind**: global function  
+<a name="scimErrorHandler"></a>
+
+## scimErrorHandler()
+SCIM Error Handler Middleware
+
+**Kind**: global function  
 <a name="generateOdooHash"></a>
 
 ## generateOdooHash(message, secret) ⇒ <code>string</code>
@@ -779,6 +1363,15 @@ Generate a cryptographically secure random salt
 
 **Kind**: global function  
 **Returns**: <code>string</code> - - salt string  
+<a name="validateOIDCProperties"></a>
+
+## validateOIDCProperties(req) ⇒ <code>boolean</code>
+
+Validates that the OIDC authentication, most of the checks are done by the OIDC library, but we add some little extra
+checks.
+
+**Kind**: global function  
+**Returns**: <code>boolean</code> - - True if authentication is valid, false otherwise  
 <a name="identifyUser"></a>
 
 ## identifyUser(identifier, options) ⇒ <code>Promise.&lt;Object&gt;</code>
@@ -790,10 +1383,16 @@ Gets a user by either user_id or oauth_id
 
 - <code>ValidationError</code> - If user not found or doesn't meet requirements
 
+<a name="scimAuth"></a>
+
+## scimAuth(req, res, next)
+SCIM HTTP Basic Authentication Middleware
+Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
+
+**Kind**: global function  
 <a name="fmt"></a>
 
 ## fmt(dt, toUTC) ⇒ <code>string</code>
-
 Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)
 
 **Kind**: global function  

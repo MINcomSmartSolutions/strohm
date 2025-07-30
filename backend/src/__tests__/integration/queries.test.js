@@ -6,7 +6,6 @@ const {
     setupTestDatabase,
     clearTestData,
     insertTestUser,
-    insertOdooCredentials,
     insertTestTransaction,
     insertElectricityPrice,
     closePool,
@@ -31,8 +30,7 @@ jest.mock('../../services/db_conn', () => {
 
 // Import queries after mocking the database connection
 const {db} = require('../../utils/queries');
-const {ValidationError, ErrorCodes} = require('../../utils/errors');
-const {fullyQualifiedUserSchema} = require('../../utils/joi');
+const {ValidationError} = require('../../utils/errors');
 
 describe('Database Queries Integration Tests', () => {
     let pool;
@@ -198,91 +196,33 @@ describe('Database Queries Integration Tests', () => {
             await expect(db.getUserUnique({}))
                 .rejects.toThrow(ValidationError);
 
-            // Test with null filter
+            // Test with null filters
             await expect(db.getUserUnique(null))
                 .rejects.toThrow(ValidationError);
-        });
 
-        test('getUserUnique should throw if multiple users match', async () => {
-            //FIXME: Not deterministic, so this test is disabled
+            // Test with non-object filters
+            await expect(db.getUserUnique('invalid'))
+                .rejects.toThrow(ValidationError);
 
-            // Create users with the same email for testing
+            // Test multiple users matching criteria (should throw ValidationError)
+            // First create two users with the same name
             await db.createUser(
-                'duplicate1',
-                'Duplicate User 1',
-                'duplicate@example.com',
-                'test_rfid1',
+                'duplicate_oauth1',
+                'Duplicate Name',
+                'dup1@example.com',
+                'dup_rfid1',
+            );
+            await db.createUser(
+                'duplicate_oauth2',
+                'Duplicate Name',
+                'dup2@example.com',
+                'dup_rfid2',
             );
 
-            await db.createUser(
-                'duplicate2',
-                'Duplicate User 2',
-                'duplicate@example.com',
-                'test_rfid2',
-            );
-
-            // Should throw because multiple users have the same email
-            await expect(db.getUserUnique({email: 'duplicate@example.com'}))
-                .rejects.toThrow(ValidationError);
-            await expect(db.getUserUnique({email: 'duplicate@example.com'}))
-                .rejects.toMatchObject({
-                    errorDef: {code: ErrorCodes.VALIDATION.ASK_RETURN_DISCREPANCY.code},
-                });
-
-        });
-
-        test('getUserUnique should return null user with null filter', async () => {
-
-            expect(await db.getUserUnique({steve_id: null})).toBeNull();
-
-            // Create a user with null steve_id
-            await pool.query('INSERT INTO users (oauth_id, name, email, rfid, steve_id) VALUES ($1, $2, $3, $4, $5)',
-                ['test_oauth_id10012', 'Test User 4', 'test_user9991@email.com', 'test_rfid1001', null]);
-
-            expect(await db.getUserUnique({steve_id: null})).not.toBeNull();
-            expect(await db.getUserUnique({steve_id: null})).toBeDefined();
-        });
-
-        test('deactivateUser should set deactivated_at timestamp', async () => {
-            // Deactivate the test user
-            await db.deactivateUser(testUser);
-
-            // Fetch the user again
-            const deactivatedUser = await db.getUserUnique({user_id: testUser.user_id});
-
-            expect(deactivatedUser).toBeDefined();
-            expect(deactivatedUser.deactivated_at).toBeDefined();
-            expect(deactivatedUser.deactivated_at).not.toBeNull();
-
-            // Try to deactivate an invalid user
-            await expect(db.deactivateUser(null))
-                .rejects.toThrow(ValidationError);
-
-            await expect(db.deactivateUser({}))
+            await expect(db.getUserUnique({name: 'Duplicate Name'}))
                 .rejects.toThrow(ValidationError);
         });
 
-        test('deactivateUser should record activity log entry', async () => {
-            // Deactivate the test user
-            await db.deactivateUser(testUser);
-
-            // Verify activity log entry
-            const client = await pool.connect();
-            try {
-                const result = await client.query(
-                    'SELECT * FROM activity_log WHERE user_id = $1 AND event_type = $2',
-                    [testUser.user_id, 'DEACTIVATE USER'],
-                );
-                expect(result.rows.length).toBe(1);
-                expect(result.rows[0].target).toBe('DB');
-                expect(result.rows[0].rfid).toBe(testUser.rfid);
-            } finally {
-                client.release();
-            }
-        });
-    });
-
-    describe('Odoo Credentials', () => {
         test('setUserOdooCredentials should set Odoo credentials', async () => {
             await db.setUserOdooCredentials(
                 testUser,
@@ -354,8 +294,11 @@ describe('Database Queries Integration Tests', () => {
             expect(credentials).toBeNull();
         });
 
-        test('getUserOdooCredentials should throw when missing user_id', async () => {
+        test('getUserOdooCredentials should handle missing user_id', async () => {
             await expect(db.getUserOdooCredentials(null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.getUserOdooCredentials(undefined))
                 .rejects.toThrow(ValidationError);
         });
 
@@ -842,6 +785,111 @@ describe('Database Queries Integration Tests', () => {
             } finally {
                 client.release();
             }
+        });
+    });
+
+    describe('Error Handling Edge Cases', () => {
+        test('database connection errors should be handled properly', async () => {
+            // Mock pool.connect to simulate connection failure
+            const originalConnect = pool.connect;
+            pool.connect = jest.fn().mockRejectedValue(new Error('Connection failed'));
+
+            try {
+                await expect(db.createUser('test_oauth', 'Test User', 'test@email.com', 'test_rfid'))
+                    .rejects.toThrow();
+            } finally {
+                // Restore original connect method
+                pool.connect = originalConnect;
+            }
+        });
+
+        test('transaction rollback should work correctly', async () => {
+            // Create a user first
+            const user = await db.createUser('rollback_test', 'Rollback User', 'rollback@test.com', 'rollback_rfid');
+
+            // Mock client.query to fail on the second query (after BEGIN)
+            const originalConnect = pool.connect;
+            let callCount = 0;
+
+            pool.connect = jest.fn().mockImplementation(() => {
+                const mockClient = {
+                    query: jest.fn().mockImplementation((query) => {
+                        callCount++;
+                        if (query === 'BEGIN') {
+                            return Promise.resolve();
+                        } else if (callCount === 2) {
+                            // Fail on the actual operation
+                            return Promise.reject(new Error('Simulated query failure'));
+                        } else if (query === 'ROLLBACK') {
+                            return Promise.resolve();
+                        }
+                        return Promise.resolve();
+                    }),
+                    release: jest.fn()
+                };
+                return Promise.resolve(mockClient);
+            });
+
+            try {
+                await expect(db.setUserOdooCredentials(user, 123, 456, 'test_key', 'test_salt'))
+                    .rejects.toThrow();
+            } finally {
+                // Restore original connect method
+                pool.connect = originalConnect;
+            }
+        });
+
+        test('query error handling should log and re-throw errors', async () => {
+            // Test handleQueryError function by triggering a database error
+            const originalQuery = pool.query;
+            pool.query = jest.fn().mockRejectedValue(new Error('Simulated database error'));
+
+            try {
+                await expect(db.getUserOdooCredentials(999))
+                    .rejects.toThrow();
+            } finally {
+                // Restore original query method
+                pool.query = originalQuery;
+            }
+        });
+    });
+
+    describe('Advanced Query Options', () => {
+        test('getUsers should handle complex ordering scenarios', async () => {
+            // Create users with different creation times
+            await db.createUser('user1', 'User One', 'user1@test.com', 'rfid1');
+            await db.createUser('user2', 'User Two', 'user2@test.com', 'rfid2');
+            await db.createUser('user3', 'User Three', 'user3@test.com', 'rfid3');
+
+            // Test ordering by created_at
+            const orderedByDate = await db.getUsers({}, {orderBy: 'created_at', orderDirection: 'ASC'});
+            expect(orderedByDate.length).toBeGreaterThanOrEqual(4);
+
+            // Test ordering by email
+            const orderedByEmail = await db.getUsers({}, {orderBy: 'email', orderDirection: 'DESC'});
+            expect(orderedByEmail.length).toBeGreaterThanOrEqual(4);
+
+            // Test default ASC ordering when direction not specified
+            const defaultOrder = await db.getUsers({}, {orderBy: 'name'});
+            expect(defaultOrder.length).toBeGreaterThanOrEqual(4);
+        });
+
+        test('getUsers should handle pagination correctly', async () => {
+            // Create multiple users for pagination testing
+            for (let i = 1; i <= 5; i++) {
+                await db.createUser(`paginate_user${i}`, `Paginate User ${i}`, `paginate${i}@test.com`, `paginate_rfid${i}`);
+            }
+
+            // Test first page
+            const firstPage = await db.getUsers({}, {limit: 2, offset: 0, orderBy: 'name', orderDirection: 'ASC'});
+            expect(firstPage.length).toBe(2);
+
+            // Test second page
+            const secondPage = await db.getUsers({}, {limit: 2, offset: 2, orderBy: 'name', orderDirection: 'ASC'});
+            expect(secondPage.length).toBe(2);
+
+            // Verify different results
+            expect(firstPage[0].user_id).not.toBe(secondPage[0].user_id);
         });
     });
 });

@@ -31,6 +31,9 @@ const handleQueryError = (error, operation) => {
 
 
 const createUser = async (oauth_id, name, email, rfid) => {
+    //TODO: Only req.oidc can be porided
+
+
     if (!oauth_id || !name || !email || !rfid) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
     }
@@ -344,8 +347,8 @@ const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => 
                 `Failed to insert new key for user ID ${user_id}.`,
             );
         }
-
-        return await client.query('COMMIT');
+        await client.query('COMMIT');
+        return true; // Rotation successful
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'rotateOdooUserKey');
@@ -416,7 +419,7 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
 
     // Validate required parameters
     if (!event_type || !target || !rfid) {
-        logger.warn(`Attempted to record activity log with missing required parameters: ${event_type}, ${target}, ${rfid}`);
+        logger.error(`Attempted to record activity log with missing required parameters: ${event_type}, ${target}, ${rfid}`);
         return;
     }
 
@@ -436,16 +439,17 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
 
     const client = await pool.connect();
     try {
+        logger.info(`Recording activity log: user_id=${user_id}, event_type=${event_type}, target=${target}, rfid=${rfid}, reason=${reason || 'N/A'}`);
         await client.query('BEGIN');
         await client.query(activity_log_query, values);
         await client.query('COMMIT');
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'recordActivityLog');
+        logger.error(`Error recording activity log: ${error.message}`, error)
     } finally {
         client.release();
     }
-};
+}
 
 
 /**
@@ -729,6 +733,7 @@ async function deactivateUser(user) {
         UPDATE users
         SET deactivated_at = now()
         WHERE user_id = $1::integer
+          AND deactivated_at IS NULL
     `;
 
     const client = await pool.connect();
@@ -739,7 +744,6 @@ async function deactivateUser(user) {
             throw new Error('Could not deactivate user');
         }
         await client.query('COMMIT');
-        await recordActivityLog(user.user_id, 'DEACTIVATE USER', 'DB', user.rfid);
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'deactivateUser');
@@ -780,14 +784,114 @@ async function revokeUserOdooCredentials(user) {
     }
 }
 
+/**
+ * Get total count of users matching the given filters
+ * @param {Object} filters - Filter criteria (same format as getUsers)
+ * @returns {Promise<number>} Total count of matching users
+ */
+const getUsersCount = async (filters = {}) => {
+    let whereClause = '';
+    const whereValues = [];
+    let valueIndex = 1;
+
+    if (Object.keys(filters).length > 0) {
+        const conditions = [];
+
+        for (const [key, value] of Object.entries(filters)) {
+            if (value === null) {
+                conditions.push(`${key} IS NULL`);
+            } else {
+                conditions.push(`${key} = $${valueIndex}`);
+                whereValues.push(value);
+                valueIndex++;
+            }
+        }
+
+        whereClause = ' WHERE ' + conditions.join(' AND ');
+    }
+
+    const query = `SELECT COUNT(*) as total
+                   FROM users${whereClause}`;
+
+    try {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(query, whereValues);
+            return parseInt(result.rows[0].total);
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        handleQueryError(error, 'getUsersCount');
+    }
+};
+
 // This function is a placeholder for updating user information.
 //TODO: DO we need to store additional user information in the database?
-async function updateUser(user) {
+async function updateUser(userId, updates) {
+    if (!userId || !updates || Object.keys(updates).length === 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
+    }
+
+    const setClause = [];
+    const values = [];
+    let valueIndex = 1;
+
+    // Build dynamic SET clause based on provided updates
+    for (const [key, value] of Object.entries(updates)) {
+        if (value !== undefined) {
+            setClause.push(`${key} = $${valueIndex}`);
+            values.push(value);
+            valueIndex++;
+        }
+    }
+
+    if (setClause.length === 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
+    }
+
+    // Add updated_at timestamp
+    setClause.push(`updated_at = NOW()`);
+
+    // Add user ID as final parameter
+    values.push(userId);
+    const userIdParam = `$${valueIndex}`;
+
+    const query = `
+        UPDATE users
+        SET ${setClause.join(', ')}
+        WHERE user_id = ${userIdParam}
+        RETURNING *
+    `;
+
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query(query, values);
+
+            if (result.rows.length === 0) {
+                throw new ValidationError('User not found', ErrorCodes.USER_NOT_FOUND);
+            }
+
+            await client.query('COMMIT');
+            logger.info(`User ${userId} updated successfully`);
+            return result.rows[0];
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        handleQueryError(error, 'updateUser');
+    }
 }
 
 
 module.exports = {
     db: {
+        handleQueryError,
         createUser,
         getUsers,
         getUserUnique,
@@ -803,5 +907,7 @@ module.exports = {
         getCurrentElectricityPrice,
         deactivateUser,
         revokeUserOdooCredentials,
+        getUsersCount,
+        updateUser,
     },
 };
