@@ -38,6 +38,7 @@ const ODOO_CONFIG = {
     URL: `http://${process.env.ODOO_HOST}:${process.env.ODOO_PORT}`,
     EXTERNAL_HOST: process.env.ODOO_EXTERNAL_HOST,
     EXTERNAL_PORT: process.env.ODOO_EXTERNAL_PORT,
+    //TODO: Check EXTERNAL_URL
     EXTERNAL_URL: process.env.NODE_ENV === 'production' ? `https://${process.env.ODOO_EXTERNAL_HOST}` : `http://${process.env.ODOO_EXTERNAL_HOST}:${process.env.ODOO_EXTERNAL_PORT}`,
     API_SECRET: process.env.ODOO_API_SECRET,
     USER_CREATION_URI: '/internal/user/create',

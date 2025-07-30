@@ -31,6 +31,9 @@ const handleQueryError = (error, operation) => {
 
 
 const createUser = async (oauth_id, name, email, rfid) => {
+    //TODO: Only req.oidc can be porided
+
+
     if (!oauth_id || !name || !email || !rfid) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
     }
@@ -416,7 +419,7 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
 
     // Validate required parameters
     if (!event_type || !target || !rfid) {
-        logger.warn(`Attempted to record activity log with missing required parameters: ${event_type}, ${target}, ${rfid}`);
+        logger.error(`Attempted to record activity log with missing required parameters: ${event_type}, ${target}, ${rfid}`);
         return;
     }
 
@@ -436,16 +439,17 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
 
     const client = await pool.connect();
     try {
+        logger.info(`Recording activity log: user_id=${user_id}, event_type=${event_type}, target=${target}, rfid=${rfid}, reason=${reason || 'N/A'}`);
         await client.query('BEGIN');
         await client.query(activity_log_query, values);
         await client.query('COMMIT');
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'recordActivityLog');
+        logger.error(`Error recording activity log: ${error.message}`, error)
     } finally {
         client.release();
     }
-};
+}
 
 
 /**
@@ -887,6 +891,7 @@ async function updateUser(userId, updates) {
 
 module.exports = {
     db: {
+        handleQueryError,
         createUser,
         getUsers,
         getUserUnique,

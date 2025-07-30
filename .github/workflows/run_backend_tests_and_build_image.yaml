@@ -1,19 +1,18 @@
-name: Backend Tests and Build Image
+name: Run Backend Tests and Build Image
 
 on:
   push:
     branches: [ main, master ]
     paths:
       - 'backend/**'
-      - '.github/workflows/run_backend_tests_and_build_image.yaml'
-  pull_request:
-    branches: [ main, master ]
+  pull_request_review:
+    types: [ submitted ]
     paths:
       - 'backend/**'
-      - '.github/workflows/run_backend_tests_and_build_image.yaml'
 
 jobs:
   test:
+    if: github.event.review.state == 'approved'
     name: Run Backend Tests
     runs-on: ubuntu-latest
 

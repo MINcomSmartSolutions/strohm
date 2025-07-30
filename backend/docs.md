@@ -79,6 +79,10 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 ## Classes
 
 <dl>
+<dt><a href="#SCIMUserHandler">SCIMUserHandler</a></dt>
+<dd><p>SCIM User Resource Handler
+Handles CRUD operations for users via SCIM protocol</p>
+</dd>
 <dt><a href="#AppError">AppError</a></dt>
 <dd><p>Base class for custom application errors</p>
 </dd>
@@ -105,6 +109,12 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 ## Functions
 
 <dl>
+<dt><a href="#validateSCIMResource">validateSCIMResource(resource, schema, operation)</a></dt>
+<dd><p>Validate SCIM resource using Joi and throw appropriate errors</p>
+</dd>
+<dt><a href="#scimErrorHandler">scimErrorHandler()</a></dt>
+<dd><p>SCIM Error Handler Middleware</p>
+</dd>
 <dt><a href="#generateOdooHash">generateOdooHash(message, secret)</a> ⇒ <code>string</code></dt>
 <dd><p>Generate HMAC signature matching Odoo implementation</p>
 </dd>
@@ -113,6 +123,10 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 </dd>
 <dt><a href="#identifyUser">identifyUser(identifier, options)</a> ⇒ <code>Promise.&lt;Object&gt;</code></dt>
 <dd><p>Gets a user by either user_id or oauth_id</p>
+</dd>
+<dt><a href="#scimAuth">scimAuth(req, res, next)</a></dt>
+<dd><p>SCIM HTTP Basic Authentication Middleware
+Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617</p>
 </dd>
 <dt><a href="#fmt">fmt(dt, toUTC)</a> ⇒ <code>string</code></dt>
 <dd><p>Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)</p>
@@ -128,13 +142,11 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <a name="module_controllers/auth"></a>
 
 ## controllers/auth
-
 Controller for handling user authentication and logout.
 
 <a name="module_controllers/odoo"></a>
 
 ## controllers/odoo
-
 Controller for handling Odoo internal user sync webhooks.
 
 <a name="module_services/cron"></a>
@@ -287,16 +299,16 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 
 
 * [services/steve_transactions](#module_services/steve_transactions)
-  * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
-    Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-  * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;{maxStop: DateTime,
-    processedCount: number}&gt;</code>
-  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-    high\_water\_mark: DateTime}&gt;</code>
-  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark:
-    DateTime}&gt;</code>
-  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
-    high\_water\_mark: DateTime}&gt;</code>
+    * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
+      Promise.&lt;Array.&lt;Object&gt;&gt;</code>
+    * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+      processedCount: number}&gt;</code>
+    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
+      high\_water\_mark: DateTime}&gt;</code>
 
 <a name="module_services/steve_transactions..fetchSince"></a>
 
@@ -352,10 +364,10 @@ All functions validate input and handle errors using custom error types.
 
 
 * [services/steve_user](#module_services/steve_user)
-  * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
-    Promise.&lt;Object&gt;</code>
-  * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
-    Array.&lt;Object&gt;\|null)&gt;</code>
+    * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
+      Promise.&lt;Object&gt;</code>
+    * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(
+      Array.&lt;Object&gt;\|null)&gt;</code>
     * [~blockSteveUser(user)](#module_services/steve_user..blockSteveUser)
     * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser)
 
@@ -464,6 +476,7 @@ Global database queries
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
   * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
     Promise.&lt;number&gt;</code>
+  * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
 
@@ -608,6 +621,14 @@ If a `specified_datetime` is provided, it will return the price valid at that ti
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Returns**: <code>Promise.&lt;number&gt;</code> - The current electricity price in cents per kWh.  
+<a name="module_utils/queries..getUsersCount"></a>
+
+### utils/queries~getUsersCount(filters) ⇒ <code>Promise.&lt;number&gt;</code>
+
+Get total count of users matching the given filters
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;number&gt;</code> - Total count of matching users  
 <a name="module_utils/steve"></a>
 
 ## utils/steve
@@ -720,6 +741,63 @@ Type definitions
 ## app
 Express app instance.
 
+<a name="SCIMUserHandler"></a>
+
+## SCIMUserHandler
+
+SCIM User Resource Handler
+Handles CRUD operations for users via SCIM protocol
+
+**Kind**: global class
+
+* [SCIMUserHandler](#SCIMUserHandler)
+    * [.read(request)](#SCIMUserHandler.read) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [.write(resource)](#SCIMUserHandler.write) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [.patch(id, resource)](#SCIMUserHandler.patch) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [.delete(id)](#SCIMUserHandler.delete) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [.toSCIMUser(user)](#SCIMUserHandler.toSCIMUser) ⇒ <code>Object</code>
+
+<a name="SCIMUserHandler.read"></a>
+
+### SCIMUserHandler.read(request) ⇒ <code>Promise.&lt;Object&gt;</code>
+
+Retrieve users with optional filtering and pagination
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - SCIM response with users  
+<a name="SCIMUserHandler.write"></a>
+
+### SCIMUserHandler.write(resource) ⇒ <code>Promise.&lt;Object&gt;</code>
+
+NOT TESTED
+Create a new user via SCIM. Should not be used since users are created via OIDC.
+Does not trigger Odoo or SteVe user creation.
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - Created SCIM user  
+<a name="SCIMUserHandler.patch"></a>
+
+### SCIMUserHandler.patch(id, resource) ⇒ <code>Promise.&lt;Object&gt;</code>
+
+Update an existing user via SCIM
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - Updated SCIM user  
+<a name="SCIMUserHandler.delete"></a>
+
+### SCIMUserHandler.delete(id) ⇒ <code>Promise.&lt;void&gt;</code>
+
+Delete a user via SCIM
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+<a name="SCIMUserHandler.toSCIMUser"></a>
+
+### SCIMUserHandler.toSCIMUser(user) ⇒ <code>Object</code>
+
+Convert database user to SCIM user format
+
+**Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
+**Returns**: <code>Object</code> - SCIM user object  
 <a name="AppError"></a>
 
 ## AppError
@@ -765,6 +843,20 @@ This module defines standardized error codes and messages for the application.
 Errors are grouped by category and include codes, HTTP status codes, and messages.
 
 **Kind**: global constant  
+<a name="validateSCIMResource"></a>
+
+## validateSCIMResource(resource, schema, operation)
+
+Validate SCIM resource using Joi and throw appropriate errors
+
+**Kind**: global function  
+<a name="scimErrorHandler"></a>
+
+## scimErrorHandler()
+
+SCIM Error Handler Middleware
+
+**Kind**: global function  
 <a name="generateOdooHash"></a>
 
 ## generateOdooHash(message, secret) ⇒ <code>string</code>
@@ -790,10 +882,17 @@ Gets a user by either user_id or oauth_id
 
 - <code>ValidationError</code> - If user not found or doesn't meet requirements
 
+<a name="scimAuth"></a>
+
+## scimAuth(req, res, next)
+
+SCIM HTTP Basic Authentication Middleware
+Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
+
+**Kind**: global function  
 <a name="fmt"></a>
 
 ## fmt(dt, toUTC) ⇒ <code>string</code>
-
 Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)
 
 **Kind**: global function  

@@ -23,6 +23,8 @@ const {morganMiddleware} = require('./services/logger');
 const auth_controller = require("./controllers/auth");
 const odoo_controller = require("./controllers/odoo");
 const scim_controller = require("./controllers/scim");
+const consent_controller = require("./controllers/consent");
+const {requireConsent} = require("./middlewares/consent");
 
 Settings.defaultZoneName = 'utc';
 
@@ -66,14 +68,21 @@ app.use(morganMiddleware); // Custom logger middleware for request logging
 app.use(express.static('public'));
 
 
+// Helps prevent HTTP Parameter Pollution attacks
 // noinspection JSCheckFunctionSignatures
 app.use(hpp());
+
+// Helmet helps secure Express apps by setting various HTTP headers
+// See: https://helmetjs.github.io/
 app.use(helmet());
 
 
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 // See: https://github.com/auth0/express-openid-connect
 app.use(auth(oidc_config));
+
+// Add consent middleware after OIDC auth but before protected routes
+app.use(requireConsent);
 
 
 app.get('/health', (req, res) => {
@@ -113,6 +122,8 @@ app.get('/welcome', async (req, res) => {
 });
 
 app.use(auth_controller);
+
+app.use(consent_controller);
 
 app.use(odoo_controller);
 

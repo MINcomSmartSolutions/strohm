@@ -364,7 +364,6 @@ async function checkValidPaymentMethod(user) {
                 throw new ResponseError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
             }
 
-            logger.info('Payment method check result: ' + result);
             return (result === 1);
         } else {
             logger.error(`Error checking payment method: ${response.status}, json: ${JSON.stringify(response.data)}`);
