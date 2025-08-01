@@ -168,22 +168,6 @@ const hasValidConsent = async (userId) => {
  * - optional = false (mandatory consent only)
  * - ORDER BY created_at DESC (most recent first)
  *
- * @example
- * const hasLatest = await hasLatestConsent(123);
- * if (!hasLatest) {
- *   // Redirect user to consent page
- *   res.redirect('/consent');
- * }
- *
- * @example
- * // Used in middleware to enforce latest consent
- * if (req.session.user) {
- *   const hasConsent = await hasLatestConsent(req.session.user.user_id);
- *   if (!hasConsent) {
- *     return res.redirect('/consent');
- *   }
- * }
- *
  * @see {@link hasValidConsent} For checking any valid consent (not necessarily latest)
  */
 const hasLatestConsent = async (userId) => {
