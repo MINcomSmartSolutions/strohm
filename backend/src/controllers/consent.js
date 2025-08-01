@@ -27,13 +27,20 @@
 
 const express = require('express');
 const consent_controller = express.Router();
-const {getActiveConsentRevision, recordConsent, withdrawConsent, hasLatestConsent} = require('../services/consent');
+const {
+    getActiveConsentRevision,
+    recordConsent,
+    withdrawConsent,
+    hasLatestConsent,
+    createConsentRevision
+} = require('../services/consent');
 const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('../utils/errors');
 const logger = require('../services/logger');
 const fs = require('fs');
 const path = require('path');
 const {userOperations} = require("../services/user_operations");
 const {validateOIDCProperties} = require("../helpers/auth");
+const {db} = require('../utils/queries');
 
 
 /**
@@ -78,13 +85,34 @@ const {validateOIDCProperties} = require("../helpers/auth");
  */
 consent_controller.get('/consent', async (req, res) => {
     try {
-        logger.debug('Rendering consent page for user:', req.session.user ? req.session.user.user_id : 'not logged in');
+        // In this point either we need to have a valid user session or OIDC properties
+        // If neither is present, redirect to login
+        if (!req.session.user || !req.oidc) {
+            logger.warn('No user session found, redirecting to login');
+            return res.redirect('/login');
+        }
 
         if (!await validateOIDCProperties(req)) {
             throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
         }
 
-        const activeConsent = await getActiveConsentRevision();
+        // Get user info from OIDC session (now validated)
+        const oidcUser = req.oidc.user;
+
+        let user = await db.getUserUnique({oauth_id: oidcUser.sub});
+
+        // Check if user already has latest consent
+        if (user) {
+            if (req.session.user) {
+                const hasConsent = await hasLatestConsent(req.session.user.user_id);
+                if (hasConsent) {
+                    logger.debug(`User ${req.session.user.user_id} has already latest consent`);
+                    return res.redirect('/');
+                }
+            }
+        }
+
+        let activeConsent = await getActiveConsentRevision();
         if (!activeConsent) {
             logger.error('No active consent revision found');
             if (process.env.NODE_ENV !== 'production') {
@@ -93,29 +121,15 @@ consent_controller.get('/consent', async (req, res) => {
                     "Initial consent created automatically, for testing purposes",
                     "https://min2sol.com/datenschutz/",
                     "https://min2sol.com/datenschutz/");
+                activeConsent = await getActiveConsentRevision();
+                if (!activeConsent) {
+                    return res.redirect('/logout')
+                }
             } else {
                 throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
             }
         }
-
-        // Get user info from OIDC session (now validated)
-        const oidcUser = req.oidc.user;
-
-        // Check if user already exists
-        const {db} = require('../utils/queries');
-        let user = await db.getUserUnique({oauth_id: oidcUser.sub});
-
-
-        // Check if user already has latest consent
-        if (user) {
-            if (req.session.user) {
-                const hasConsent = await hasLatestConsent(req.session.user.user_id);
-                if (hasConsent) {
-                    return res.redirect('/');
-                }
-            }
-        }
-
+        logger.debug('Rendering consent page for user:', req.session.user ? req.session.user.user_id : 'not logged in');
 
         // Read the HTML template file
         const templatePath = path.join(__dirname, '../../public/consent/consent.html');
@@ -124,6 +138,7 @@ consent_controller.get('/consent', async (req, res) => {
         // Replace placeholders with dynamic content
         htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, activeConsent.title);
         htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, activeConsent.content.replace(/\n/g, '<br>'));
+        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, activeConsent.version);
 
         // Generate links section if URLs are provided
         let linksSection = '';
@@ -205,48 +220,86 @@ consent_controller.post('/consent', async (req, res) => {
             throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
         }
 
-        const {consent_given} = req.body;
+        const {consent_given, consent_version} = req.body;
 
         if (!consent_given) {
-            return res.status(400).send(`
-                <script>
-                    alert('Sie müssen die Bedingungen akzeptieren, um fortzufahren.');
-                    window.history.back();
-                </script>
-            `);
-        }
-
-        const activeConsent = await getActiveConsentRevision();
-        if (!activeConsent) {
-            logger.error('No active consent revision found during submission');
-            throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
+            return res.redirect('/logout')
         }
 
         // Get user info from OIDC session (now validated)
         const oidcUser = req.oidc.user;
 
-        // Check if user already exists
+        // Create or get user
         const user = await userOperations(oidcUser);
+
+        const hasConsent = await hasLatestConsent(user.user_id);
+        if (hasConsent) {
+            logger.info(`User ${user.user_id} already has latest consent, redirecting to home page`);
+            return res.redirect('/');
+        }
+
+        let activeConsent = await getActiveConsentRevision();
+        if (!activeConsent) {
+            logger.error('No active consent revision found');
+            if (process.env.NODE_ENV !== 'production') {
+                await createConsentRevision("0.1.1",
+                    "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung",
+                    "Initial consent created automatically, for testing purposes",
+                    "https://min2sol.com/datenschutz/",
+                    "https://min2sol.com/datenschutz/");
+                activeConsent = await getActiveConsentRevision();
+                if (!activeConsent) {
+                    return res.redirect('/logout')
+                }
+            } else {
+                throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
+            }
+        }
+
+        // Verify that the consent version matches the current active version
+        if (consent_version && consent_version !== activeConsent.version) {
+            logger.warn(`Consent version mismatch: submitted ${consent_version}, current ${activeConsent.version}`);
+            return res.status(400).send(`
+                <script>
+                    alert('Die Einverständniserklärung wurde aktualisiert. Bitte laden Sie die Seite neu.');
+                    window.location.reload();
+                </script>
+            `);
+        }
 
         // Record the consent AFTER user creation (if new user) or for existing user
         const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
             (req.connection.socket ? req.connection.socket.remoteAddress : null);
         const userAgent = req.get('User-Agent');
 
-        await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
+        const consentRecord = await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
 
-        // Store user in session
-        req.session.user = user;
-        req.session.save((err) => {
-            if (err) {
-                throw new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED, null, err);
-            }
+        // Store user in session with consent info
+        req.session.user = {
+            ...user,
+            consent_version: activeConsent.version,
+            consent_granted_at: consentRecord.consented_at
+        };
+
+        // Use promise-based session save for better error handling
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) {
+                    reject(new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED, null, err));
+                } else {
+                    resolve();
+                }
+            });
         });
 
-        logger.info(`Consent recorded and user session created for user ${user.user_id}`);
+        logger.info(`Consent v${activeConsent.version} recorded and user session created for user ${user.user_id}`);
 
-        // Redirect to home page
-        res.redirect('/');
+        // Check for redirect URL in session or query params
+        const redirectUrl = req.session.returnTo || req.query.returnTo || '/';
+        delete req.session.returnTo; // Clear the return URL after use
+
+        // Redirect to the intended destination
+        res.redirect(redirectUrl);
     } catch (error) {
         logger.error('Error processing consent submission:', error);
         appErrorHandler(error, res);

@@ -9,6 +9,9 @@
 <body>
 <div class="consent-container">
     <h1>{{TITLE}}</h1>
+    <div class="version-info">
+        <small>Version: {{VERSION}}</small>
+    </div>
 
     <div class="consent-content">
         {{CONTENT}}
@@ -16,6 +19,7 @@
 
 
     <form action="/consent" id="consentForm" method="POST">
+        <input name="consent_version" type="hidden" value="{{VERSION}}">
         <div class="checkbox-group">
             <input id="consent_checkbox" name="consent_given" required type="checkbox">
             <label for="consent_checkbox">
@@ -45,4 +49,3 @@
 <script src="/consent/consent.js"></script>
 </body>
 </html>
-
