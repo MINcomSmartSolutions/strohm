@@ -459,6 +459,7 @@ const getUserConsentHistory = async (userId) => {
  * @param {string|null} [privacyPolicyUrl=null] - URL to privacy policy document
  * @param {string|null} [termsUrl=null] - URL to terms of service document
  * @param {Date|null} [expiresAt=null] - Optional expiration date for the revision
+ * @param {boolean} [optional=false] - Whether this revision is optional (default false)
  * @returns {Promise<Object>} The created consent revision record
  * @returns {number} returns.id - Unique identifier for the new revision
  * @returns {string} returns.version - Version identifier
@@ -484,36 +485,8 @@ const getUserConsentHistory = async (userId) => {
  * revision is active at any given time, maintaining consistency for user consent
  * validation throughout the application.
  *
- * @example
- * const newRevision = await createConsentRevision(
- *   "3.0.0",
- *   "Updated Data Processing Consent",
- *   "By using this service, you agree to our updated terms...",
- *   "https://example.com/privacy-v3",
- *   "https://example.com/terms-v3",
- *   new Date('2026-12-31')  // Optional expiration
- * );
- * console.log(`Created revision ${newRevision.version} with ID ${newRevision.id}`);
- *
- * @example
- * // Create revision without expiration or external URLs
- * const revision = await createConsentRevision(
- *   "2.1.1",
- *   "Minor Update to Consent",
- *   "Updated consent with minor clarifications..."
- * );
- *
- * @admin
- * **Administrative Use**: This function is typically used by administrators
- * or automated systems to deploy new consent versions. Consider implementing
- * proper authorization checks before calling this function in production.
- *
- * @versioning
- * **Version Strategy**: Consider using semantic versioning (MAJOR.MINOR.PATCH)
- * for consent revisions to clearly communicate the significance of changes
- * to both users and administrators.
  */
-const createConsentRevision = async (version, title, content, privacyPolicyUrl = null, termsUrl = null, expiresAt = null) => {
+const createConsentRevision = async (version, title, content, privacyPolicyUrl = null, termsUrl = null, expiresAt = null, optional = false) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -522,10 +495,10 @@ const createConsentRevision = async (version, title, content, privacyPolicyUrl =
         await client.query('UPDATE consent_revisions SET is_active = false WHERE is_active = true');
 
         const result = await client.query(`
-            INSERT INTO consent_revisions (version, title, content, privacy_policy_url, terms_url, expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active
-        `, [version, title, content, privacyPolicyUrl, termsUrl, expiresAt]);
+            INSERT INTO consent_revisions (version, title, content, privacy_policy_url, terms_url, expires_at, optional)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active, optional
+        `, [version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optional]);
 
         await client.query('COMMIT');
         logger.info(`New consent revision created: ${version}`);

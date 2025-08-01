@@ -339,6 +339,7 @@ describe('Consent Service', () => {
         const privacyPolicyUrl = 'https://example.com/privacy';
         const termsUrl = 'https://example.com/terms';
         const expiresAt = new Date('2026-01-01');
+        const optinal = false;
 
         it('should successfully create new consent revision with all parameters', async () => {
             const mockRevision = {
@@ -350,7 +351,8 @@ describe('Consent Service', () => {
                 terms_url: termsUrl,
                 created_at: '2025-01-01T00:00:00Z',
                 expires_at: expiresAt,
-                is_active: true
+                is_active: true,
+                optinal: false
             };
 
             mockClient.query
@@ -359,7 +361,7 @@ describe('Consent Service', () => {
                 .mockResolvedValueOnce({rows: [mockRevision]}) // INSERT new revision
                 .mockResolvedValueOnce(); // COMMIT
 
-            const result = await createConsentRevision(version, title, content, privacyPolicyUrl, termsUrl, expiresAt);
+            const result = await createConsentRevision(version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optinal);
 
             expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
             expect(mockClient.query).toHaveBeenCalledWith(
@@ -367,7 +369,7 @@ describe('Consent Service', () => {
             );
             expect(mockClient.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO consent_revisions'),
-                [version, title, content, privacyPolicyUrl, termsUrl, expiresAt]
+                [version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optinal]
             );
             expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
             expect(result).toEqual(mockRevision);
@@ -385,7 +387,8 @@ describe('Consent Service', () => {
                 terms_url: null,
                 created_at: '2025-01-01T00:00:00Z',
                 expires_at: null,
-                is_active: true
+                is_active: true,
+                optinal: false
             };
 
             mockClient.query
@@ -398,7 +401,7 @@ describe('Consent Service', () => {
 
             expect(mockClient.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO consent_revisions'),
-                [version, title, content, null, null, null]
+                [version, title, content, null, null, null, false]
             );
             expect(result).toEqual(mockRevision);
         });

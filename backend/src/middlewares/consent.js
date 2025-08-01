@@ -20,7 +20,7 @@
  * @see {@link module:controllers/consent} For consent page handling
  */
 
-const {getActiveConsentRevision, hasLatestConsent} = require('../services/consent');
+const {getActiveConsentRevision, hasLatestConsent, createConsentRevision} = require('../services/consent');
 const logger = require('../services/logger');
 const {db} = require("../utils/queries");
 const {userOperations} = require("../services/user_operations");
@@ -103,10 +103,19 @@ const requireConsent = async (req, res, next) => {
         }
 
         // Check if there's an active consent revision
-        const activeConsent = await getActiveConsentRevision();
+        let activeConsent = await getActiveConsentRevision();
         if (!activeConsent) {
-            logger.warn('No active consent revision found - allowing access without consent check');
-            return next();
+            logger.warn('No active consent revision found');
+            if (process.env.NODE_ENV !== 'production') {
+                await createConsentRevision("0.1.0", "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung", "Initial consent created automatically, for testing purposes", "https://min2sol.com/datenschutz/", "https://min2sol.com/datenschutz/");
+                activeConsent = await getActiveConsentRevision();
+                if (activeConsent) {
+                    logger.info('Created initial consent revision for testing purposes');
+                }
+            } else {
+                logger.warn('Allowing access without consent check');
+                return next();
+            }
         }
 
         if (!await validateOIDCProperties(req)) {

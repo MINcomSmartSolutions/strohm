@@ -87,7 +87,15 @@ consent_controller.get('/consent', async (req, res) => {
         const activeConsent = await getActiveConsentRevision();
         if (!activeConsent) {
             logger.error('No active consent revision found');
-            throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
+            if (process.env.NODE_ENV !== 'production') {
+                await createConsentRevision("0.1.1",
+                    "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung",
+                    "Initial consent created automatically, for testing purposes",
+                    "https://min2sol.com/datenschutz/",
+                    "https://min2sol.com/datenschutz/");
+            } else {
+                throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
+            }
         }
 
         // Get user info from OIDC session (now validated)
