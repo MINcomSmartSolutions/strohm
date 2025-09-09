@@ -154,22 +154,14 @@ jobs:
         run: |
           npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --verbose --coverage --coverageReporters=text --coverageReporters=lcov
 
-      - name: Archive test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-node-${{ matrix.node-version }}
-          path: |
-            backend/coverage/
-            backend/logs/
-
       - name: Comment backend coverage
         if: github.event.pull_request
-        uses: adamsocrat/jest-lcov-reporter@v2.1
+        uses: zgosalvez/github-actions-report-lcov@v4
         with:
-          name: Backend Coverage
+          coverage-files: coverage/lcov.info
+          artifact-name: backend-coverage-report
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          lcov-file: ./backend/coverage/lcov.info
+          working-directory: backend
           update-comment: true
 
   build:
