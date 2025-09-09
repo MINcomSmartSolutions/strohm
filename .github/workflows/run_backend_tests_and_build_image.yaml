@@ -154,6 +154,10 @@ jobs:
         run: |
           npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --coverage --coverageReporters=text --coverageReporters=lcov
 
+      - name: Setup LCOV
+        if: github.event.pull_request
+        uses: hrishikesh-kadam/setup-lcov@v1
+
       - name: Comment backend coverage
         if: github.event.pull_request
         uses: zgosalvez/github-actions-report-lcov@v4
