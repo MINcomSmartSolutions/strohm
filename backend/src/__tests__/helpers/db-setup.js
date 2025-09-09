@@ -53,7 +53,7 @@ const clearTestData = async (pool) => {
     try {
         await client.query('BEGIN');
 
-        // Truncate all tables (adjust table names as needed based on your schema)
+        // Truncate all tables
         await client.query(`
       TRUNCATE 
         users, 
