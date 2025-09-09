@@ -162,7 +162,8 @@ jobs:
         if: github.event.pull_request
         uses: zgosalvez/github-actions-report-lcov@v4
         with:
-          coverage-files: ./backend/coverage/lcov*.info
+          working-directory: ./backend
+          coverage-files: coverage/lcov*.info
           artifact-name: backend-coverage-report
           github-token: ${{ secrets.GITHUB_TOKEN }}
           update-comment: true
