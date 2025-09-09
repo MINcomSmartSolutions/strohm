@@ -28,7 +28,7 @@
 
 const pool = require('./db_conn');
 const logger = require('./logger');
-const {db} = require("../utils/queries");
+const {db} = require('#utils/queries');
 
 
 /**

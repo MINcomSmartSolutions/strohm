@@ -3,8 +3,8 @@
  * @file Helper functions for authentication and security.
  */
 const crypto = require('crypto');
-const {ValidationError, ErrorCodes} = require('../utils/errors');
-const logger = require('../services/logger');
+const {ValidationError, ErrorCodes} = require('#utils/errors');
+const logger = require('#services/logger');
 
 
 /**

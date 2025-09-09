@@ -9,13 +9,13 @@
 const express = require('express');
 const scim_controller = express.Router();
 const SCIMMY = require("scimmy");
-const logger = require('../services/logger');
-const {db} = require('../utils/queries');
-const {userOperations} = require('../services/user_operations');
-const {AuthError, ValidationError, ErrorCodes} = require('../utils/errors');
+const logger = require('#services/logger');
+const {db} = require('#utils/queries');
+const {userOperations} = require('#services/user_operations');
+const {AuthError, ValidationError, ErrorCodes} = require('#utils/errors');
 const Joi = require('joi');
-const {blockSteveUser} = require("../services/steve_user");
-const {scimAuth} = require('../middlewares/auth');
+const {blockSteveUser} = require('#services/steve_user');
+const {scimAuth} = require('#middlewares/auth');
 
 
 // Apply SCIM authentication middleware to all SCIM routes

@@ -6,8 +6,8 @@
  */
 
 
-const logger = require('../services/logger');
-const pool = require('../services/db_conn');
+const logger = require('#services/logger');
+const pool = require('#services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');

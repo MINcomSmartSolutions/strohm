@@ -10,13 +10,13 @@ const {
     insertElectricityPrice,
     closePool,
     teardownTestEnvironment,
-} = require('../helpers/db-setup');
+} = require('#test_helpers/db-setup');
 
 // Create a mock pool that will be properly initialized in beforeAll
 let mockPool;
 
 // Override database connection with test connection
-jest.mock('../../services/db_conn', () => {
+jest.mock('#services/db_conn', () => {
     // Return a proxy object that will be replaced with the real pool once it's ready
     return new Proxy({}, {
         get: (target, prop) => {
@@ -29,8 +29,8 @@ jest.mock('../../services/db_conn', () => {
 });
 
 // Import queries after mocking the database connection
-const {db} = require('../../utils/queries');
-const {ValidationError} = require('../../utils/errors');
+const {db} = require('#utils/queries');
+const {ValidationError} = require('#utils/errors');
 
 describe('Database Queries Integration Tests', () => {
     let pool;

@@ -6,12 +6,12 @@
  */
 
 
-const {createOdooUser, checkValidPaymentMethod} = require('./odoo');
-const {db} = require('../utils/queries');
+const {createOdooUser} = require('./odoo');
+const {db} = require('#utils/queries');
 const {createSteveUser} = require('./steve_user');
-const logger = require('../services/logger');
-const {AuthError, ErrorCodes} = require('../utils/errors');
-const {validateUser} = require("../utils/joi");
+const logger = require('#services/logger');
+const {AuthError, ErrorCodes} = require('#utils/errors');
+const {validateUser} = require('#utils/joi');
 
 /**
  * Handles user creation and linking with external systems.

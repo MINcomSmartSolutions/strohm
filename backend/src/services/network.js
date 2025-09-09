@@ -8,7 +8,7 @@
  */
 const axios = require('axios');
 const logger = require('./logger');
-const {STEVE_CONFIG, ODOO_CONFIG} = require('../config');
+const {STEVE_CONFIG, ODOO_CONFIG} = require('#config');
 
 
 

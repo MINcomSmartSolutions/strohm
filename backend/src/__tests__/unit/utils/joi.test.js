@@ -1,13 +1,54 @@
-const Joi = require('joi');
 const {
     userSchema,
     fullyQualifiedUserSchema,
     steveUserSchema,
     steveTransactionSchema,
     dbTransactionSchema,
-} = require('../../../utils/joi');
+} = require('#utils/joi');
 
+const {
+    setupTestDatabase,
+    clearTestData,
+    insertTestUser,
+    closePool,
+    teardownTestEnvironment,
+} = require('#test_helpers/db-setup');
+
+// Create a mock pool that will be properly initialized in beforeAll
+let mockPool;
+
+// Override database connection with test connection
+jest.mock('#services/db_conn', () => {
+    // Return a proxy object that will be replaced with the real pool once it's ready
+    return new Proxy({}, {
+        get: (target, prop) => {
+            if (!mockPool) {
+                throw new Error('Test database not initialized yet');
+            }
+            return mockPool[prop];
+        },
+    });
+});
 describe('Joi Validation Schemas', () => {
+    let pool;
+    let testUser;
+
+    beforeAll(async () => {
+        // Initialize the database and assign the pool to our mockPool
+        pool = await setupTestDatabase();
+        mockPool = pool;
+    });
+
+    beforeEach(async () => {
+        await clearTestData(pool);
+        testUser = await insertTestUser(pool);
+    });
+
+    afterAll(async () => {
+        await closePool(pool);
+        await teardownTestEnvironment();
+    });
+
     describe('userSchema', () => {
         it('should validate a valid user', () => {
             const validUser = {

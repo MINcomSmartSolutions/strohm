@@ -6,17 +6,17 @@ const {
     getSteveUser,
     blockSteveUser,
     unblockSteveUser,
-} = require('../../../services/steve_user');
-const {steveAxios} = require('../../../services/network');
-const {db} = require('../../../utils/queries');
-const {validateSteveUser} = require('../../../utils/steve');
-const {ValidationError, SystemError, ErrorCodes} = require('../../../utils/errors');
-const {STEVE_CONFIG} = require('../../../config');
+} = require('#services/steve_user');
+const {steveAxios} = require('#services/network');
+const {db} = require('#utils/queries');
+const {validateSteveUser} = require('#utils/steve');
+const {ValidationError, SystemError, ErrorCodes} = require('#utils/errors');
+const {STEVE_CONFIG} = require('#config');
 
 // TODO: Needs reviewing
 
 // Mock dependencies
-jest.mock('../../../services/network', () => ({
+jest.mock('#services/network', () => ({
     steveAxios: {
         post: jest.fn(),
         get: jest.fn(),
@@ -24,18 +24,18 @@ jest.mock('../../../services/network', () => ({
     },
 }));
 
-jest.mock('../../../utils/queries', () => ({
+jest.mock('#utils/queries', () => ({
     db: {
         setSteveUserParamaters: jest.fn(),
         recordActivityLog: jest.fn(),
     },
 }));
 
-jest.mock('../../../utils/steve', () => ({
+jest.mock('#utils/steve', () => ({
     validateSteveUser: jest.fn(),
 }));
 
-jest.mock('../../../config', () => ({
+jest.mock('#config', () => ({
     STEVE_CONFIG: {
         OCPP_TAGS_URI: '/api/v1/tags',
     },

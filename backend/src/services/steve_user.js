@@ -11,13 +11,13 @@
  *
  * @module services/steve_user
  */
-const {ValidationError, ErrorCodes, SystemError} = require('../utils/errors');
+const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const {steveAxios} = require('./network');
-const {validateSteveUser} = require('../utils/steve');
+const {validateSteveUser} = require('#utils/steve');
 const logger = require('./logger');
-const {db} = require('../utils/queries');
-const {STEVE_CONFIG} = require('../config');
-const {fullyQualifiedUserSchema} = require('../utils/joi');
+const {db} = require('#utils/queries');
+const {STEVE_CONFIG} = require('#config');
+const {fullyQualifiedUserSchema} = require('#utils/joi');
 
 
 /**

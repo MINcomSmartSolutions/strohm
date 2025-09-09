@@ -37,20 +37,19 @@ const logger = winston.createLogger({
     ],
 });
 
-// Enhanced console output for non-production
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: format.combine(
-            format.colorize(),
-            format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
-            format.printf(({timestamp, level, message, file, line, label, ...meta}) => {
-                let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
-                let envLabel = label ? `[${label.toUpperCase()}]` : '';
-                return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr}`.trim();
-            }),
-        ),
-    }));
-}
+
+logger.add(new winston.transports.Console({
+    format: format.combine(
+        format.colorize(),
+        format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
+        format.printf(({timestamp, level, message, file, line, label, ...meta}) => {
+            let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
+            let envLabel = label ? `[${label.toUpperCase()}]` : '';
+            return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr}`.trim();
+        }),
+    ),
+}));
+
 
 const morganMiddleware = morgan(
     ':method :url :status :res[content-length] - :response-time ms - :remote-addr',

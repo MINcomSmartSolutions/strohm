@@ -1,5 +1,5 @@
-const {validateSteveUser} = require('../../../utils/steve');
-const {ValidationError, ErrorCodes} = require('../../../utils/errors');
+const {validateSteveUser} = require('#utils/steve');
+const {ValidationError, ErrorCodes} = require('#utils/errors');
 
 describe('Steve Utility Functions', () => {
     describe('validateSteveUser', () => {

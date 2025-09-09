@@ -19,20 +19,20 @@
  */
 const request = require('supertest');
 const express = require('express');
-const scimController = require('../../../controllers/scim');
-const {AuthError, ValidationError, ErrorCodes} = require('../../../utils/errors');
-const {userOperations} = require('../../../services/user_operations');
-const {blockSteveUser} = require('../../../services/steve_user');
-const logger = require('../../../services/logger');
-const {db} = require('../../../utils/queries');
+const scimController = require('#controllers/scim');
+const {AuthError, ValidationError, ErrorCodes} = require('#utils/errors');
+const {userOperations} = require('#services/user_operations');
+const {blockSteveUser} = require('#services/steve_user');
+const logger = require('#services/logger');
+const {db} = require('#utils/queries');
 
 // Mock dependencies
-jest.mock('../../../services/logger');
-jest.mock('../../../services/user_operations');
-jest.mock('../../../services/steve_user');
+jest.mock('#services/logger');
+jest.mock('#services/user_operations');
+jest.mock('#services/steve_user');
 
 // Mock the database queries module
-jest.mock('../../../utils/queries', () => ({
+jest.mock('#utils/queries', () => ({
     db: {
         getUserUnique: jest.fn(),
         getUsers: jest.fn(),
@@ -46,7 +46,7 @@ jest.mock('../../../utils/queries', () => ({
 
 
 // Mock the auth middleware to bypass authentication in tests
-jest.mock('../../../middlewares/auth', () => ({
+jest.mock('#middlewares/auth', () => ({
     scimAuth: (req, res, next) => next(), // Bypass auth for tests
 }));
 

@@ -8,7 +8,7 @@ const {
     OAuthError,
     SystemError,
     appErrorHandler,
-} = require('../../../utils/errors');
+} = require('#utils/errors');
 
 describe('Error Utilities', () => {
     describe('createError', () => {

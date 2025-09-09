@@ -2,23 +2,23 @@
  * @file Unit tests for Steve transactions service
  */
 const {DateTime} = require('luxon');
-const {runIncremental} = require('../../../services/steve_transactions');
-const {steveAxios} = require('../../../services/network');
-const {db} = require('../../../utils/queries');
-const {fmt} = require('../../../utils/datetime_format');
-const {createOdooTxnInvoice} = require('../../../services/odoo');
-const {STEVE_CONFIG} = require('../../../config');
+const {runIncremental} = require('#services/steve_transactions');
+const {steveAxios} = require('#services/network');
+const {db} = require('#utils/queries');
+const {fmt} = require('#utils/datetime_format');
+const {createOdooTxnInvoice} = require('#services/odoo');
+const {STEVE_CONFIG} = require('#config');
 
 // TODO: Needs reviewing
 
 // Mock dependencies
-jest.mock('../../../services/network', () => ({
+jest.mock('#services/network', () => ({
     steveAxios: {
         get: jest.fn(),
     },
 }));
 
-jest.mock('../../../utils/queries', () => ({
+jest.mock('#utils/queries', () => ({
     db: {
         getLastStopTimestamp: jest.fn(),
         setLastStopTimestamp: jest.fn(),
@@ -27,21 +27,21 @@ jest.mock('../../../utils/queries', () => ({
     },
 }));
 
-jest.mock('../../../services/odoo', () => ({
+jest.mock('#services/odoo', () => ({
     createOdooTxnInvoice: jest.fn(),
 }));
 
-jest.mock('../../../utils/datetime_format', () => ({
+jest.mock('#utils/datetime_format', () => ({
     fmt: jest.fn(),
 }));
 
-jest.mock('../../../services/logger', () => ({
+jest.mock('#services/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
 }));
 
-jest.mock('../../../config', () => ({
+jest.mock('#config', () => ({
     STEVE_CONFIG: {
         TRANSACTIONS_URI: '/api/v1/transactions',
     },
@@ -315,7 +315,7 @@ describe('Steve Transactions Service', () => {
             const invalidTransaction = {id: 12345};
             steveAxios.get.mockResolvedValue({status: 200, data: [invalidTransaction]});
             // Patch the schema validate to always return error
-            jest.spyOn(require('../../../utils/joi').steveTransactionSchema, 'validate').mockReturnValue({error: new Error('Invalid')});
+            jest.spyOn(require('#utils/joi').steveTransactionSchema, 'validate').mockReturnValue({error: new Error('Invalid')});
             await expect(runIncremental()).rejects.toThrow();
         });
 

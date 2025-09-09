@@ -13,7 +13,11 @@
   "imports": {
     "#utils/*": "./src/utils/*.js",
     "#middlewares/*": "./src/middlewares/*.js",
-    "#controllers/*": "./src/controllers/*.js"
+    "#controllers/*": "./src/controllers/*.js",
+    "#services/*": "./src/services/*.js",
+    "#helpers/*": "./src/helpers/*.js",
+    "#test_helpers/*": "./src/__tests__/helpers/*.js",
+    "#config": "./src/config.js"
   },
   "keywords": [],
   "author": "MINcom Smart Solutions GmbH",

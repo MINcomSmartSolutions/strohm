@@ -5,16 +5,16 @@
  *
  * @module services/odoo
  */
-const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('../utils/errors');
-const {db} = require('../utils/queries');
+const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('#utils/errors');
+const {db} = require('#utils/queries');
 
-const {generateOdooHash, generateSalt} = require('../helpers/auth');
+const {generateOdooHash, generateSalt} = require('#helpers/auth');
 const {odooAxios, odooUserAxios} = require('./network');
 const {DateTime} = require('luxon');
-const {fmt} = require('../utils/datetime_format');
-const {ODOO_CONFIG} = require('../config');
-const {dbTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('../utils/joi');
-const logger = require('../services/logger');
+const {fmt} = require('#utils/datetime_format');
+const {ODOO_CONFIG} = require('#config');
+const {dbTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('#utils/joi');
+const logger = require('#services/logger');
 
 
 /**

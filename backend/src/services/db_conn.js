@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const {DatabaseError, ErrorCodes} = require('../utils/errors');
+const {DatabaseError, ErrorCodes} = require('#utils/errors');
 const logger = require('./logger');
 
 
