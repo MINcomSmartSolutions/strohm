@@ -19,6 +19,10 @@
     "#test_helpers/*": "./src/__tests__/helpers/*.js",
     "#config": "./src/config.js"
   },
+  "engines": {
+    "npm": ">=10.9.3",
+    "node": ">=20.0.0"
+  },
   "keywords": [],
   "author": "MINcom Smart Solutions GmbH",
   "license": "ISC",
