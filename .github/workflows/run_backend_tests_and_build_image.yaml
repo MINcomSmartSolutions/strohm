@@ -152,16 +152,15 @@ jobs:
           SERVER_OIDC_CLIENT_SECRET: mock_client_secret
           SERVER_OIDC_ISSUER_BASE_URL: http://localhost:9000
         run: |
-          npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --verbose --coverage --coverageReporters=text --coverageReporters=lcov
+          npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --coverage --coverageReporters=text --coverageReporters=lcov
 
       - name: Comment backend coverage
         if: github.event.pull_request
         uses: zgosalvez/github-actions-report-lcov@v4
         with:
-          coverage-files: coverage/lcov.info
+          coverage-files: ./backend/coverage/lcov*.info
           artifact-name: backend-coverage-report
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: backend
           update-comment: true
 
   build:
