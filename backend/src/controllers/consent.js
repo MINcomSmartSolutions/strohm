@@ -33,6 +33,7 @@ const {
     withdrawConsent,
     hasLatestConsent,
     createConsentRevision
+  
 } = require('#services/consent');
 const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('#utils/errors');
 const logger = require('#services/logger');
