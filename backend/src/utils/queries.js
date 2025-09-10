@@ -473,11 +473,11 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
  * Otherwise, inserts a new record with proper user association or updates existing one.
  *
  * @async
- * @param {Object} tx - Transaction from Steve system
- * @returns {Promise<Object>} db_txn - The transaction record from database
+ * @param {Object<steve_txn>} txn - Transaction from Steve system
+ * @returns {Promise<Object<db_txn>>} db_txn - The transaction record from database
  */
-async function recordTransaction(tx) {
-    const {transactionError} = steveTransactionSchema.validate(tx);
+async function recordSteveTxn(txn) {
+    const {transactionError} = steveTransactionSchema.validate(txn);
     if (transactionError) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
@@ -490,17 +490,17 @@ async function recordTransaction(tx) {
         await client.query('BEGIN');
 
         // First check if transaction already exists in our database
-        const existingTxQuery = `
+        const existingTxnQuery = `
             SELECT *
             FROM charging_transactions
             WHERE tx_steve_id = $1
         `;
 
-        const existingTxResult = await client.query(existingTxQuery, [tx.id]);
+        const existingTxnResult = await client.query(existingTxnQuery, [txn.id]);
 
         // If transaction exists, check if values match to avoid unnecessary updates
-        if (existingTxResult.rowCount > 0) {
-            const existingTx = existingTxResult.rows[0];
+        if (existingTxnResult.rowCount > 0) {
+            const existingTxn = existingTxnResult.rows[0];
 
             // Check if transaction is complete and matches incoming data
             if (existingTx.stop_timestamp !== null &&
@@ -508,11 +508,11 @@ async function recordTransaction(tx) {
             ) {
                 logger.info('Transaction already exists with matching stop timestamp - returning existing record');
                 await client.query('COMMIT');
-                return existingTx;
+                return existingTxn;
             }
 
             // Transaction exists but needs updating
-            logger.info(`Updating existing transaction ${existingTx.id} (Steve ID: ${tx.id})`);
+            logger.info(`Updating existing transaction ${existingTxn.id} (Steve ID: ${txn.id})`);
             const updateQuery = `
                 UPDATE charging_transactions
                 SET ocpp_id_tag     = $1,
@@ -526,13 +526,13 @@ async function recordTransaction(tx) {
             `;
 
             const updateValues = [
-                tx.ocppIdTag,
-                tx.startTimestamp,
-                tx.stopTimestamp,
-                tx.startValue,
-                tx.stopValue,
-                tx.stopReason,
-                tx.id,
+                txn.ocppIdTag,
+                txn.startTimestamp,
+                txn.stopTimestamp,
+                txn.startValue,
+                txn.stopValue,
+                txn.stopReason,
+                txn.id,
             ];
 
             const updateResult = await client.query(updateQuery, updateValues);
@@ -548,13 +548,16 @@ async function recordTransaction(tx) {
               AND rfid = $2::varchar
         `;
 
-        const userCrossCheckResult = await client.query(userCrossCheckQuery, [tx.ocppTagPk, tx.ocppIdTag]);
+        const userCrossCheckResult = await client.query(userCrossCheckQuery, [txn.ocppTagPk, txn.ocppIdTag]);
         let user_id = null;
 
         if (userCrossCheckResult.rowCount > 0) {
             user_id = userCrossCheckResult.rows[0].user_id;
         } else {
-            logger.warn(`Unknown user's transaction is received. Inserting without user_id. ocppTagPk=${tx.ocppTagPk}, ocppIdTag=${tx.ocppIdTag}`);
+            logger.warn(`Unknown user's transaction is received. Inserting without user_id.`, {
+                ocppTagPk: txn.ocppTagPk,
+                ocppIdTag: txn.ocppIdTag,
+            });
         }
 
         const insertQuery = `INSERT INTO charging_transactions
@@ -564,13 +567,13 @@ async function recordTransaction(tx) {
                              RETURNING *`;
 
         const values = [
-            tx.id,
-            tx.ocppIdTag,
-            tx.startTimestamp,
-            tx.stopTimestamp,
-            tx.startValue,
-            tx.stopValue,
-            tx.stopReason,
+            txn.id,
+            txn.ocppIdTag,
+            txn.startTimestamp,
+            txn.stopTimestamp,
+            txn.startValue,
+            txn.stopValue,
+            txn.stopReason,
             user_id,
         ];
 
@@ -622,8 +625,7 @@ async function setLastStopTimestamp(new_watermark) {
  * Returns a Luxon DateTime if found, otherwise null.
  *
  * @async
- * @returns {Promise<DateTime|null>} The latest stop timestamp or null if not found.
- * @throws {DatabaseError} On query error.
+ * @returns {Promise<DateTime|null>} The latest stop timestamp or null if not found or error on watermark fetch.
  */
 async function getLastStopTimestamp() {
     const query = `
@@ -655,7 +657,7 @@ async function getLastStopTimestamp() {
  * This is used to link a transaction to an invoice in Odoo.
  *
  * @async
- * @param {Object} txn - The transaction object (must include `id`).
+ * @param {Object<db_txn>} txn - The transaction object (must include `id`).
  * @param {number} invoice_id - The invoice ID came from Odoo to set.
  * @returns {Promise<void>}
  * @throws {DatabaseError|ValidationError} On query error.
@@ -916,7 +918,7 @@ module.exports = {
         rotateOdooUserKey,
         setSteveUserParamaters,
         recordActivityLog,
-        recordTransaction,
+        recordTransaction: recordSteveTxn,
         setLastStopTimestamp,
         getLastStopTimestamp,
         saveInvoiceId,

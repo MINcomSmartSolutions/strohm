@@ -554,17 +554,17 @@ describe('Database Queries Integration Tests', () => {
 
         test('saveInvoiceId should link an invoice to a transaction', async () => {
             // First create a transaction
-            const tx = await insertTestTransaction(pool, testUser);
+            const txn = await insertTestTransaction(pool, testUser);
 
             // Link invoice
-            await db.saveInvoiceId(tx, 98765);
+            await db.saveInvoiceId(txn, 98765);
 
             // Verify link
             const client = await pool.connect();
             try {
                 const result = await client.query(
                     'SELECT invoice_ref FROM charging_transactions WHERE id = $1',
-                    [tx.id],
+                    [txn.id],
                 );
 
                 expect(result.rows[0].invoice_ref).toBe(98765);

@@ -20,7 +20,7 @@
 
 
 /**
- * @typedef {Object} tx
+ * @typedef {Object} steve_txn
  *
  * @property {number} id - PK of the transaction
  * @property {number} connectorId - Connector ID of the charge box at which the transaction took place

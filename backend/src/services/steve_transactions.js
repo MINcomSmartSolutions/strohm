@@ -60,22 +60,22 @@ async function fetchTxnsSince(since = null) {
 /**
  * Record and create bills for transactions/charging sessions
  * @async
- * @param {Array<Object>} txns
+ * @param {Array<Object<steve_txn>>} txns
  * @returns {Promise<{maxStop: DateTime, processedCount: number}>} The new high‑water mark (max stopTimestamp) and count of unique processed
  * @throws {ValidationError} If any transaction does not match the expected schema
  */
 async function processTxnsSince(txns) {
     // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
     const unique = Array.from(
-        txns.reduce((map, tx) => {
-            logger.info('Processing transaction: ' + tx.id);
+        txns.reduce((map, txn) => {
+            logger.info('Processing transaction: ' + txn.id);
             // Validate transaction against schema
-            const {error} = steveTransactionSchema.validate(tx);
+            const {error} = steveTransactionSchema.validate(txn);
             if (error) {
                 throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
                     `Invalid transaction format: ${error.message}`);
             }
-            return map.set(tx.id, tx);
+            return map.set(txn.id, txn);
         }, new Map()).values(),
     );
 
@@ -88,9 +88,9 @@ async function processTxnsSince(txns) {
 
     logger.info('Processing transactions since last high-water mark');
     // Record all unique
-    for (const tx of unique) {
-        logger.info('Recording transaction: ' + tx.id);
-        const db_txn = await db.recordTransaction(tx);
+    for (const txn of unique) {
+        logger.info('Recording transaction: ' + txn.id);
+        const db_txn = await db.recordTransaction(txn);
 
         // If the transaction does not have a invoice_ref to odoo
         // and have a associated user, create a bill.
@@ -100,8 +100,8 @@ async function processTxnsSince(txns) {
         }
 
         // Determine new high‑water mark: max stopTimestamp of unique
-        maxStop = unique.reduce((max, tx) => {
-            const stop = DateTime.fromISO(tx.stopTimestamp, {zone: 'utc'});
+        maxStop = unique.reduce((max, txn) => {
+            const stop = DateTime.fromISO(txn.stopTimestamp, {zone: 'utc'});
             return stop > max ? stop : max;
         }, DateTime.fromMillis(0));
     }
