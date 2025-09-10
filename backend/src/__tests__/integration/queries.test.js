@@ -846,7 +846,7 @@ describe('Database Queries Integration Tests', () => {
             pool.query = jest.fn().mockRejectedValue(new Error('Simulated database error'));
 
             try {
-                await expect(db.getUserOdooCredentials(999))
+                await expect(db.getUserOdooCredentials('a'))
                     .rejects.toThrow();
             } finally {
                 // Restore original query method

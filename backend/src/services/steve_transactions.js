@@ -30,7 +30,7 @@ const logger = require('#services/logger');
  * @param {DateTime|null} since  Only transactions with stopTimestamp > since
  * @returns {Promise<Array<Object>>} Array of transactions
  */
-async function fetchSince(since = null) {
+async function fetchTxnsSince(since = null) {
     const to = DateTime.now();
 
     // Always fetch stopped sessions
@@ -64,7 +64,7 @@ async function fetchSince(since = null) {
  * @returns {Promise<{maxStop: DateTime, processedCount: number}>} The new high‑water mark (max stopTimestamp) and count of unique processed
  * @throws {ValidationError} If any transaction does not match the expected schema
  */
-async function processSince(txns) {
+async function processTxnsSince(txns) {
     // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
     const unique = Array.from(
         txns.reduce((map, tx) => {
@@ -115,27 +115,37 @@ async function processSince(txns) {
  * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
  */
 async function runIncremental() {
-    //FIXME: What happens if proccessing fails but high-water mark is updated? BUG
     logger.info('Running incremental transaction fetch and processing');
-    // retrieve the last watermark
+
     const since = await db.getLastStopTimestamp();
 
-    // add 1 second to the last high water mark to prevent overlapping and fetching the same transactions
+    // add 1 second to the last high water mark to prevent overlapping and fetching the same transaction
     const last_high_water = since ? since.plus(1000) : null;
     let new_high_water = since ? since : DateTime.now().toUTC();
 
-    const new_txns = await fetchSince(last_high_water);
+    const new_txns = await fetchTxnsSince(last_high_water);
     let processedCount = 0;
+
     if (new_txns.length > 0) {
         logger.info('Sending ' + new_txns.length + ' transactions for processing');
-        const {maxStop, processedCount: count} = await processSince(new_txns);
-        new_high_water = maxStop;
-        processedCount = count;
+        try {
+            const {maxStop, processedCount: count} = await processTxnsSince(new_txns);
+            new_high_water = maxStop;
+            processedCount = count;
+
+            // Only update high-water mark after successful processing
+            await db.setLastStopTimestamp(new_high_water);
+        } catch (e) {
+            logger.error('Failed to process transactions, high-water mark not updated');
+            throw e;
+        }
+    } else {
+        // No new transactions, but still update the high-water mark to current time
+        await db.setLastStopTimestamp(new_high_water);
     }
-    await db.setLastStopTimestamp(new_high_water);
+
     return {fetched: processedCount, high_water_mark: new_high_water};
 }
-
 
 /**
  * Fetches all transactions from Steve, processes them, and updates the high-water mark.
@@ -146,9 +156,9 @@ async function runIncremental() {
 async function runFull() {
     let new_high_water = DateTime.now().toUTC();
 
-    const new_txns = await fetchSince();
+    const new_txns = await fetchTxnsSince();
     if (new_txns > 0) {
-        new_high_water = await processSince(new_txns);
+        new_high_water = await processTxnsSince(new_txns);
     }
     await db.setLastStopTimestamp(new_high_water);
     return {fetched: new_txns.length, high_water_mark: new_high_water};
@@ -164,9 +174,9 @@ async function runToday() {
     // Get today's date and set it to midnight
     let new_high_water = DateTime.utc().startOf('day');
 
-    const new_txns = await fetchSince(new_high_water);
+    const new_txns = await fetchTxnsSince(new_high_water);
     if (new_txns > 0) {
-        new_high_water = await processSince(new_txns);
+        new_high_water = await processTxnsSince(new_txns);
     }
     await db.setLastStopTimestamp(new_high_water);
     return {fetched: new_txns.length, high_water_mark: new_high_water};

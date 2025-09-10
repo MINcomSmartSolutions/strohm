@@ -18,10 +18,14 @@ const {steveTransactionSchema} = require('./joi');
  *
  * @param {Error} error - The error object.
  * @param {string} operation - The operation being performed.
+ * @param {boolean=false} silent
  * @throws {Error} - The error that happened during the operation.
  */
-const handleQueryError = (error, operation) => {
+const handleQueryError = (error, operation, silent = false) => {
     logger.error(`Error during ${operation} operation:`, error);
+    if (silent) {
+        return;
+    }
     throw new DatabaseError(
         ErrorCodes.DATABASE.QUERY_ERROR,
         `Error during ${operation} operation.`,
@@ -33,10 +37,19 @@ const handleQueryError = (error, operation) => {
 const createUser = async (oauth_id, name, email, rfid) => {
     //TODO: Only req.oidc can be porided
 
-
-    if (!oauth_id || !name || !email || !rfid) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
+    const inputsValid = ![oauth_id, name, email, rfid].some(param => !param || param === '');
+    if (!inputsValid) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, {
+                'user': {
+                    'oauth_id': oauth_id,
+                    'name': name,
+                    'email': email,
+                    'rfid': rfid,
+                },
+            },
+        );
     }
+
 
     const query = `
         INSERT INTO users (oauth_id, name, email, rfid)
@@ -172,7 +185,7 @@ const getUsers = async (filters = {}, options = {}) => {
 const getUserUnique = async (filters) => {
     if (!filters || typeof filters !== 'object' || Object.keys(filters).length === 0) {
         throw new ValidationError(
-            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS, {filters},
         );
     }
     const users = await getUsers(filters, {limit: 2});
@@ -208,16 +221,12 @@ const getUserUnique = async (filters) => {
  * @throws {DatabaseError} - If database operations fail
  */
 const setUserOdooCredentials = async (user, odoo_user_id, odoo_partner_id, encrypted_key, salt) => {
+    const inputsValid = ![user, odoo_user_id, odoo_partner_id, encrypted_key, salt].some(param => !param || param === '');
+    const inputsAreIntegers = user && [user.user_id, odoo_user_id, odoo_partner_id].every(Number.isSafeInteger);
 
-    if (!user || !odoo_user_id || !odoo_partner_id || !encrypted_key || !salt) {
+    if (!inputsValid || !inputsAreIntegers) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-        );
-    }
-
-    if (!Number.isInteger(user.user_id) || !Number.isInteger(odoo_user_id) || !Number.isInteger(odoo_partner_id)) {
-        throw new ValidationError(
-            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
         );
     }
 
@@ -266,7 +275,7 @@ const setUserOdooCredentials = async (user, odoo_user_id, odoo_partner_id, encry
  * @throws {ValidationError|DatabaseError} On missing parameters or query error.
  */
 const getUserOdooCredentials = async (user_id) => {
-    if (!user_id) {
+    if (!user_id || !Number.isSafeInteger(user_id)) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
         );
@@ -282,8 +291,9 @@ const getUserOdooCredentials = async (user_id) => {
         LIMIT 1
     `;
 
+    const client = await pool.connect();
     try {
-        const result = await pool.query(query, [user_id]);
+        const result = await client.query(query, [user_id]);
 
         if (result.rows.length === 0) {
             return null; // No valid credentials found
@@ -292,6 +302,8 @@ const getUserOdooCredentials = async (user_id) => {
         return result.rows[0];
     } catch (error) {
         handleQueryError(error, 'getUserOdooCredentials');
+    } finally {
+        client.release();
     }
 };
 
@@ -309,7 +321,10 @@ const getUserOdooCredentials = async (user_id) => {
  * @throws {ValidationError|DatabaseError} On missing parameters or DB error.
  */
 const rotateOdooUserKey = async (user_id, old_key_id, new_key, new_key_salt) => {
-    if (!user_id || !old_key_id || !new_key || !new_key_salt) {
+    const inputsValid = ![user_id, old_key_id, new_key, new_key_salt].some(param => !param || param === '');
+    const inputsAreIntegers = [user_id, old_key_id].every(Number.isSafeInteger);
+
+    if (!inputsValid || !inputsAreIntegers) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
         );
@@ -411,7 +426,7 @@ const setSteveUserParamaters = async (user, steve_id) => {
  */
 async function recordActivityLog(user_id, event_type, target, rfid, reason = null) {
     // If user_id is null or undefined, don't attempt to insert a record
-    // This prevents foreign key constraint violations
+    // This prevents foreign key constraint violations in the db
     if (!user_id) {
         logger.warn(`Attempted to record activity log without valid user_id: ${event_type}, ${target}, ${rfid}`);
         return;
@@ -445,7 +460,7 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
         await client.query('COMMIT');
     } catch (error) {
         await client.query('ROLLBACK');
-        logger.error(`Error recording activity log: ${error.message}`, error)
+        handleQueryError(error, 'recordActivityLog', true);
     } finally {
         client.release();
     }
@@ -576,7 +591,7 @@ async function recordTransaction(tx) {
  * Inserts or updates the `watermark` table with the given timestamp.
  *
  * @async
- * @param {string|Date} new_watermark - The new last stop timestamp.
+ * @param {DateTime} new_watermark - The new last stop timestamp (watermark).
  * @returns {Promise<void>}
  */
 async function setLastStopTimestamp(new_watermark) {
@@ -603,7 +618,7 @@ async function setLastStopTimestamp(new_watermark) {
 
 
 /**
- * Retrieves the most recent `last_stop_timestamp` from the watermark table.
+ * Retrieves the most recent `last_stop_timestamp` aka watermark from the watermark table.
  * Returns a Luxon DateTime if found, otherwise null.
  *
  * @async
@@ -617,18 +632,21 @@ async function getLastStopTimestamp() {
         ORDER BY created_at DESC
         LIMIT 1
     `;
+    let last_stop_timestamp = null;
 
     const client = await pool.connect();
     try {
         const result = await client.query(query);
-        return result.rows[0]?.last_stop_timestamp
+        last_stop_timestamp = result.rows[0]?.last_stop_timestamp
             ? DateTime.fromJSDate(result.rows[0].last_stop_timestamp)
             : null;
     } catch (error) {
-        handleQueryError(error, 'getLastStopTimestamp');
+        // Silently log the error as we dont want to break functionality if watermark is missing
+        handleQueryError(error, 'getLastStopTimestamp', true);
     } finally {
         client.release();
     }
+    return last_stop_timestamp;
 }
 
 
@@ -670,8 +688,8 @@ async function saveInvoiceId(txn, invoice_id) {
  * If no price is found, it returns null.
  *
  * @async
- * @param {DateTime|null} specified_datetime - Optional ISO 8601 datetime string to check the price at a specific time.
- * @returns {Promise<number>|null} The current electricity price in cents per kWh.
+ * @param {DateTime|null} specified_datetime - Optional luxon datetime object to check the price at a specific time.
+ * @returns {Promise<number>|null} If `specified_datetime` provided, that datetime's if not, the current electricity price in cents per kWh.
  */
 async function getCurrentElectricityPrice(specified_datetime = null) {
     if (specified_datetime && !specified_datetime.isValid) {
@@ -827,7 +845,10 @@ const getUsersCount = async (filters = {}) => {
 // This function is a placeholder for updating user information.
 //TODO: DO we need to store additional user information in the database?
 async function updateUser(userId, updates) {
-    if (!userId || !updates || Object.keys(updates).length === 0) {
+    const inputsValid = ![userId, updates].some(param => !param || param === '' || (typeof param === 'object' && Object.keys(param).length === 0));
+    const userIdIsInteger = Number.isSafeInteger(userId);
+
+    if (!inputsValid || !userIdIsInteger) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
     }
 
@@ -862,27 +883,24 @@ async function updateUser(userId, updates) {
         RETURNING *
     `;
 
+
+    const client = await pool.connect();
     try {
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            const result = await client.query(query, values);
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
 
-            if (result.rows.length === 0) {
-                throw new ValidationError('User not found', ErrorCodes.USER_NOT_FOUND);
-            }
-
-            await client.query('COMMIT');
-            logger.info(`User ${userId} updated successfully`);
-            return result.rows[0];
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
+        if (result.rows.length === 0) {
+            throw new ValidationError('User not found', ErrorCodes.USER_NOT_FOUND);
         }
+
+        await client.query('COMMIT');
+        logger.info(`User ${userId} updated successfully`);
+        return result.rows[0];
     } catch (error) {
-        handleQueryError(error, 'updateUser');
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'updateUser', true);
+    } finally {
+        client.release();
     }
 }
 
