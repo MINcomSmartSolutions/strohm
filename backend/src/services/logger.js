@@ -12,6 +12,7 @@ const morgan = require('morgan');
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'silly',
+    levels: winston.config.npm.levels,
     format: format.combine(
         format.timestamp(),
         format.label({label: process.env.NODE_ENV}),

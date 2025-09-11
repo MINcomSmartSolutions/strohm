@@ -56,8 +56,8 @@ By accepting these terms, you acknowledge that you have read, understood, and ag
 
         logger.info('Initial consent revision created successfully:', consentRevision);
         logger.info('✅ Initial consent revision created successfully');
-        logger.verbose('Version:', consentRevision.version);
-        logger.verbose('Title:', consentRevision.title);
+        logger.info('Version:', consentRevision.version);
+        logger.info('Title:', consentRevision.title);
 
     } catch (error) {
         logger.error('Failed to initialize consent:', error);

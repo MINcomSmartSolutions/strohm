@@ -1,3 +1,5 @@
+// noinspection HttpUrlsUsage
+
 /**
  * @namespace config
  * @description Configuration settings for SteVe and Odoo integrations
