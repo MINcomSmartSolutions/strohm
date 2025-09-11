@@ -55,7 +55,7 @@
  * @property {number} ocpp_id_tag - The Ocpp Tag used in the transaction (rfid in strohm.users table)
  * @property {number} user_id - The user ID associated with the transaction
  * @property {number} invoice_ref - The invoice reference associated with the transaction returned from Odoo
- * @property {number} steve_id - PK of the transaction in SteVe
+ * @property {number} txn_steve_id - PK of the transaction in SteVe
  */
 
 

@@ -1,9 +1,10 @@
 /**
  * @file SteVe Transactions Service
  *
- * Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+ * Incremental fetch of all transactions since last high‑water mark (T0).
+ * Records all transactions in database, but only bills permanently stopped ones.
  * High‑Water Mark Concept:
- * We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
+ * We persist the timestamp of the latest processed transaction (the "high‑water mark" or T0).
  * On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
  * After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
  *   • No overlap or reprocessing of already handled transactions.
@@ -12,7 +13,6 @@
  *
  * @module services/steve_transactions
  */
-
 const {DateTime} = require('luxon');
 const {steveAxios} = require('./network');
 const {fmt} = require('#utils/datetime_format');
@@ -23,48 +23,132 @@ const {db} = require('#utils/queries');
 const {createOdooTxnInvoice} = require('./odoo');
 const logger = require('#services/logger');
 
+/// Steve API docs: http://localhost:8180/steve/manager/swagger-ui/swagger-ui/index.html
+
+
+const TxnPeriodType = Object.freeze({
+    ALL: 'ALL', // default in SteVe
+    TODAY: 'TODAY',
+    LAST_10: 'LAST_10',
+    LAST_30: 'LAST_30',
+    LAST_90: 'LAST_90',
+    FROM_TO: 'FROM_TO', // requires `from` and `to` params
+});
+
+const TxnType = Object.freeze({
+    ALL: 'ALL', // default in SteVe
+    ACTIVE: 'ACTIVE',
+    STOPPED: 'STOPPED',
+});
+
+
 /**
- * Fetch STOPPED transactions since a given timestamp (exclusive)
+ * Fetch all transactions since a given timestamp (exclusive)
  * If no timestamp is provided, fetch all transactions
  * @async
  * @param {DateTime|null} since  Only transactions with stopTimestamp > since
- * @returns {Promise<Array<Object>>} Array of transactions
+ * @returns {Promise<Array<{steve_txn}>>} Array of transactions
  */
-async function fetchTxnsSince(since = null) {
+async function fetchTxnsSince(since) {
     const to = DateTime.now();
 
-    // Always fetch stopped sessions
-    // FIXME: STOPPED can also mean its paused. Check stop reason?!!!
+    // Fetch all transactions (both active and stopped) to record them in database
     let params = {
-        type: 'STOPPED',
+        type: TxnType.ALL,
     };
 
     // If `since` is provided, add periodType and date range
     if (since) {
-        params.periodType = 'FROM_TO';
+        if (!since.isValid) {
+            throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid 'since' DateTime: ${since.invalidExplanation}`);
+        }
+        params.periodType = TxnPeriodType.FROM_TO;
         params.from = fmt(since.toUTC());
         params.to = fmt(to.toUTC());
         logger.info(`Fetching transactions from SteVe since ${since.toISO()} to ${to.toISO()}`);
     } else {
         // If `since` is not provided, fetch all transactions
-        params.periodType = 'ALL';
+        params.periodType = TxnPeriodType.ALL;
         logger.info('Fetching all transactions from SteVe');
     }
 
 
     const res = await steveAxios.get(STEVE_CONFIG.TRANSACTIONS_URI, {params});
+    // TODO: Check the response
     return res.data;
 }
 
 
 /**
- * Record and create bills for transactions/charging sessions
+ * Stop reasons that indicate a transaction is temporarily stopped/paused
+ * and should not be billed yet (may resume later)
+ */
+const TEMPORARY_STOP_REASONS = new Set([
+    'EmergencyStop',    // Emergency stop - may resume after issue resolved
+    'PowerLoss',        // Power loss - may resume when power restored
+    'EVDisconnected',   // EV disconnected - may be plugged back in
+    null,               // No reason provided - assume it is active
+    undefined,           // No reason provided - assume it is active
+]);
+
+/**
+ * Stop reasons that indicate a permanent transaction end
+ * and should be processed for billing
+ */
+const PERMANENT_STOP_REASONS = new Set([
+    'DeAuthorized',     // User was deauthorized - transaction complete
+    'Local',            // Stopped locally - user intended to end
+    'Remote',           // Stopped remotely - operator intended to end
+    'HardReset',        // Hard reset - transaction terminated
+    'SoftReset',        // Soft reset - transaction terminated
+    'Reboot',           // Reboot - transaction terminated
+    'UnlockCommand',    // Unlock command - transaction complete
+    'Other',            // Other reasons - assume complete
+]);
+
+/**
+ * Determines if a transaction should be processed for billing based on its stop reason
+ * @param {Object<steve_txn>} txn - Transaction object
+ * @returns {boolean} True if transaction should be billed
+ */
+function shouldProcessTransaction(txn) {
+    const stop_reason = txn.stopReason ?? null;
+    const stop_timestamp = txn.stopTimestamp ?? null;
+
+    if (!stop_timestamp) {
+        // The txn is possibly active
+        return false;
+    }
+
+    if (stop_timestamp && TEMPORARY_STOP_REASONS.has(stop_reason)) {
+        logger.warn('Discrepancy in the txn data: stop_timestamp is set but stop_reason indicates temporary stop. Transaction ID: ' + txn.id);
+    }
+
+    // If it's a known temporary stop reason, don't process yet
+    if (TEMPORARY_STOP_REASONS.has(stop_reason)) {
+        logger.info(`Skipping transaction ${txn.id} with temporary stop reason: ${stop_reason}`);
+        return false;
+    }
+
+    // If it's a known permanent stop reason or no reason provided, process it
+    if (PERMANENT_STOP_REASONS.has(stop_reason)) {
+        return true;
+    }
+
+
+    // For unknown stop reasons, log a warning and process conservatively
+    logger.warn(`Unknown stop reason '${stop_reason}' for transaction ${txn.id}, processing for billing`);
+    return true;
+}
+
+/**
+ * Record all transactions and create bills for permanently stopped transactions
  * @async
  * @param {Array<Object<steve_txn>>} txns
- * @returns {Promise<{maxStop: DateTime, processedCount: number}>} The new high‑water mark (max stopTimestamp) and count of unique processed
+ * @returns {Promise<{maxStop: DateTime, processedCount: number, billedCount: number}>} The new high‑water mark (max stopTimestamp), count of all processed transactions, and count of billed transactions
  * @throws {ValidationError} If any transaction does not match the expected schema
  */
-async function processTxnsSince(txns) {
+async function processTxns(txns) {
     // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
     const unique = Array.from(
         txns.reduce((map, txn) => {
@@ -72,47 +156,58 @@ async function processTxnsSince(txns) {
             // Validate transaction against schema
             const {error} = steveTransactionSchema.validate(txn);
             if (error) {
-                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
-                    `Invalid transaction format: ${error.message}`);
+                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error.message);
             }
             return map.set(txn.id, txn);
         }, new Map()).values(),
     );
 
+    // Filter transactions based on stop reason for billing
+    const billableTransactions = unique.filter(shouldProcessTransaction);
+
     //TODO: More checks needed.
     // 1. Check if the bill already exists in Odoo
     //
 
-
     let maxStop;
 
     logger.info('Processing transactions since last high-water mark');
-    // Record all unique
+    logger.info(`Found ${unique.length} unique transactions, ${billableTransactions.length} billable transactions`);
+
+    // Record ALL transactions in database regardless of billing status
     for (const txn of unique) {
         logger.info('Recording transaction: ' + txn.id);
         const db_txn = await db.recordTransaction(txn);
 
-        // If the transaction does not have a invoice_ref to odoo
-        // and have a associated user, create a bill.
-        if (!db_txn.invoice_ref && db_txn.user_id) {
-            const bill_id = await createOdooTxnInvoice(db_txn);
-            await db.saveInvoiceId(db_txn, bill_id);
-        }
+        // Only create bills for transactions with permanent stop reasons
+        if (shouldProcessTransaction(txn)) {
+            logger.info('Creating bill for transaction: ' + txn.id);
 
-        // Determine new high‑water mark: max stopTimestamp of unique
-        maxStop = unique.reduce((max, txn) => {
-            const stop = DateTime.fromISO(txn.stopTimestamp, {zone: 'utc'});
-            return stop > max ? stop : max;
-        }, DateTime.fromMillis(0));
+            // If the transaction does not have a invoice_ref to odoo
+            // and have a associated user, create a bill.
+            if (!db_txn.invoice_ref && db_txn.user_id) {
+                const bill_id = await createOdooTxnInvoice(db_txn);
+                await db.saveInvoiceId(db_txn, bill_id);
+            }
+        } else {
+            logger.info(`Transaction ${txn.id} recorded but not billed due to its state: ${txn.stopReason}`);
+        }
     }
 
-    return {maxStop, processedCount: unique.length};
+    // Determine new high‑water mark: max stopTimestamp of ALL unique transactions (not just billable ones)
+    // This ensures we don't re-fetch temporarily stopped transactions on the next run
+    maxStop = unique.reduce((max, txn) => {
+        const stop = DateTime.fromISO(txn.stopTimestamp, {zone: 'utc'});
+        return stop > max ? stop : max;
+    }, DateTime.fromMillis(0));
+
+    return {maxStop, processedCount: unique.length, billedCount: billableTransactions.length};
 }
 
 /**
- * Run incremental billing cycle: fetch and process since last T0
+ * Run incremental billing cycle: fetch and process since last watermark
  * @async
- * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetched: number, billed: number, high_water_mark: DateTime}>}
  */
 async function runIncremental() {
     logger.info('Running incremental transaction fetch and processing');
@@ -121,65 +216,79 @@ async function runIncremental() {
 
     // add 1 second to the last high water mark to prevent overlapping and fetching the same transaction
     const last_high_water = since ? since.plus(1000) : null;
-    let new_high_water = since ? since : DateTime.now().toUTC();
+    let new_watermark = since ? since : DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince(last_high_water);
     let processedCount = 0;
+    let billedCount = 0;
 
     if (new_txns.length > 0) {
         logger.info('Sending ' + new_txns.length + ' transactions for processing');
         try {
-            const {maxStop, processedCount: count} = await processTxnsSince(new_txns);
-            new_high_water = maxStop;
-            processedCount = count;
+            const {maxStop, processedCount: processed, billedCount: billed} = await processTxns(new_txns);
+            new_watermark = maxStop;
+            processedCount = processed;
+            billedCount = billed;
 
             // Only update high-water mark after successful processing
-            await db.setLastStopTimestamp(new_high_water);
+            await db.setLastStopTimestamp(new_watermark);
         } catch (e) {
             logger.error('Failed to process transactions, high-water mark not updated');
             throw e;
         }
     } else {
         // No new transactions, but still update the high-water mark to current time
-        await db.setLastStopTimestamp(new_high_water);
+        await db.setLastStopTimestamp(new_watermark);
     }
 
-    return {fetched: processedCount, high_water_mark: new_high_water};
+    return {fetched: processedCount, billed: billedCount, high_water_mark: new_watermark};
 }
 
 /**
  * Fetches all transactions from Steve, processes them, and updates the high-water mark.
  * Use for a full sync (no time filter).
  * @async
- * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetched: number, billed: number, high_water_mark: DateTime}>}
  */
 async function runFull() {
-    let new_high_water = DateTime.now().toUTC();
+    let watermark = DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince();
-    if (new_txns > 0) {
-        new_high_water = await processTxnsSince(new_txns);
+    let processedCount = 0;
+    let billedCount = 0;
+
+    if (new_txns.length > 0) {
+        const {maxStop, processedCount: processed, billedCount: billed} = await processTxns(new_txns);
+        watermark = maxStop;
+        processedCount = processed;
+        billedCount = billed;
     }
-    await db.setLastStopTimestamp(new_high_water);
-    return {fetched: new_txns.length, high_water_mark: new_high_water};
+    await db.setLastStopTimestamp(watermark);
+    return {fetched: processedCount, billed: billedCount, high_water_mark: watermark};
 }
 
 
 /**
  * Fetch and process all of today's transactions and updates the high-water mark.
  * @async
- * @returns {Promise<{fetched: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetched: number, billed: number, high_water_mark: DateTime}>}
  */
 async function runToday() {
     // Get today's date and set it to midnight
-    let new_high_water = DateTime.utc().startOf('day');
+    let watermark = DateTime.utc().startOf('day');
 
-    const new_txns = await fetchTxnsSince(new_high_water);
-    if (new_txns > 0) {
-        new_high_water = await processTxnsSince(new_txns);
+    const new_txns = await fetchTxnsSince(watermark);
+    let processedCount = 0;
+    let billedCount = 0;
+
+    if (new_txns.length > 0) {
+        const {maxStop, processedCount: processed, billedCount: billed} = await processTxns(new_txns);
+        watermark = maxStop;
+        processedCount = processed;
+        billedCount = billed;
     }
-    await db.setLastStopTimestamp(new_high_water);
-    return {fetched: new_txns.length, high_water_mark: new_high_water};
+    await db.setLastStopTimestamp(watermark);
+    return {fetched: processedCount, billed: billedCount, high_water_mark: watermark};
 }
 
-module.exports = {runIncremental};
+module.exports = {runIncremental, shouldProcessTransaction, TEMPORARY_STOP_REASONS, PERMANENT_STOP_REASONS};

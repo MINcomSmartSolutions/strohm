@@ -452,7 +452,7 @@ describe('Database Queries Integration Tests', () => {
             const savedTx = await db.recordTransaction(steveTransaction);
 
             expect(savedTx).toBeDefined();
-            expect(savedTx.tx_steve_id).toBe(12345);
+            expect(savedTx.txn_steve_id).toBe(12345);
             expect(savedTx.user_id).toBe(testUser.user_id);
             expect(savedTx.ocpp_id_tag).toBe(testUser.rfid);
             expect(Number(savedTx.delivered_energy_wh)).toBe(15); // stop_value - start_value = 15
@@ -480,7 +480,7 @@ describe('Database Queries Integration Tests', () => {
             const savedTx = await db.recordTransaction(steveTransaction);
 
             expect(savedTx).toBeDefined();
-            expect(savedTx.tx_steve_id).toBe(12346);
+            expect(savedTx.txn_steve_id).toBe(12346);
             expect(savedTx.user_id).toBeNull(); // No user association
             expect(savedTx.ocpp_id_tag).toBe('unknown_rfid');
         });
@@ -491,17 +491,17 @@ describe('Database Queries Integration Tests', () => {
             const startTime = new Date(now.getTime() - 3600000);
 
             const steveTransaction = {
-                id: 54321,
+                id: 54350,
                 connectorId: 1,
                 chargeBoxPk: 100,
                 ocppTagPk: 1000,
                 chargeBoxId: 'TEST-CHARGER-01',
                 ocppIdTag: testUser.rfid,
                 startTimestamp: startTime.toISOString(),
-                stopTimestamp: now.toISOString(),
+                stopTimestamp: null,
                 startValue: 0,
-                stopValue: 10,
-                stopReason: 'Remote',
+                stopValue: null,
+                stopReason: null,
                 stopEventActor: 'manual',
             };
 
@@ -517,12 +517,12 @@ describe('Database Queries Integration Tests', () => {
             const saved = await db.recordTransaction(updatedTx);
 
             expect(saved).toBeDefined();
-            expect(saved.tx_steve_id).toBe(54321);
+            expect(saved.txn_steve_id).toBe(54350);
             expect(Number(saved.stop_value)).toBe(20);
             expect(Number(saved.delivered_energy_wh)).toBe(20);
         });
 
-        test('recordTransaction should return existing transaction if stop timestamp matches', async () => {
+        test('recordTransaction should return existing transaction if ids matches', async () => {
             const now = new Date();
             const startTime = new Date(now.getTime() - 3600000);
 
@@ -535,8 +535,8 @@ describe('Database Queries Integration Tests', () => {
                 ocppIdTag: testUser.rfid,
                 startTimestamp: startTime.toISOString(),
                 stopTimestamp: now.toISOString(),
-                startValue: 0,
-                stopValue: 10,
+                startValue: 10,
+                stopValue: 520,
                 stopReason: 'Remote',
                 stopEventActor: 'manual',
             };
@@ -549,7 +549,7 @@ describe('Database Queries Integration Tests', () => {
 
             // Should be the same record, not a new one
             expect(savedAgainTx.id).toBe(initialTx.id);
-            expect(savedAgainTx.tx_steve_id).toBe(initialTx.tx_steve_id);
+            expect(savedAgainTx.txn_steve_id).toBe(initialTx.txn_steve_id);
         });
 
         test('saveInvoiceId should link an invoice to a transaction', async () => {

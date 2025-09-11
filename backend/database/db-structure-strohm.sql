@@ -154,7 +154,7 @@ CREATE TABLE public.charging_transactions (
     connector_id integer,
     stop_event_actor character varying,
     invoice_ref integer,
-    tx_steve_id integer NOT NULL,
+    txn_steve_id integer NOT NULL,
     user_id integer,
     CONSTRAINT always_positive CHECK ((delivered_energy_wh >= 0.0))
 );
@@ -655,7 +655,7 @@ ALTER TABLE ONLY public.bills
 --
 
 ALTER TABLE ONLY public.charging_transactions
-    ADD CONSTRAINT charging_transactions_pk UNIQUE (tx_steve_id);
+    ADD CONSTRAINT charging_transactions_pk UNIQUE (txn_steve_id);
 
 
 --

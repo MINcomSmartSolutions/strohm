@@ -11,6 +11,7 @@ const pool = require('#services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
+const {dbTransactionSchema} = require('#utils/joi');
 
 
 /**
@@ -18,7 +19,7 @@ const {steveTransactionSchema} = require('./joi');
  *
  * @param {Error} error - The error object.
  * @param {string} operation - The operation being performed.
- * @param {boolean=false} silent
+ * @param  {boolean} silent=false - If true, logs the error but does not throw.
  * @throws {Error} - The error that happened during the operation.
  */
 const handleQueryError = (error, operation, silent = false) => {
@@ -421,7 +422,7 @@ const setSteveUserParamaters = async (user, steve_id) => {
  * @param {string} event_type - The type of event (e.g., 'CREATE', 'BLOCK').
  * @param {string} target - The target system or entity (e.g., 'DB', 'SteVe').
  * @param {string} rfid - The user's RFID.
- * @param {string|null} reason
+ * @param {string|null} reason=null - Optional reason for the event.
  * @returns {Promise<void>}
  */
 async function recordActivityLog(user_id, event_type, target, rfid, reason = null) {
@@ -473,11 +474,11 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
  * Otherwise, inserts a new record with proper user association or updates existing one.
  *
  * @async
- * @param {Object<steve_txn>} txn - Transaction from Steve system
+ * @param {Object<steve_txn>} steve_txn - Transaction from Steve system
  * @returns {Promise<Object<db_txn>>} db_txn - The transaction record from database
  */
-async function recordSteveTxn(txn) {
-    const {transactionError} = steveTransactionSchema.validate(txn);
+async function recordSteveTxn(steve_txn) {
+    const {transactionError} = steveTransactionSchema.validate(steve_txn);
     if (transactionError) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
@@ -493,54 +494,64 @@ async function recordSteveTxn(txn) {
         const existingTxnQuery = `
             SELECT *
             FROM charging_transactions
-            WHERE tx_steve_id = $1
+            WHERE txn_steve_id = $1::integer
+            LIMIT 1
         `;
 
-        const existingTxnResult = await client.query(existingTxnQuery, [txn.id]);
+        const existingTxnResult = await client.query(existingTxnQuery, [steve_txn.id]);
 
         // If transaction exists, check if values match to avoid unnecessary updates
-        if (existingTxnResult.rowCount > 0) {
-            const existingTxn = existingTxnResult.rows[0];
+        if (existingTxnResult.rows.length > 0) {
+            const existing_txn = existingTxnResult.rows[0];
+            // const existing_txn_start_datetime = existing_txn.start_timestamp ? DateTime.fromJSDate(existing_txn.start_timestamp).toUTC() : null;
+            // const incoming_txn_start_datetime = steve_txn.startTimestamp ? DateTime.fromISO(steve_txn.startTimestamp).toUTC() : null;
+            const existing_txn_stop_datetime = existing_txn.stop_timestamp ? DateTime.fromJSDate(existing_txn.stop_timestamp).toUTC() : null;
+            const incoming_txn_stop_datetime = steve_txn.stopTimestamp ? DateTime.fromISO(steve_txn.stopTimestamp).toUTC() : null;
 
+            /// I am skeptical about checking timestamps with such precision, or even at all
+            // const has_same_start = existing_txn_start_datetime && incoming_txn_start_datetime && existing_txn_start_datetime.toMillis() === incoming_txn_start_datetime.toMillis();
+            // const has_same_stop = existing_txn_stop_datetime && incoming_txn_stop_datetime && existing_txn_stop_datetime.toMillis() === incoming_txn_stop_datetime.toMillis();
+
+            // TODO: This much precision check might brake the check, examine more
             // Check if transaction is complete and matches incoming data
-            if (existingTx.stop_timestamp !== null &&
-                DateTime.fromJSDate(existingTx.stop_timestamp).toUTC().toMillis() === DateTime.fromISO(tx.stopTimestamp).toMillis()
-            ) {
-                logger.info('Transaction already exists with matching stop timestamp - returning existing record');
+            if (existing_txn.txn_steve_id === steve_txn.id) {
+                if (incoming_txn_stop_datetime && existing_txn_stop_datetime) {
+                    logger.info('Transaction already exists - returning existing record');
+                    await client.query('COMMIT');
+                    return existing_txn;
+                }
+
+                // Transaction exists but needs updating
+                logger.info(`Updating existing transaction ${existing_txn.id} (Steve txn ID: ${steve_txn.id})`);
+                // How much safe to update existing transaction?
+                // We assume that start values are immutable, only stop values can change
+                const updateQuery = `
+                    UPDATE charging_transactions
+                    SET start_timestamp = $1,
+                        stop_timestamp  = $2,
+                        start_value     = $3::numeric,
+                        stop_value      = $4::numeric,
+                        stop_reason     = $5::varchar
+                    WHERE txn_steve_id = $6::integer
+                    RETURNING *
+                `;
+
+                const updateValues = [
+                    steve_txn.startTimestamp,
+                    steve_txn.stopTimestamp,
+                    steve_txn.startValue,
+                    steve_txn.stopValue,
+                    steve_txn.stopReason,
+                    steve_txn.id,
+                ];
+
+                const updateResult = await client.query(updateQuery, updateValues);
                 await client.query('COMMIT');
-                return existingTxn;
+                return updateResult.rows[0];
             }
-
-            // Transaction exists but needs updating
-            logger.info(`Updating existing transaction ${existingTxn.id} (Steve ID: ${txn.id})`);
-            const updateQuery = `
-                UPDATE charging_transactions
-                SET ocpp_id_tag     = $1,
-                    start_timestamp = $2,
-                    stop_timestamp  = $3,
-                    start_value     = $4::numeric,
-                    stop_value      = $5::numeric,
-                    stop_reason     = $6::varchar
-                WHERE tx_steve_id = $7::integer
-                RETURNING *
-            `;
-
-            const updateValues = [
-                txn.ocppIdTag,
-                txn.startTimestamp,
-                txn.stopTimestamp,
-                txn.startValue,
-                txn.stopValue,
-                txn.stopReason,
-                txn.id,
-            ];
-
-            const updateResult = await client.query(updateQuery, updateValues);
-            await client.query('COMMIT');
-            return updateResult.rows[0];
         }
 
-        // Transaction doesn't exist, proceed with user lookup
+        // Transaction doesn't exist, proceed to insert
         const userCrossCheckQuery = `
             SELECT user_id
             FROM users
@@ -548,32 +559,31 @@ async function recordSteveTxn(txn) {
               AND rfid = $2::varchar
         `;
 
-        const userCrossCheckResult = await client.query(userCrossCheckQuery, [txn.ocppTagPk, txn.ocppIdTag]);
+        const userCrossCheckResult = await client.query(userCrossCheckQuery, [steve_txn.ocppTagPk, steve_txn.ocppIdTag]);
         let user_id = null;
 
-        if (userCrossCheckResult.rowCount > 0) {
-            user_id = userCrossCheckResult.rows[0].user_id;
-        } else {
+        if (userCrossCheckResult.rowCount > 0) user_id = userCrossCheckResult.rows[0].user_id;
+        else {
             logger.warn(`Unknown user's transaction is received. Inserting without user_id.`, {
-                ocppTagPk: txn.ocppTagPk,
-                ocppIdTag: txn.ocppIdTag,
+                ocppTagPk: steve_txn.ocppTagPk,
+                ocppIdTag: steve_txn.ocppIdTag,
             });
         }
 
         const insertQuery = `INSERT INTO charging_transactions
-                             (tx_steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
+                             (txn_steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
                               stop_reason, user_id)
                              VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar, $8)
                              RETURNING *`;
 
         const values = [
-            txn.id,
-            txn.ocppIdTag,
-            txn.startTimestamp,
-            txn.stopTimestamp,
-            txn.startValue,
-            txn.stopValue,
-            txn.stopReason,
+            steve_txn.id,
+            steve_txn.ocppIdTag,
+            steve_txn.startTimestamp,
+            steve_txn.stopTimestamp,
+            steve_txn.startValue,
+            steve_txn.stopValue,
+            steve_txn.stopReason,
             user_id,
         ];
 
@@ -657,12 +667,17 @@ async function getLastStopTimestamp() {
  * This is used to link a transaction to an invoice in Odoo.
  *
  * @async
- * @param {Object<db_txn>} txn - The transaction object (must include `id`).
+ * @param {Object<db_txn>} txn - The transaction object
  * @param {number} invoice_id - The invoice ID came from Odoo to set.
  * @returns {Promise<void>}
  * @throws {DatabaseError|ValidationError} On query error.
  */
 async function saveInvoiceId(txn, invoice_id) {
+    const {error} = dbTransactionSchema.validate(txn);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error);
+    }
+
     const query = `
         UPDATE charging_transactions
         SET invoice_ref = $1::integer

@@ -67,7 +67,7 @@ describe('Steve Transactions Service', () => {
 
     const sampleDbTransaction = {
         id: 1,
-        tx_steve_id: 12345,
+        txn_steve_id: 12345,
         ocpp_id_tag: 'test_rfid',
         start_timestamp: new Date('2025-06-16T10:00:00Z'),
         stop_timestamp: new Date('2025-06-16T11:00:00Z'),
@@ -120,7 +120,7 @@ describe('Steve Transactions Service', () => {
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
                     params: {
-                        type: 'STOPPED',
+                        type: 'ALL',
                         periodType: 'FROM_TO',
                         from: expect.any(String),
                         to: expect.any(String),
@@ -143,6 +143,7 @@ describe('Steve Transactions Service', () => {
             // Verify returned result matches expected format
             expect(result).toEqual({
                 fetched: 1,
+                billed: 1,
                 high_water_mark: expect.any(DateTime),
             });
         });
@@ -167,7 +168,7 @@ describe('Steve Transactions Service', () => {
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
                     params: {
-                        type: 'STOPPED',
+                        type: 'ALL',
                         periodType: 'ALL',
                     },
                 },
@@ -179,6 +180,7 @@ describe('Steve Transactions Service', () => {
             // Verify returned result matches expected format for no transactions
             expect(result).toEqual({
                 fetched: 0,
+                billed: 0,
                 high_water_mark: expect.any(DateTime),
             });
         });
