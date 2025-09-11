@@ -89,9 +89,10 @@ database queries for specialized consent management requirements.</p>
 </dd>
 <dt><a href="#module_services/steve_transactions">services/steve_transactions</a></dt>
 <dd><p>SteVe Transactions Service</p>
-<p>Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+<p>Incremental fetch of all transactions since last high‑water mark (T0).
+Records all transactions in database, but only bills permanently stopped ones.
 High‑Water Mark Concept:
-We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
+We persist the timestamp of the latest processed transaction (the &quot;high‑water mark&quot; or T0).
 On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
 After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
   • No overlap or reprocessing of already handled transactions.
@@ -709,9 +710,10 @@ Checks if the given user has a valid payment method in Odoo.
 ## services/steve\_transactions
 SteVe Transactions Service
 
-Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+Incremental fetch of all transactions since last high‑water mark (T0).
+Records all transactions in database, but only bills permanently stopped ones.
 High‑Water Mark Concept:
-We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
+We persist the timestamp of the latest processed transaction (the "high‑water mark" or T0).
 On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
 After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 • No overlap or reprocessing of already handled transactions.
@@ -720,53 +722,84 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 
 
 * [services/steve_transactions](#module_services/steve_transactions)
+    * [~TEMPORARY_STOP_REASONS](#module_services/steve_transactions..TEMPORARY_STOP_REASONS)
+    * [~PERMANENT_STOP_REASONS](#module_services/steve_transactions..PERMANENT_STOP_REASONS)
     * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>
-      Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-    * [~processTxnsSince(txns)](#module_services/steve_transactions..processTxnsSince) ⇒ <code>Promise.&lt;{maxStop:
-      DateTime, processedCount: number}&gt;</code>
+      Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+    * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>
+      boolean</code>
+    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+      processedCount: number, billedCount: number}&gt;</code>
     * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+      billed: number, high\_water\_mark: DateTime}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
       high\_water\_mark: DateTime}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
-    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
       high\_water\_mark: DateTime}&gt;</code>
 
+<a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
+
+### services/steve_transactions~TEMPORARY\_STOP\_REASONS
+
+Stop reasons that indicate a transaction is temporarily stopped/paused
+and should not be billed yet (may resume later)
+
+**Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
+<a name="module_services/steve_transactions..PERMANENT_STOP_REASONS"></a>
+
+### services/steve_transactions~PERMANENT\_STOP\_REASONS
+
+Stop reasons that indicate a permanent transaction end
+and should be processed for billing
+
+**Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..fetchTxnsSince"></a>
 
-### services/steve_transactions~fetchTxnsSince(since) ⇒ <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-Fetch STOPPED transactions since a given timestamp (exclusive)
+### services/steve_transactions~fetchTxnsSince(since) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+
+Fetch all transactions since a given timestamp (exclusive)
 If no timestamp is provided, fetch all transactions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> - Array of transactions  
-<a name="module_services/steve_transactions..processTxnsSince"></a>
+**Returns**: <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code> - Array of transactions  
+<a name="module_services/steve_transactions..shouldProcessTransaction"></a>
 
-### services/steve_transactions~processTxnsSince(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number}&gt;</code>
-Record and create bills for transactions/charging sessions
+### services/steve_transactions~shouldProcessTransaction(txn) ⇒ <code>boolean</code>
+
+Determines if a transaction should be processed for billing based on its stop reason
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedCount: number}&gt;</code> - The new high‑water mark (max
-stopTimestamp) and count of unique processed  
+**Returns**: <code>boolean</code> - True if transaction should be billed  
+<a name="module_services/steve_transactions..processTxns"></a>
+
+### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code>
+
+Record all transactions and create bills for permanently stopped transactions
+
+**Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
+**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code> - The new
+high‑water mark (max stopTimestamp), count of all processed transactions, and count of billed transactions  
 **Throws**:
 
 - <code>ValidationError</code> If any transaction does not match the expected schema
 
 <a name="module_services/steve_transactions..runIncremental"></a>
 
-### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
-Run incremental billing cycle: fetch and process since last T0
+### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+
+Run incremental billing cycle: fetch and process since last watermark
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
-### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
 Fetches all transactions from Steve, processes them, and updates the high-water mark.
 Use for a full sync (no time filter).
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runToday"></a>
 
-### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
 Fetch and process all of today's transactions and updates the high-water mark.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -876,27 +909,27 @@ Global database queries
 * [utils/queries](#module_utils/queries)
     * [~handleQueryError(error, operation, silent)](#module_utils/queries..handleQueryError)
     * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
-    * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
-      &gt;</code>
-    * [~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt)](#module_utils/queries..setUserOdooCredentials) ⇒ <code>
-      Promise.&lt;number&gt;</code>
-    * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(
-      Object\|null)&gt;</code>
-    * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
-      Promise.&lt;boolean&gt;</code>
-    * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
-      Object\|undefined)&gt;</code>
-    * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>
-      Promise.&lt;void&gt;</code>
-    * [~recordSteveTxn(txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>
-      Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
-    * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
-      Promise.&lt;void&gt;</code>
-    * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
-      &gt;</code>
+  * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
+    &gt;</code>
+  * [~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt)](#module_utils/queries..setUserOdooCredentials) ⇒ <code>
+    Promise.&lt;number&gt;</code>
+  * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(Object\|null)
+    &gt;</code>
+  * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
+    Promise.&lt;boolean&gt;</code>
+  * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
+    Object\|undefined)&gt;</code>
+  * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>
+    Promise.&lt;void&gt;</code>
+  * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>
+    Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
+  * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
+    Promise.&lt;void&gt;</code>
+  * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
+    &gt;</code>
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
-    * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
-      Promise.&lt;number&gt;</code> \| <code>null</code>
+  * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
+    Promise.&lt;number&gt;</code> \| <code>null</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
@@ -997,7 +1030,7 @@ Records an activity event for a user in the activity log.
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..recordSteveTxn"></a>
 
-### utils/queries~recordSteveTxn(txn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
+### utils/queries~recordSteveTxn(steve_txn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
 Record a transaction record into the `charging_transactions` table.
 If transaction already exists and is complete, returns it without modification.
 Otherwise, inserts a new record with proper user association or updates existing one.
@@ -1014,7 +1047,6 @@ Inserts or updates the `watermark` table with the given timestamp.
 <a name="module_utils/queries..getLastStopTimestamp"></a>
 
 ### utils/queries~getLastStopTimestamp() ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
-
 Retrieves the most recent `last_stop_timestamp` aka watermark from the watermark table.
 Returns a Luxon DateTime if found, otherwise null.
 
@@ -1140,7 +1172,7 @@ Type definitions
 | ocpp_id_tag         | <code>number</code> | The Ocpp Tag used in the transaction (rfid in strohm.users table)                    |
 | user_id             | <code>number</code> | The user ID associated with the transaction                                          |
 | invoice_ref         | <code>number</code> | The invoice reference associated with the transaction returned from Odoo             |
-| steve_id            | <code>number</code> | PK of the transaction in SteVe                                                       |
+| txn_steve_id        | <code>number</code> | PK of the transaction in SteVe                                                       |
 
 <a name="module_utils/typedef..electricity_price"></a>
 
