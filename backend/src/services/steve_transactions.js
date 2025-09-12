@@ -18,7 +18,7 @@ const {steveAxios} = require('./network');
 const {fmt} = require('#utils/datetime_format');
 const {STEVE_CONFIG} = require('#config');
 const {steveTransactionSchema} = require('#utils/joi');
-const {ValidationError, ErrorCodes} = require('#utils/errors');
+const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const {db} = require('#utils/queries');
 const {createOdooTxnInvoice} = require('./odoo');
 const logger = require('#services/logger');
@@ -36,7 +36,7 @@ const TxnPeriodType = Object.freeze({
 });
 
 const TxnType = Object.freeze({
-    ALL: 'ALL', // default in SteVe
+    ALL: 'ALL', // default in SteVe, ignores FROM_TO variable and returns all transactions
     ACTIVE: 'ACTIVE',
     STOPPED: 'STOPPED',
 });
@@ -50,32 +50,63 @@ const TxnType = Object.freeze({
  * @returns {Promise<Array<{steve_txn}>>} Array of transactions
  */
 async function fetchTxnsSince(since) {
-    const to = DateTime.now();
+    const now = DateTime.now();
 
-    // Fetch all transactions (both active and stopped) to record them in database
-    let params = {
-        type: TxnType.ALL,
-    };
 
-    // If `since` is provided, add periodType and date range
+// Fetch all transactions (both active and stopped) to record them in database
+    let baseParams = {};
+
+// If `since` is provided, add periodType and date range
     if (since) {
         if (!since.isValid) {
             throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid 'since' DateTime: ${since.invalidExplanation}`);
         }
-        params.periodType = TxnPeriodType.FROM_TO;
-        params.from = fmt(since.toUTC());
-        params.to = fmt(to.toUTC());
-        logger.info(`Fetching transactions from SteVe since ${since.toISO()} to ${to.toISO()}`);
+        // Validate that since is before now
+        if (since > now) {
+            throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `'since' timestamp must be before than current time. since: ${since.toISO()}, now: ${now.toISO()}`);
+        }
+
+        baseParams.periodType = TxnPeriodType.FROM_TO;
+        baseParams.from = fmt(since.toUTC());
+        baseParams.to = fmt(now.toUTC());
+
+        logger.info(`Fetching transactions from SteVe since ${since.toISO()} to ${now.toISO()}`);
     } else {
         // If `since` is not provided, fetch all transactions
-        params.periodType = TxnPeriodType.ALL;
+        baseParams.periodType = TxnPeriodType.ALL;
         logger.info('Fetching all transactions from SteVe');
     }
 
+    // Fetch both stopped and active transactions
+    const stoppedParams = {...baseParams, type: TxnType.STOPPED};
+    const activeParams = {...baseParams, type: TxnType.ACTIVE};
 
-    const res = await steveAxios.get(STEVE_CONFIG.TRANSACTIONS_URI, {params});
-    // TODO: Check the response
-    return res.data;
+    logger.verbose('Fetch parameters for stopped transactions', stoppedParams);
+    logger.verbose('Fetch parameters for active transactions', activeParams);
+
+    const [stoppedRes, activeRes] = await Promise.all([
+        steveAxios.get(STEVE_CONFIG.TRANSACTIONS_URI, {params: stoppedParams}),
+        steveAxios.get(STEVE_CONFIG.TRANSACTIONS_URI, {params: activeParams}),
+    ]);
+
+    if (stoppedRes.status !== 200) {
+        throw new SystemError(ErrorCodes.STEVE.NO_RESPONSE, {res: stoppedRes});
+    }
+    if (activeRes.status !== 200) {
+        throw new SystemError(ErrorCodes.STEVE.NO_RESPONSE, {res: activeRes});
+    }
+
+    const stoppedTxns = stoppedRes?.data || [];
+    const activeTxns = activeRes?.data || [];
+
+    logger.verbose(`Fetched ${stoppedTxns.length} stopped transactions from SteVe`, stoppedTxns ? {
+        sample: stoppedTxns.slice(0, 2),
+    } : undefined);
+    logger.verbose(`Fetched ${activeTxns.length} active transactions from SteVe`, activeTxns ? {
+        sample: activeTxns.slice(0, 2),
+    } : undefined);
+
+    return [...stoppedTxns, ...activeTxns];
 }
 
 
@@ -130,7 +161,7 @@ function shouldProcessTransaction(txn) {
         return false;
     }
 
-    // If it's a known permanent stop reason or no reason provided, process it
+    // If it's a known permanent stop reason, process it
     if (PERMANENT_STOP_REASONS.has(stop_reason)) {
         return true;
     }
@@ -156,7 +187,7 @@ async function processTxns(txns) {
             // Validate transaction against schema
             const {error} = steveTransactionSchema.validate(txn);
             if (error) {
-                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error.message);
+                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error);
             }
             return map.set(txn.id, txn);
         }, new Map()).values(),
@@ -181,13 +212,13 @@ async function processTxns(txns) {
 
         // Only create bills for transactions with permanent stop reasons
         if (shouldProcessTransaction(txn)) {
-            logger.info('Creating bill for transaction: ' + txn.id);
-
             // If the transaction does not have a invoice_ref to odoo
             // and have a associated user, create a bill.
             if (!db_txn.invoice_ref && db_txn.user_id) {
+                logger.info('Creating bill for transaction: ' + txn.id);
                 const bill_id = await createOdooTxnInvoice(db_txn);
                 await db.saveInvoiceId(db_txn, bill_id);
+                logger.info(`Created bill ${bill_id} for transaction ${txn.id}`);
             }
         } else {
             logger.info(`Transaction ${txn.id} recorded but not billed due to its state: ${txn.stopReason}`);
@@ -233,7 +264,7 @@ async function runIncremental() {
             // Only update high-water mark after successful processing
             await db.setLastStopTimestamp(new_watermark);
         } catch (e) {
-            logger.error('Failed to process transactions, high-water mark not updated');
+            logger.error('Failed to process transactions, high-water mark not updated', e);
             throw e;
         }
     } else {

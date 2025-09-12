@@ -638,26 +638,36 @@ async function setLastStopTimestamp(new_watermark) {
  * @returns {Promise<DateTime|null>} The latest stop timestamp or null if not found or error on watermark fetch.
  */
 async function getLastStopTimestamp() {
-    const query = `
-        SELECT last_stop_timestamp::timestamptz
-        FROM watermark
-        ORDER BY created_at DESC
-        LIMIT 1
-    `;
+    const query = `SELECT last_stop_timestamp::timestamptz, iterated_at::timestamptz
+                   FROM watermark
+                   ORDER BY created_at DESC
+                   LIMIT 1;`;
+
     let last_stop_timestamp = null;
 
     const client = await pool.connect();
     try {
         const result = await client.query(query);
-        last_stop_timestamp = result.rows[0]?.last_stop_timestamp
-            ? DateTime.fromJSDate(result.rows[0].last_stop_timestamp)
-            : null;
+        const row = result.rows[0];
+
+        if (row) {
+            const lastStopTs = row.last_stop_timestamp ? DateTime.fromJSDate(row.last_stop_timestamp) : null;
+            const iteratedAt = row.iterated_at ? DateTime.fromJSDate(row.iterated_at) : null;
+
+            // If iterated_at exists and is greater than last_stop_timestamp, use iterated_at
+            if (iteratedAt && lastStopTs && iteratedAt > lastStopTs) {
+                last_stop_timestamp = iteratedAt;
+            } else {
+                last_stop_timestamp = lastStopTs;
+            }
+        }
     } catch (error) {
         // Silently log the error as we dont want to break functionality if watermark is missing
         handleQueryError(error, 'getLastStopTimestamp', true);
     } finally {
         client.release();
     }
+    logger.verbose('Fetched last stop timestamp watermark:', {last_stop_timestamp: last_stop_timestamp ? last_stop_timestamp.toISO() : 'N/A'});
     return last_stop_timestamp;
 }
 

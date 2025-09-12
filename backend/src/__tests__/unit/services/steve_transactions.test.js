@@ -39,6 +39,8 @@ jest.mock('#services/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    debug: jest.fn(),
+    verbose: jest.fn(),
 }));
 
 jest.mock('#config', () => ({
