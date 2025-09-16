@@ -20,13 +20,14 @@ const logger = require('./services/logger');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
 const {morganMiddleware} = require('./services/logger');
-const auth_controller = require("./controllers/auth");
-const odoo_controller = require("./controllers/odoo");
-const scim_controller = require("./controllers/scim");
-const consent_controller = require("./controllers/consent");
-const {requireConsent} = require("./middlewares/consent");
+const auth_controller = require('./controllers/auth');
+const odoo_controller = require('./controllers/odoo');
+const scim_controller = require('./controllers/scim');
+const consent_controller = require('./controllers/consent');
+const {requireConsent} = require('./middlewares/consent');
 
 Settings.defaultZoneName = 'utc';
+Settings.defaultLocale = 'de-DE';
 
 
 // Handling response status codes where the respected function is called instead of axios throwing an error
@@ -37,7 +38,7 @@ axios.interceptors.response.use(function (response) {
     // Optional: Do something with response data
     return response;
 }, function (error) {
-    // Do whatever you want with the response error here:
+    // Do whatever we want with the response error here:
 
     // But, be SURE to return the rejected promise, so the caller still has
     // the option of additional specialized handling at the call-site:

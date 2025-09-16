@@ -22,9 +22,11 @@ const testConnection = async () => {
     }
 };
 
-// Test the connection when this module is imported
-testConnection().catch((error) => {
-	throw new DatabaseError(ErrorCodes.DATABASE.CONNECTION_ERROR, 'Database connection error', error)
-});
+// Test the connection when this module is imported only if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+    testConnection().catch((error) => {
+        throw new DatabaseError(ErrorCodes.DATABASE.CONNECTION_ERROR, error);
+    });
+}
 
 module.exports = pool;
