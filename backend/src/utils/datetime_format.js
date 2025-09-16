@@ -1,6 +1,9 @@
 /**
  * @file DateTime formatting utilities
+ * The overall app uses Luxon for date/time handling.
  * If no time relation information is given with a timezone representation, the time is assumed to be in UTC time.
+ * defaultLocale is set to de-DE (Germany) in app.js
+ * defaultZoneName is set to 'utc' in app.js
  * Z = Zulu = UTC ~= GMT(+0)
  */
 

@@ -98,6 +98,7 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
   • No overlap or reprocessing of already handled transactions.
   • No gaps: even if a transaction ends just after T0, it will be fetched next run.
   • Linear, efficient incremental retrieval without maintaining complex windows.</p>
+<p>Steve API docs: Steve <a href="http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html">http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html</a></p>
 </dd>
 <dt><a href="#module_services/steve_user">services/steve_user</a></dt>
 <dd><p>SteVe User Service</p>
@@ -720,43 +721,43 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 • No gaps: even if a transaction ends just after T0, it will be fetched next run.
 • Linear, efficient incremental retrieval without maintaining complex windows.
 
+Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html
 
 * [services/steve_transactions](#module_services/steve_transactions)
     * [~TEMPORARY_STOP_REASONS](#module_services/steve_transactions..TEMPORARY_STOP_REASONS)
     * [~PERMANENT_STOP_REASONS](#module_services/steve_transactions..PERMANENT_STOP_REASONS)
-    * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>
-      Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
-    * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>
-      boolean</code>
-    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime,
-      processedCount: number, billedCount: number}&gt;</code>
-    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-      billed: number, high\_water\_mark: DateTime}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
-      high\_water\_mark: DateTime}&gt;</code>
-    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
-      high\_water\_mark: DateTime}&gt;</code>
+  * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>
+    Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+  * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>
+    boolean</code>
+  * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+    processedCount: number, billedCount: number}&gt;</code>
+  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+    billed: number, high\_water\_mark: DateTime}&gt;</code>
+  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
+    high\_water\_mark: DateTime}&gt;</code>
+  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
+    high\_water\_mark: DateTime}&gt;</code>
 
 <a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
 
 ### services/steve_transactions~TEMPORARY\_STOP\_REASONS
-
 Stop reasons that indicate a transaction is temporarily stopped/paused
-and should not be billed yet (may resume later)
+and should not be billed yet (may resume later).
+According to OCPP1.6 spec
 
 **Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..PERMANENT_STOP_REASONS"></a>
 
 ### services/steve_transactions~PERMANENT\_STOP\_REASONS
-
 Stop reasons that indicate a permanent transaction end
-and should be processed for billing
+and should be processed for billing.
+According to OCPP1.6 spec
 
 **Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..fetchTxnsSince"></a>
 
 ### services/steve_transactions~fetchTxnsSince(since) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
-
 Fetch all transactions since a given timestamp (exclusive)
 If no timestamp is provided, fetch all transactions
 
@@ -765,7 +766,6 @@ If no timestamp is provided, fetch all transactions
 <a name="module_services/steve_transactions..shouldProcessTransaction"></a>
 
 ### services/steve_transactions~shouldProcessTransaction(txn) ⇒ <code>boolean</code>
-
 Determines if a transaction should be processed for billing based on its stop reason
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -773,7 +773,6 @@ Determines if a transaction should be processed for billing based on its stop re
 <a name="module_services/steve_transactions..processTxns"></a>
 
 ### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code>
-
 Record all transactions and create bills for permanently stopped transactions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -786,7 +785,6 @@ high‑water mark (max stopTimestamp), count of all processed transactions, and 
 <a name="module_services/steve_transactions..runIncremental"></a>
 
 ### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
-
 Run incremental billing cycle: fetch and process since last watermark
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  

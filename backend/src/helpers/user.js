@@ -1,3 +1,8 @@
+/*
+ * Helper functions for user management
+ * Not used at the moment but could be useful in the future
+ */
+
 const {getUserUnique} = require('#utils/queries');
 const {ValidationError, ErrorCodes} = require('#utils/errors');
 

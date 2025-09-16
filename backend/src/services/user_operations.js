@@ -33,6 +33,7 @@ const userOperations = async (oidc_user) => {
         // Use random RFID for development
         let rfid = Math.random().toString(36).substring(2, 10);
         // const rfid = oidc_user.rfid,
+
         if (env === 'dev' || env === 'test') {
             if (oidc_user.email === "tester@tester2.com") {
                 rfid = "4doiy7pg"
@@ -64,7 +65,7 @@ const userOperations = async (oidc_user) => {
 
     // Only fully qualified users are allowed to move further
     //TODO: If this fails show error message to user and end the session (logout)
-    validateUser(user);
+    validateUser(user); // throws if not valid
 
     // const has_valid_payment_method = await checkValidPaymentMethod(user);
     // if (!has_valid_payment_method) {

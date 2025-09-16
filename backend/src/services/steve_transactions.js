@@ -11,6 +11,8 @@
  *   • No gaps: even if a transaction ends just after T0, it will be fetched next run.
  *   • Linear, efficient incremental retrieval without maintaining complex windows.
  *
+ * Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html
+ *
  * @module services/steve_transactions
  */
 const {DateTime} = require('luxon');
@@ -23,9 +25,8 @@ const {db} = require('#utils/queries');
 const {createOdooTxnInvoice} = require('./odoo');
 const logger = require('#services/logger');
 
-/// Steve API docs: http://localhost:8180/steve/manager/swagger-ui/swagger-ui/index.html
 
-
+// Transaction fetch parameters according to Steve API
 const TxnPeriodType = Object.freeze({
     ALL: 'ALL', // default in SteVe
     TODAY: 'TODAY',
@@ -35,6 +36,7 @@ const TxnPeriodType = Object.freeze({
     FROM_TO: 'FROM_TO', // requires `from` and `to` params
 });
 
+// Transaction types according to Steve API
 const TxnType = Object.freeze({
     ALL: 'ALL', // default in SteVe, ignores FROM_TO variable and returns all transactions
     ACTIVE: 'ACTIVE',
@@ -112,7 +114,8 @@ async function fetchTxnsSince(since) {
 
 /**
  * Stop reasons that indicate a transaction is temporarily stopped/paused
- * and should not be billed yet (may resume later)
+ * and should not be billed yet (may resume later).
+ * According to OCPP1.6 spec
  */
 const TEMPORARY_STOP_REASONS = new Set([
     'EmergencyStop',    // Emergency stop - may resume after issue resolved
@@ -124,7 +127,8 @@ const TEMPORARY_STOP_REASONS = new Set([
 
 /**
  * Stop reasons that indicate a permanent transaction end
- * and should be processed for billing
+ * and should be processed for billing.
+ * According to OCPP1.6 spec
  */
 const PERMANENT_STOP_REASONS = new Set([
     'DeAuthorized',     // User was deauthorized - transaction complete
@@ -261,7 +265,7 @@ async function runIncremental() {
             processedCount = processed;
             billedCount = billed;
 
-            // Only update high-water mark after successful processing
+            // Only update high-water mark after successful processing to prevent transaction miss
             await db.setLastStopTimestamp(new_watermark);
         } catch (e) {
             logger.error('Failed to process transactions, high-water mark not updated', e);
@@ -324,7 +328,6 @@ async function runToday() {
 
 module.exports = {
     runIncremental,
-    shouldProcessTransaction,
     TEMPORARY_STOP_REASONS,
     PERMANENT_STOP_REASONS,
     TxnPeriodType,
