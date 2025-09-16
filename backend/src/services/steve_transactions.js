@@ -322,4 +322,11 @@ async function runToday() {
     return {fetched: processedCount, billed: billedCount, high_water_mark: watermark};
 }
 
-module.exports = {runIncremental, shouldProcessTransaction, TEMPORARY_STOP_REASONS, PERMANENT_STOP_REASONS};
+module.exports = {
+    runIncremental,
+    shouldProcessTransaction,
+    TEMPORARY_STOP_REASONS,
+    PERMANENT_STOP_REASONS,
+    TxnPeriodType,
+    TxnType,
+};

@@ -2,7 +2,7 @@
  * @file Unit tests for Steve transactions service
  */
 const {DateTime} = require('luxon');
-const {runIncremental} = require('#services/steve_transactions');
+const {runIncremental, TxnType, TxnPeriodType} = require('#services/steve_transactions');
 const {steveAxios} = require('#services/network');
 const {db} = require('#utils/queries');
 const {fmt} = require('#utils/datetime_format');
@@ -117,13 +117,24 @@ describe('Steve Transactions Service', () => {
             // Verify getLastStopTimestamp was called
             expect(db.getLastStopTimestamp).toHaveBeenCalled();
 
-            // Verify axios get was called with correct parameters (adding 1 second to prevent overlap)
             expect(steveAxios.get).toHaveBeenCalledWith(
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
                     params: {
-                        type: 'ALL',
-                        periodType: 'FROM_TO',
+                        type: TxnType.ACTIVE,
+                        periodType: TxnPeriodType.FROM_TO,
+                        from: expect.any(String),
+                        to: expect.any(String),
+                    },
+                },
+            );
+
+            expect(steveAxios.get).toHaveBeenCalledWith(
+                STEVE_CONFIG.TRANSACTIONS_URI,
+                {
+                    params: {
+                        type: TxnType.STOPPED,
+                        periodType: TxnPeriodType.FROM_TO,
                         from: expect.any(String),
                         to: expect.any(String),
                     },
@@ -170,8 +181,18 @@ describe('Steve Transactions Service', () => {
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
                     params: {
-                        type: 'ALL',
-                        periodType: 'ALL',
+                        type: TxnType.ACTIVE,
+                        periodType: TxnPeriodType.ALL,
+                    },
+                },
+            );
+
+            expect(steveAxios.get).toHaveBeenCalledWith(
+                STEVE_CONFIG.TRANSACTIONS_URI,
+                {
+                    params: {
+                        type: TxnType.STOPPED,
+                        periodType: TxnPeriodType.ALL,
                     },
                 },
             );

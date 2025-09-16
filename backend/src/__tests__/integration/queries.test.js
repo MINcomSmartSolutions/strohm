@@ -637,7 +637,7 @@ describe('Database Queries Integration Tests', () => {
 
     describe('Watermark', () => {
         test('setLastStopTimestamp and getLastStopTimestamp should work', async () => {
-            const testDate = new Date();
+            const testDate = DateTime.now().minus({hours: 2});
 
             // Set watermark
             await db.setLastStopTimestamp(testDate);
@@ -646,7 +646,7 @@ describe('Database Queries Integration Tests', () => {
             const watermark = await db.getLastStopTimestamp();
 
             expect(watermark).toBeDefined();
-            expect(watermark.toJSDate().getTime()).toBeCloseTo(testDate.getTime(), -3); // Allow small difference due to DB conversion
+            expect(watermark.toJSDate().getTime()).toBeCloseTo(testDate.toJSDate().getTime()); // Allow small difference due to DB conversion
         });
 
         test('getLastStopTimestamp should return null when no watermark exists', async () => {
@@ -665,7 +665,7 @@ describe('Database Queries Integration Tests', () => {
 
         test('setLastStopTimestamp should update existing timestamp', async () => {
             // Set initial watermark
-            const initialDate = new Date('2025-01-01T12:00:00Z');
+            const initialDate = DateTime.now();
 
             await db.setLastStopTimestamp(initialDate);
 
@@ -673,11 +673,9 @@ describe('Database Queries Integration Tests', () => {
 
             await db.setLastStopTimestamp(initialDate);
 
-            // Get the watermark
             const watermark = await db.getLastStopTimestamp();
 
-            // Should be the new date
-            expect(watermark.toJSDate().getTime()).toBeCloseTo(initialDate.getTime(), -3);
+            expect(watermark.toJSDate().getTime()).toBeCloseTo(initialDate.toJSDate().getTime(), -3);
 
             // Check that there's only one record
             const client = await pool.connect();

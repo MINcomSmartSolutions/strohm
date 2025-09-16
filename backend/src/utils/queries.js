@@ -608,6 +608,14 @@ async function recordSteveTxn(steve_txn) {
  * @returns {Promise<void>}
  */
 async function setLastStopTimestamp(new_watermark) {
+    if (!new_watermark || !new_watermark.isValid) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Invalid or missing new watermark timestamp.`,
+        );
+    }
+
+
     const query = `
         INSERT INTO watermark (last_stop_timestamp)
         VALUES ($1::timestamptz)
