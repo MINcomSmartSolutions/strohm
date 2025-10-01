@@ -24,7 +24,7 @@ services:
 
   server:
     container_name: strohm_server_prod
-    image: "ghcr.io/mincom-strohm/strohm-backend:latest"
+    image: ghcr.io/mincomsmartsolutions/strohm_backend:latest
     restart: unless-stopped
     depends_on:
       db:
@@ -68,7 +68,7 @@ services:
 
   odoo:
     container_name: strohm_odoo_prod
-    image: "ghcr.io/mincom-strohm/odoo:latest"
+    image: ghcr.io/mincomsmartsolutions/odoo:latest
     restart: unless-stopped
     environment:
       DOODBA_ENV: "prod"
