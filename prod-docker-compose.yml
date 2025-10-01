@@ -1,0 +1,153 @@
+# Docker Compose file for production deployment
+
+services:
+  db:
+    container_name: strohm_db_prod
+    image: postgres:16.6
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d postgres'" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    environment:
+      POSTGRES_DB: "postgres"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PRODUCTION_PASSWORD}
+    volumes:
+      - main-db-data:/var/lib/postgresql/data
+      - ./database/init.d:/docker-entrypoint-initdb.d:ro
+    networks:
+      - strohm-network
+    # ports are only accessible within the docker network
+
+  server:
+    container_name: strohm_server_prod
+    image: "ghcr.io/mincom-strohm/strohm-backend:latest"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NODE_PORT: 3000
+      SERVER_OIDC_SECRET: ${SERVER_PRODUCTION_OIDC_SECRET}
+      SERVER_OIDC_CLIENT_ID: ${SERVER_PRODUCTION_OIDC_CLIENT_ID}
+      SERVER_OIDC_ISSUER_BASE_URL: ${SERVER_PRODUCTION_OIDC_ISSUER_BASE_URL}
+      SERVER_OIDC_BASE_URL: ${SERVER_PRODUCTION_BASE_URL}
+      SERVER_OIDC_CLIENT_SECRET: ${SERVER_PRODUCTION_OIDC_CLIENT_SECRET}
+      ODOO_ADMIN_API_KEY: ${ODOO_PRODUCTION_ADMIN_API_KEY}
+      ODOO_API_SECRET: ${ODOO_PRODUCTION_API_SECRET}
+      ODOO_HOST: odoo
+      ODOO_PORT: 8069
+      ODOO_EXTERNAL_HOST: ${ODOO_EXTERNAL_HOST:-ladenportal.hm.edu}
+      ODOO_EXTERNAL_PORT: 443
+      WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
+      DB_HOST: db
+      DB_NAME: ${STROHM_DB}
+      DB_USER: ${STROHM_DB_USER}
+      DB_PASSWORD: ${STROHM_DB_PASSWORD}
+      DB_PORT: 5432
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - strohm-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  odoo:
+    container_name: strohm_odoo_prod
+    image: "ghcr.io/mincom-strohm/odoo:latest"
+    restart: unless-stopped
+    environment:
+      DOODBA_ENV: "prod"
+      ODOO_ENV: "production"
+      LIST_DB: "false"
+      PGHOST: db
+      PGDATABASE: ${ODOO_DB}
+      PGUSER: ${ODOO_DB_USER}
+      PGPASSWORD: ${ODOO_DB_PRODUCTION_PASSWORD}
+      ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD}
+      PYTHONOPTIMIZE: 2
+      PYTHONDONTWRITEBYTECODE: 1
+      ODOO_API_SECRET: ${ODOO_PRODUCTION_API_SECRET}
+      INITIAL_LANG: "de_DE"
+      BACKEND_HOST: server
+      BACKEND_PORT: ${SERVER_PORT:-3000}
+      WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
+      WITHOUT_DEMO: "all"
+      PROXY_MODE: "true"
+      WORKERS: ${ODOO_WORKERS:-4}
+      MAX_CRON_THREADS: ${ODOO_MAX_CRON_THREADS:-2}
+    ports:
+      - "127.0.0.1:8069:8069"
+      - "127.0.0.1:8072:8072"
+    volumes:
+      - ./doodba/odoo/custom:/opt/odoo/custom:ro,z
+      - odoo-web-data:/var/lib/odoo:z
+      - odoo-logs:/var/log/odoo:z
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - strohm-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8069/web/health" ]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    command:
+      - odoo
+      - --limit-memory-hard=1610612736
+      - --limit-memory-soft=1073741824
+      - --limit-time-real-cron=7200
+      - --limit-time-real=600
+      - --workers=${ODOO_WORKERS:-4}
+      - --max-cron-threads=${ODOO_MAX_CRON_THREADS:-2}
+      - --proxy-mode
+
+  # Log management service
+  logrotate:
+    image: linkyard/docker-logrotate
+    container_name: strohm_logrotate
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - odoo-logs:/logs/odoo:rw
+    environment:
+      LOGS_DIRECTORIES: "/logs/odoo"
+      LOGROTATE_INTERVAL: daily
+      LOGROTATE_COPIES: 7
+
+volumes:
+  main-db-data:
+    driver: local
+  odoo-web-data:
+    driver: local
+  odoo-logs:
+    driver: local
+
+networks:
+  strohm-network:
+    driver: bridge
+    driver_opts:
+      encrypted: "true"
