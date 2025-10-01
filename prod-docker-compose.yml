@@ -68,7 +68,7 @@ services:
 
   odoo:
     container_name: strohm_odoo_prod
-    image: ghcr.io/mincomsmartsolutions/odoo:latest
+    image: ghcr.io/mincomsmartsolutions/odoo:18.0
     restart: unless-stopped
     environment:
       DOODBA_ENV: "prod"
@@ -123,20 +123,6 @@ services:
       - --workers=${ODOO_WORKERS:-4}
       - --max-cron-threads=${ODOO_MAX_CRON_THREADS:-2}
       - --proxy-mode
-
-  # Log management service
-  logrotate:
-    image: linkyard/docker-logrotate
-    container_name: strohm_logrotate
-    restart: unless-stopped
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      - odoo-logs:/logs/odoo:rw
-    environment:
-      LOGS_DIRECTORIES: "/logs/odoo"
-      LOGROTATE_INTERVAL: daily
-      LOGROTATE_COPIES: 7
 
 volumes:
   main-db-data:
