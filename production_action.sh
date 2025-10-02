@@ -105,31 +105,29 @@ initialize_fresh_deployment() {
     # Create databases and users using environment variables
     echo "Creating databases and users..."
 
-    # Create strohm user and database
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -c "
-        CREATE USER $STROHM_DB_USER WITH PASSWORD '$STROHM_DB_PASSWORD';
-        CREATE DATABASE $STROHM_DB WITH OWNER $STROHM_DB_USER ENCODING 'UTF8';
-        GRANT ALL PRIVILEGES ON DATABASE $STROHM_DB TO $STROHM_DB_USER;
-    "
+    # Create strohm user first
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE USER $STROHM_DB_USER WITH PASSWORD '$STROHM_DB_PASSWORD';"
 
-    # Create odoo user and database
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -c "
-        CREATE USER $ODOO_DB_USER WITH PASSWORD '$ODOO_DB_PRODUCTION_PASSWORD' CREATEDB;
-        CREATE DATABASE $ODOO_DB WITH OWNER $ODOO_DB_USER ENCODING 'UTF8';
-        GRANT ALL PRIVILEGES ON DATABASE $ODOO_DB TO $ODOO_DB_USER;
-    "
+    # Create strohm database (separate command to avoid transaction block)
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE $STROHM_DB WITH OWNER $STROHM_DB_USER ENCODING 'UTF8';"
+
+    # Grant privileges to strohm user
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $STROHM_DB TO $STROHM_DB_USER;"
+
+    # Create odoo user first
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE USER $ODOO_DB_USER WITH PASSWORD '$ODOO_DB_PRODUCTION_PASSWORD' CREATEDB;"
+
+    # Create odoo database (separate command to avoid transaction block)
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE $ODOO_DB WITH OWNER $ODOO_DB_USER ENCODING 'UTF8';"
+
+    # Grant privileges to odoo user
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $ODOO_DB TO $ODOO_DB_USER;"
 
     # Apply database structure for strohm (modify to use env variables)
     echo "Applying Strohm database structure..."
-    # Create a temporary SQL file that uses environment variables
-    cat > /tmp/strohm_init.sql << EOF
-CREATE DATABASE $STROHM_DB WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.utf8';
-ALTER DATABASE $STROHM_DB OWNER TO $STROHM_DB_USER;
-COMMENT ON DATABASE $STROHM_DB IS 'Database for stroHM project. All datetime''s are in UTC timezone';
-EOF
 
-    # Copy the structure file and modify it
-    sed "s/strohm_admin/$STROHM_DB_USER/g; s/DROP DATABASE strohm;//g; s/CREATE DATABASE strohm/-- Database already created/g" \
+    # Copy the structure file and modify it (skip database creation since it's already done)
+    sed "s/strohm_admin/$STROHM_DB_USER/g; s/DROP DATABASE strohm;//g; s/CREATE DATABASE.*;//g; /^\\\\connect strohm/d" \
         ./database/db-structure-strohm.sql > /tmp/strohm_structure_modified.sql
 
     # Apply the modified structure
@@ -140,7 +138,7 @@ EOF
     docker compose -f "$COMPOSE_FILE" exec odoo odoo -d "$ODOO_DB" -i base --stop-after-init --without-demo=all
 
     # Clean up temporary files
-    rm -f /tmp/strohm_init.sql /tmp/strohm_structure_modified.sql
+    rm -f /tmp/strohm_structure_modified.sql
 
     echo -e "${GREEN}Fresh deployment initialization completed${NC}"
 }
