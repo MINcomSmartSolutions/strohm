@@ -76,18 +76,18 @@ set +a
 
 # Function to check if system is already deployed
 is_fresh_deployment() {
-    # Check if databases exist
-    if ! docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
+    # Check if database container is running
+    if ! docker compose -f "$COMPOSE_FILE" ps db 2>/dev/null | grep -q "Up"; then
         return 0  # Fresh deployment - no running database
     fi
 
-    # Check if strohm database exists
-    if ! docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "$STROHM_DB"; then
+    # Check if strohm database exists (connect to postgres database to list databases)
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -lqt | cut -d \| -f 1 | grep -qw "$STROHM_DB"; then
         return 0  # Fresh deployment - strohm database doesn't exist
     fi
 
-    # Check if odoo database exists
-    if ! docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "$ODOO_DB"; then
+    # Check if odoo database exists (connect to postgres database to list databases)
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -lqt | cut -d \| -f 1 | grep -qw "$ODOO_DB"; then
         return 0  # Fresh deployment - odoo database doesn't exist
     fi
 
