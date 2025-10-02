@@ -20,11 +20,11 @@
  * @see {@link module:controllers/consent} For consent page handling
  */
 
-const {getActiveConsentRevision, hasLatestConsent, createConsentRevision} = require('../services/consent');
-const logger = require('../services/logger');
-const {db} = require("../utils/queries");
-const {userOperations} = require("../services/user_operations");
-const {validateOIDCProperties} = require("../helpers/auth");
+const {getActiveConsentRevision, hasLatestConsent, createConsentRevision} = require('#services/consent');
+const logger = require('#services/logger');
+const {db} = require('#utils/queries');
+const {userOperations} = require('#services/user_operations');
+const {validateOIDCProperties} = require('#helpers/auth');
 
 /**
  * Express middleware that validates user consent status before allowing access to protected routes.

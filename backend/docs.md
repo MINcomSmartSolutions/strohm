@@ -89,14 +89,16 @@ database queries for specialized consent management requirements.</p>
 </dd>
 <dt><a href="#module_services/steve_transactions">services/steve_transactions</a></dt>
 <dd><p>SteVe Transactions Service</p>
-<p>Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+<p>Incremental fetch of all transactions since last high‑water mark (T0).
+Records all transactions in database, but only bills permanently stopped ones.
 High‑Water Mark Concept:
-We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
+We persist the timestamp of the latest processed transaction (the &quot;high‑water mark&quot; or T0).
 On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
 After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
   • No overlap or reprocessing of already handled transactions.
   • No gaps: even if a transaction ends just after T0, it will be fetched next run.
   • Linear, efficient incremental retrieval without maintaining complex windows.</p>
+<p>Steve API docs: Steve <a href="http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html">http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html</a></p>
 </dd>
 <dt><a href="#module_services/steve_user">services/steve_user</a></dt>
 <dd><p>SteVe User Service</p>
@@ -207,11 +209,9 @@ Controller for handling user authentication and logout.
 <a name="module_controllers/consent"></a>
 
 ## controllers/consent
-
 Controller for handling user consent pages and operations.
 
 This controller manages the complete consent workflow including:
-
 - Displaying consent forms to users
 - Processing consent submissions
 - Handling consent withdrawals
@@ -224,7 +224,6 @@ transaction handling and enhanced audit capabilities required for GDPR complianc
 
 **SERVICE DEPENDENCIES**: The controller uses several key functions from the consent
 service that bypass the centralized queries.js mechanism:
-
 - `getActiveConsentRevision()` - Direct database query for active consent
 - `recordConsent()` - Specialized audit trail recording with transactions
 - `withdrawConsent()` - GDPR-compliant consent withdrawal with preservation
@@ -243,7 +242,6 @@ Controller for handling Odoo internal user sync webhooks.
 <a name="module_middlewares/consent"></a>
 
 ## middlewares/consent
-
 Middleware for checking user consent status and enforcing consent requirements.
 
 This middleware ensures that authenticated users have provided valid consent
@@ -267,9 +265,7 @@ GDPR compliance requirements.
 <a name="module_middlewares/consent..requireConsent"></a>
 
 ### middlewares/consent~requireConsent(req, res, next) ⇒ <code>void</code>
-
 Middleware Flow:
-
 1. **Route Filtering**: Checks if current route should skip consent validation
     - Skipped routes: /consent, /logout, /health, /welcome, /login, /callback, /scim, /assets, /favicon
 2. **Consent Revision Check**: Uses `getActiveConsentRevision()` to verify system has active consent
@@ -290,7 +286,6 @@ Middleware Flow:
 - <code>Error</code> Logs errors but does not throw to prevent application blocking
 
 **Security**: Security Considerations:
-
 - Always validates OIDC properties before proceeding
 - Gracefully handles errors to prevent application blocking
 - Maintains session integrity during user operations
@@ -312,11 +307,9 @@ Middleware Flow:
 <a name="module_services/consent"></a>
 
 ## services/consent
-
 Service for handling user consent operations and consent revision management.
 
 This service provides a comprehensive API for managing user consent workflows including:
-
 - Active consent revision retrieval and management
 - User consent validation and verification
 - Consent recording with audit trail capabilities
@@ -330,7 +323,6 @@ centralized database operations, this consent service implements its own
 database queries for specialized consent management requirements.
 
 This approach provides:
-
 - Enhanced audit trail capabilities for compliance
 - Specialized transaction handling for consent operations
 - Fine-grained control over consent-related database operations
@@ -354,7 +346,7 @@ services/db\_conn</code>, [<code>services/logger</code>](#module_services/logger
       Promise.&lt;Array.&lt;Object&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>
       boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>
       string</code>
-    * [~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt])](#module_services/consent..createConsentRevision) ⇒ <code>
+    * [~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>
       Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>
       string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>
       Date</code> \| <code>Date</code> \| <code>null</code> \| <code>boolean</code>
@@ -362,9 +354,7 @@ services/db\_conn</code>, [<code>services/logger</code>](#module_services/logger
 <a name="module_services/consent..getActiveConsentRevision"></a>
 
 ### services/consent~getActiveConsentRevision() ⇒ <code>Promise.&lt;(Object\|null)&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code>
-
 Query Logic:
-
 1. Filters for revisions marked as active (is_active = true)
 2. Excludes expired revisions (expires_at IS NULL OR expires_at > NOW())
 3. Orders by creation date descending to get the most recent
@@ -385,9 +375,7 @@ was created<code>Date</code> \| <code>null</code> - returns.expires_at - Expirat
 <a name="module_services/consent..hasValidConsent"></a>
 
 ### services/consent~hasValidConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
-
 Validation Criteria:
-
 1. User has a consent record (user_consents table)
 2. Consent is linked to an active revision (is_active = true)
 3. Consent has not been withdrawn (is_withdrawn = false)
@@ -413,19 +401,15 @@ if (isValid) {
   console.log('User needs to provide consent');
 }
 ```
-
 <a name="module_services/consent..hasLatestConsent"></a>
 
 ### services/consent~hasLatestConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
-
 Validation Process:
-
 1. **Latest Revision Lookup**: Finds the most recent active, non-optional consent revision
 2. **Consent Verification**: Checks if user has specifically consented to this revision
 3. **Withdrawal Check**: Ensures the consent has not been withdrawn
 
 Filtering Criteria for Latest Revision:
-
 - is_active = true (currently active)
 - expires_at IS NULL OR expires_at > NOW() (not expired)
 - optional = false (mandatory consent only)
@@ -438,34 +422,10 @@ Filtering Criteria for Latest Revision:
 - <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
 
 **See**: [hasValidConsent](hasValidConsent) For checking any valid consent (not necessarily latest)  
-**Example**
-
-```js
-const hasLatest = await hasLatestConsent(123);
-if (!hasLatest) {
-  // Redirect user to consent page
-  res.redirect('/consent');
-}
-```
-
-**Example**
-
-```js
-// Used in middleware to enforce latest consent
-if (req.session.user) {
-  const hasConsent = await hasLatestConsent(req.session.user.user_id);
-  if (!hasConsent) {
-    return res.redirect('/consent');
-  }
-}
-```
-
 <a name="module_services/consent..recordConsent"></a>
 
 ### services/consent~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>number</code> \| <code>number</code> \| <code>Date</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
-
 Audit Trail Features:
-
 - **Immutable Records**: Consent records cannot be modified once created
 - **IP Address Tracking**: Records user's IP for geographical compliance
 - **Device Fingerprinting**: User agent helps identify consent device
@@ -474,7 +434,6 @@ Audit Trail Features:
 - **Transaction Safety**: Uses database transactions for data integrity
 
 Supported Consent Methods:
-
 - 'web_form' (default) - HTML form submission
 - 'api' - Direct API call
 - 'import' - Bulk import from external system
@@ -515,13 +474,10 @@ const ipAddress = req.ip || req.connection.remoteAddress;
 const userAgent = req.get('User-Agent');
 await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
 ```
-
 <a name="module_services/consent..withdrawConsent"></a>
 
 ### services/consent~withdrawConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
-
 Withdrawal Process:
-
 1. **Transaction Safety**: Uses database transaction for atomic operations
 2. **Batch Update**: Updates all non-withdrawn consent records for the user
 3. **Timestamp Recording**: Records exact time of withdrawal
@@ -566,13 +522,10 @@ if (success) {
   res.status(404).json({ error: 'No active consent found to withdraw' });
 }
 ```
-
 <a name="module_services/consent..getUserConsentHistory"></a>
 
 ### services/consent~getUserConsentHistory(userId) ⇒ <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
-
 History Data Includes:
-
 - **Chronological Order**: Most recent consent actions first
 - **Version Tracking**: Which consent version was accepted
 - **Withdrawal Status**: Clear indication of current consent state
@@ -595,10 +548,8 @@ revision
 principle by providing complete documentation of consent lifecycle events.  
 <a name="module_services/consent..createConsentRevision"></a>
 
-### services/consent~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code> \| <code>boolean</code>
-
+### services/consent~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code> \| <code>boolean</code>
 Creation Process:
-
 1. **Transaction Start**: Begins database transaction for atomicity
 2. **Deactivation**: Sets all existing active revisions to inactive
 3. **Creation**: Creates new revision with is_active = true
@@ -621,36 +572,6 @@ Always true for newly created revisions
 
 - <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
 
-**Admin**: **Administrative Use**: This function is typically used by administrators
-or automated systems to deploy new consent versions. Consider implementing
-proper authorization checks before calling this function in production.  
-**Versioning**: **Version Strategy**: Consider using semantic versioning (MAJOR.MINOR.PATCH)
-for consent revisions to clearly communicate the significance of changes
-to both users and administrators.  
-**Example**
-
-```js
-const newRevision = await createConsentRevision(
-  "3.0.0",
-  "Updated Data Processing Consent",
-  "By using this service, you agree to our updated terms...",
-  "https://example.com/privacy-v3",
-  "https://example.com/terms-v3",
-  new Date('2026-12-31')  // Optional expiration
-);
-console.log(`Created revision ${newRevision.version} with ID ${newRevision.id}`);
-```
-
-**Example**
-
-```js
-// Create revision without expiration or external URLs
-const revision = await createConsentRevision(
-  "2.1.1",
-  "Minor Update to Consent",
-  "Updated consent with minor clarifications..."
-);
-```
 <a name="module_services/cron"></a>
 
 ## services/cron
@@ -685,7 +606,7 @@ It is responsible for user creation, login, key rotation, and invoicing with Odo
     * [~createOdooUser(user)](#module_services/odoo..createOdooUser)
     * [~getOdooPortalLogin(user)](#module_services/odoo..getOdooPortalLogin) ⇒ <code>string</code>
     * [~rotateOdooUserAuth(user)](#module_services/odoo..rotateOdooUserAuth) ⇒ <code>Promise.&lt;Object&gt;</code>
-    * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;string&gt;</code>
+  * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;Number&gt;</code>
   * [~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>
     Promise.&lt;boolean&gt;</code>
 
@@ -740,7 +661,7 @@ Rotates the Odoo user API key for the given user.
 
 <a name="module_services/odoo..createOdooTxnInvoice"></a>
 
-### services/odoo~createOdooTxnInvoice(db_txn) ⇒ <code>Promise.&lt;string&gt;</code>
+### services/odoo~createOdooTxnInvoice(db_txn) ⇒ <code>Promise.&lt;Number&gt;</code>
 Creates a bill/invoice in Odoo for a given transaction.
 
 Request payload to Odoo:
@@ -763,7 +684,7 @@ lines_data (list[dict]): Invoice line data dict with the following fields:
 - Throws if creation fails.
 
 **Kind**: inner method of [<code>services/odoo</code>](#module_services/odoo)  
-**Returns**: <code>Promise.&lt;string&gt;</code> - The created bill ID.  
+**Returns**: <code>Promise.&lt;Number&gt;</code> - The created bill ID.  
 **Throws**:
 
 - <code>ValidationError</code><code>SystemError</code> On validation or Odoo errors.
@@ -790,64 +711,93 @@ Checks if the given user has a valid payment method in Odoo.
 ## services/steve\_transactions
 SteVe Transactions Service
 
-Incremental fetch of STOPPED transactions since last high‑water mark (T0).
+Incremental fetch of all transactions since last high‑water mark (T0).
+Records all transactions in database, but only bills permanently stopped ones.
 High‑Water Mark Concept:
-We persist the timestamp of the latest processed transaction (the “high‑water mark” or T0).
+We persist the timestamp of the latest processed transaction (the "high‑water mark" or T0).
 On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
 After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 • No overlap or reprocessing of already handled transactions.
 • No gaps: even if a transaction ends just after T0, it will be fetched next run.
 • Linear, efficient incremental retrieval without maintaining complex windows.
 
+Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html
 
 * [services/steve_transactions](#module_services/steve_transactions)
-    * [~fetchSince(since)](#module_services/steve_transactions..fetchSince) ⇒ <code>
-      Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-    * [~processSince(txns)](#module_services/steve_transactions..processSince) ⇒ <code>Promise.&lt;{maxStop: DateTime,
-      processedCount: number}&gt;</code>
-    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
-    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number,
-      high\_water\_mark: DateTime}&gt;</code>
+    * [~TEMPORARY_STOP_REASONS](#module_services/steve_transactions..TEMPORARY_STOP_REASONS)
+    * [~PERMANENT_STOP_REASONS](#module_services/steve_transactions..PERMANENT_STOP_REASONS)
+  * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>
+    Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+  * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>
+    boolean</code>
+  * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+    processedCount: number, billedCount: number}&gt;</code>
+  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+    billed: number, high\_water\_mark: DateTime}&gt;</code>
+  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
+    high\_water\_mark: DateTime}&gt;</code>
+  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
+    high\_water\_mark: DateTime}&gt;</code>
 
-<a name="module_services/steve_transactions..fetchSince"></a>
+<a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
 
-### services/steve_transactions~fetchSince(since) ⇒ <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code>
-Fetch STOPPED transactions since a given timestamp (exclusive)
+### services/steve_transactions~TEMPORARY\_STOP\_REASONS
+Stop reasons that indicate a transaction is temporarily stopped/paused
+and should not be billed yet (may resume later).
+According to OCPP1.6 spec
+
+**Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
+<a name="module_services/steve_transactions..PERMANENT_STOP_REASONS"></a>
+
+### services/steve_transactions~PERMANENT\_STOP\_REASONS
+Stop reasons that indicate a permanent transaction end
+and should be processed for billing.
+According to OCPP1.6 spec
+
+**Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
+<a name="module_services/steve_transactions..fetchTxnsSince"></a>
+
+### services/steve_transactions~fetchTxnsSince(since) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+Fetch all transactions since a given timestamp (exclusive)
 If no timestamp is provided, fetch all transactions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> - Array of transactions  
-<a name="module_services/steve_transactions..processSince"></a>
+**Returns**: <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code> - Array of transactions  
+<a name="module_services/steve_transactions..shouldProcessTransaction"></a>
 
-### services/steve_transactions~processSince(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number}&gt;</code>
-Record and create bills for transactions/charging sessions
+### services/steve_transactions~shouldProcessTransaction(txn) ⇒ <code>boolean</code>
+Determines if a transaction should be processed for billing based on its stop reason
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedCount: number}&gt;</code> - The new high‑water mark (max
-stopTimestamp) and count of unique processed  
+**Returns**: <code>boolean</code> - True if transaction should be billed  
+<a name="module_services/steve_transactions..processTxns"></a>
+
+### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code>
+Record all transactions and create bills for permanently stopped transactions
+
+**Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
+**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code> - The new
+high‑water mark (max stopTimestamp), count of all processed transactions, and count of billed transactions  
 **Throws**:
 
 - <code>ValidationError</code> If any transaction does not match the expected schema
 
 <a name="module_services/steve_transactions..runIncremental"></a>
 
-### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
-Run incremental billing cycle: fetch and process since last T0
+### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+Run incremental billing cycle: fetch and process since last watermark
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
-### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
 Fetches all transactions from Steve, processes them, and updates the high-water mark.
 Use for a full sync (no time filter).
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runToday"></a>
 
-### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, high\_water\_mark: DateTime}&gt;</code>
+### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
 Fetch and process all of today's transactions and updates the high-water mark.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -955,7 +905,7 @@ Global database queries
 
 
 * [utils/queries](#module_utils/queries)
-    * [~handleQueryError(error, operation)](#module_utils/queries..handleQueryError)
+    * [~handleQueryError(error, operation, silent)](#module_utils/queries..handleQueryError)
     * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
   * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
     &gt;</code>
@@ -969,19 +919,20 @@ Global database queries
     Object\|undefined)&gt;</code>
   * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>
     Promise.&lt;void&gt;</code>
-    * [~recordTransaction(tx)](#module_utils/queries..recordTransaction) ⇒ <code>Promise.&lt;Object&gt;</code>
+  * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>
+    Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
   * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
     Promise.&lt;void&gt;</code>
   * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
     &gt;</code>
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
   * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
-    Promise.&lt;number&gt;</code>
-  * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
+    Promise.&lt;number&gt;</code> \| <code>null</code>
+    * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
 
-### utils/queries~handleQueryError(error, operation)
+### utils/queries~handleQueryError(error, operation, silent)
 Handles query errors.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -1075,15 +1026,15 @@ Sets the SteVe user ID for a user in the database.
 Records an activity event for a user in the activity log.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-<a name="module_utils/queries..recordTransaction"></a>
+<a name="module_utils/queries..recordSteveTxn"></a>
 
-### utils/queries~recordTransaction(tx) ⇒ <code>Promise.&lt;Object&gt;</code>
+### utils/queries~recordSteveTxn(steve_txn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
 Record a transaction record into the `charging_transactions` table.
 If transaction already exists and is complete, returns it without modification.
 Otherwise, inserts a new record with proper user association or updates existing one.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;Object&gt;</code> - db_txn - The transaction record from database  
+**Returns**: <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code> - db_txn - The transaction record from database  
 <a name="module_utils/queries..setLastStopTimestamp"></a>
 
 ### utils/queries~setLastStopTimestamp(new_watermark) ⇒ <code>Promise.&lt;void&gt;</code>
@@ -1094,15 +1045,12 @@ Inserts or updates the `watermark` table with the given timestamp.
 <a name="module_utils/queries..getLastStopTimestamp"></a>
 
 ### utils/queries~getLastStopTimestamp() ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
-Retrieves the most recent `last_stop_timestamp` from the watermark table.
+Retrieves the most recent `last_stop_timestamp` aka watermark from the watermark table.
 Returns a Luxon DateTime if found, otherwise null.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;(DateTime\|null)&gt;</code> - The latest stop timestamp or null if not found.  
-**Throws**:
-
-- <code>DatabaseError</code> On query error.
-
+**Returns**: <code>Promise.&lt;(DateTime\|null)&gt;</code> - The latest stop timestamp or null if not found or error on
+watermark fetch.  
 <a name="module_utils/queries..saveInvoiceId"></a>
 
 ### utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>
@@ -1116,12 +1064,14 @@ This is used to link a transaction to an invoice in Odoo.
 
 <a name="module_utils/queries..getCurrentElectricityPrice"></a>
 
-### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code>
+### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code> \| <code>null</code>
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
+If no price is found, it returns null.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;number&gt;</code> - The current electricity price in cents per kWh.  
+**Returns**: <code>Promise.&lt;number&gt;</code> \| <code>null</code> - If `specified_datetime` provided, that
+datetime's if not, the current electricity price in cents per kWh.  
 <a name="module_utils/queries..getUsersCount"></a>
 
 ### utils/queries~getUsersCount(filters) ⇒ <code>Promise.&lt;number&gt;</code>
@@ -1154,7 +1104,7 @@ Type definitions
 
 * [utils/typedef](#module_utils/typedef)
     * [~User](#module_utils/typedef..User) : <code>Object</code>
-    * [~tx](#module_utils/typedef..tx) : <code>Object</code>
+  * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
     * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
     * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
 
@@ -1176,9 +1126,9 @@ Type definitions
 | steve_id       | <code>number</code> | The user's OCPP tag primary key in SteVe                |
 | deactivated_at | <code>Date</code>   | The date and time when the user is (if any) deactivated |
 
-<a name="module_utils/typedef..tx"></a>
+<a name="module_utils/typedef..steve_txn"></a>
 
-### utils/typedef~tx : <code>Object</code>
+### utils/typedef~steve\_txn : <code>Object</code>
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -1220,7 +1170,7 @@ Type definitions
 | ocpp_id_tag         | <code>number</code> | The Ocpp Tag used in the transaction (rfid in strohm.users table)                    |
 | user_id             | <code>number</code> | The user ID associated with the transaction                                          |
 | invoice_ref         | <code>number</code> | The invoice reference associated with the transaction returned from Odoo             |
-| steve_id            | <code>number</code> | PK of the transaction in SteVe                                                       |
+| txn_steve_id        | <code>number</code> | PK of the transaction in SteVe                                                       |
 
 <a name="module_utils/typedef..electricity_price"></a>
 

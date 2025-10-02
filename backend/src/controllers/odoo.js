@@ -9,11 +9,11 @@ const express = require('express');
 const odoo_controller = express();
 
 const Joi = require("joi");
-const {db} = require('../utils/queries');
-const {blockSteveUser} = require('../services/steve_user');
-const {verifyOdooApiKey} = require('../middlewares/auth');
-const logger = require('../services/logger');
-const {appErrorHandler} = require("../utils/errors");
+const {db} = require('#utils/queries');
+const {blockSteveUser} = require('#services/steve_user');
+const {verifyOdooApiKey} = require('#middlewares/auth');
+const logger = require('#services/logger');
+const {appErrorHandler} = require('#utils/errors');
 
 /**
  * Odoo internal user sync webhook endpoint.

@@ -1,5 +1,5 @@
 const {DateTime} = require('luxon');
-const {fmt, ISO_NO_ZONE} = require('../../../utils/datetime_format');
+const {fmt, ISO_NO_ZONE} = require('#utils/datetime_format');
 
 describe('DateTime Format Utilities', () => {
     describe('fmt function', () => {

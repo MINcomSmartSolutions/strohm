@@ -4,7 +4,7 @@
  * This module defines standardized error codes and messages for the application.
  * Errors are grouped by category and include codes, HTTP status codes, and messages.
  */
-const logger = require('../services/logger');
+const logger = require('#services/logger');
 
 const ExceptionCodes = Object.freeze({
     // Authentication errors (1000-1099)

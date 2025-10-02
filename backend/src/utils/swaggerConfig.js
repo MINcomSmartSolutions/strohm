@@ -4,8 +4,8 @@ const options = {
     definition: {
         openapi: '3.0.0', // Specify the OpenAPI version
         info: {
-            title: 'API Documentation', // Title of your API
-            version: '0.5.0', // Version of your API
+            title: 'API Documentation',
+            version: '0.5.0',
             description: 'API documentation',
         }, components: {
             securitySchemes: {

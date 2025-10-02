@@ -5,16 +5,16 @@
  *
  * @module services/odoo
  */
-const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('../utils/errors');
-const {db} = require('../utils/queries');
+const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('#utils/errors');
+const {db} = require('#utils/queries');
 
-const {generateOdooHash, generateSalt} = require('../helpers/auth');
+const {generateOdooHash, generateSalt} = require('#helpers/auth');
 const {odooAxios, odooUserAxios} = require('./network');
 const {DateTime} = require('luxon');
-const {fmt} = require('../utils/datetime_format');
-const {ODOO_CONFIG} = require('../config');
-const {dbTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('../utils/joi');
-const logger = require('../services/logger');
+const {fmt} = require('#utils/datetime_format');
+const {ODOO_CONFIG} = require('#config');
+const {dbTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('#utils/joi');
+const logger = require('#services/logger');
 
 
 /**
@@ -61,10 +61,11 @@ async function createOdooUser(user) {
 
         // Compare the calculated hash with the hash received from Odoo
         if (calculatedHash !== hash) {
-            logger.error('Hash verification failed');
-            logger.error('Message: ', message.toString());
-            logger.error(`Calculated: ${calculatedHash}`);
-            logger.error(`Received: ${hash}`);
+            logger.error('Hash verification failed', {
+                message: message,
+                calculatedHash: calculatedHash,
+                receivedHash: hash,
+            });
             throw new SystemError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
         }
 
@@ -80,7 +81,7 @@ async function createOdooUser(user) {
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
     } else {
-        const errorMSG = response.data['error'];
+        const errorMSG = response.data['error'] ?? 'Unknown error';
         throw new SystemError(ErrorCodes.ODOO.USER_CREATE_FAILED, errorMSG);
     }
 }
@@ -239,8 +240,8 @@ async function rotateOdooUserAuth(user) {
  * - Throws if creation fails.
  *
  * @async
- * @param {Object} db_txn - Transaction object from the database.
- * @returns {Promise<string>} The created bill ID.
+ * @param {Object<db_txn>} db_txn - Transaction object from the database.
+ * @returns {Promise<Number>} The created bill ID.
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function createOdooTxnInvoice(db_txn) {
@@ -251,7 +252,8 @@ async function createOdooTxnInvoice(db_txn) {
     }
 
     const odoo_credentials = await db.getUserOdooCredentials(db_txn.user_id);
-    if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {
+    const odoo_credentials_valid = odoo_credentials && odoo_credentials.key && odoo_credentials.key_salt;
+    if (!odoo_credentials_valid) {
         // TODO: Instead of throwing an error, trigger a key rotation process
         throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
     }
@@ -260,7 +262,7 @@ async function createOdooTxnInvoice(db_txn) {
     const user_error = fullyQualifiedUserSchema.validate(user);
     if (user_error.error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
-            `Invalid user ${user_error.error.message}`);
+            `Invalid user: ${user_error.error.message}`);
     }
 
     // The price of electricity at the time of transaction started
@@ -300,13 +302,22 @@ async function createOdooTxnInvoice(db_txn) {
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     const response = await odooUserAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
+    const response_data = response.data;
     if (response.status !== 201) {
-        const errorMSG = response.data['error'];
+        const errorMSG = response_data['error'];
         throw new SystemError(ErrorCodes.ODOO.INVOICE_CREATE_FAILED, errorMSG);
     }
 
+    let bill_id = response_data['bill_id'] ? parseInt(response_data['bill_id']) : null;
+    if (!bill_id) {
+        throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE, 'Missing or corrupted bill_id in response.' +
+            ' Probably the bill is created in Odoo but needs manual entry for the invoice id', {
+            response_data: response_data,
+        });
+    }
+
     await db.recordActivityLog(user.user_id, 'CREATE INVOICE', 'ODOO', user.rfid);
-    return response.data['bill_id'];
+    return bill_id;
 }
 
 
@@ -320,26 +331,26 @@ async function createOdooTxnInvoice(db_txn) {
  * - Returns true if the payment method is valid, false otherwise.
  *
  * @async
- * @param {Object} user - User object with odoo_user_id, odoo_partner_id, and user_id.
+ * @param {Object<User>} user - User object with odoo_user_id, odoo_partner_id, and user_id.
  * @returns {Promise<boolean>} True if payment method is valid, false otherwise.
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function checkValidPaymentMethod(user) {
-    validateUser(user);
+    validateUser(user); // throws if invalid
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
-    if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {
+    const credentials_valid = odoo_credentials && odoo_credentials.key && odoo_credentials.key_salt;
+    if (!credentials_valid) {
         throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
     }
 
-    const salt = generateSalt();
     const data = {
         timestamp: fmt(DateTime.now()),
         user_id: user.odoo_user_id,
         partner_id: user.odoo_partner_id,
         key: odoo_credentials.key,
         key_salt: odoo_credentials.key_salt,
-        salt: salt,
+        salt: generateSalt(),
     };
     const message = `${data.timestamp}${data.user_id}${data.partner_id}${data.key}${data.key_salt}${data.salt}`;
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);

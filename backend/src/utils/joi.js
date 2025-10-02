@@ -66,11 +66,11 @@ const steveTransactionSchema = Joi.object({
     // The timestamp at which the transaction started
     startTimestamp: Joi.date().required(),
     // The timestamp at which the transaction ended
-    stopTimestamp: Joi.date().required(),
+    stopTimestamp: Joi.date().allow(null),
     // The meter value reading at the start of the transaction
     startValue: Joi.number().required(),
     // The meter value reading at the end of the transaction
-    stopValue: Joi.number().min(Joi.ref('startValue')).required(),
+    stopValue: Joi.number().min(Joi.ref('startValue')).allow(null),
     // The reason for the transaction being stopped
     stopReason: Joi.string().allow(null),
     // The actor who stopped the transaction

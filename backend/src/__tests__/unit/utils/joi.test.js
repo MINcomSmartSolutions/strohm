@@ -1,11 +1,10 @@
-const Joi = require('joi');
 const {
     userSchema,
     fullyQualifiedUserSchema,
     steveUserSchema,
     steveTransactionSchema,
     dbTransactionSchema,
-} = require('../../../utils/joi');
+} = require('#utils/joi');
 
 describe('Joi Validation Schemas', () => {
     describe('userSchema', () => {

@@ -57,7 +57,7 @@ services:
       DB_USER: ${STROHM_DB_USER}
       DB_PASSWORD: ${STROHM_DB_PASSWORD}
       DB_PORT: 5432
-    command: npx nodemon server.js
+    command: npm run debug
 
   odoo:
     container_name: strohm_odoo

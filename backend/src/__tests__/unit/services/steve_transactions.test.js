@@ -2,23 +2,23 @@
  * @file Unit tests for Steve transactions service
  */
 const {DateTime} = require('luxon');
-const {runIncremental} = require('../../../services/steve_transactions');
-const {steveAxios} = require('../../../services/network');
-const {db} = require('../../../utils/queries');
-const {fmt} = require('../../../utils/datetime_format');
-const {createOdooTxnInvoice} = require('../../../services/odoo');
-const {STEVE_CONFIG} = require('../../../config');
+const {runIncremental, TxnType, TxnPeriodType} = require('#services/steve_transactions');
+const {steveAxios} = require('#services/network');
+const {db} = require('#utils/queries');
+const {fmt} = require('#utils/datetime_format');
+const {createOdooTxnInvoice} = require('#services/odoo');
+const {STEVE_CONFIG} = require('#config');
 
 // TODO: Needs reviewing
 
 // Mock dependencies
-jest.mock('../../../services/network', () => ({
+jest.mock('#services/network', () => ({
     steveAxios: {
         get: jest.fn(),
     },
 }));
 
-jest.mock('../../../utils/queries', () => ({
+jest.mock('#utils/queries', () => ({
     db: {
         getLastStopTimestamp: jest.fn(),
         setLastStopTimestamp: jest.fn(),
@@ -27,21 +27,23 @@ jest.mock('../../../utils/queries', () => ({
     },
 }));
 
-jest.mock('../../../services/odoo', () => ({
+jest.mock('#services/odoo', () => ({
     createOdooTxnInvoice: jest.fn(),
 }));
 
-jest.mock('../../../utils/datetime_format', () => ({
+jest.mock('#utils/datetime_format', () => ({
     fmt: jest.fn(),
 }));
 
-jest.mock('../../../services/logger', () => ({
+jest.mock('#services/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    debug: jest.fn(),
+    verbose: jest.fn(),
 }));
 
-jest.mock('../../../config', () => ({
+jest.mock('#config', () => ({
     STEVE_CONFIG: {
         TRANSACTIONS_URI: '/api/v1/transactions',
     },
@@ -67,7 +69,7 @@ describe('Steve Transactions Service', () => {
 
     const sampleDbTransaction = {
         id: 1,
-        tx_steve_id: 12345,
+        txn_steve_id: 12345,
         ocpp_id_tag: 'test_rfid',
         start_timestamp: new Date('2025-06-16T10:00:00Z'),
         stop_timestamp: new Date('2025-06-16T11:00:00Z'),
@@ -115,13 +117,24 @@ describe('Steve Transactions Service', () => {
             // Verify getLastStopTimestamp was called
             expect(db.getLastStopTimestamp).toHaveBeenCalled();
 
-            // Verify axios get was called with correct parameters (adding 1 second to prevent overlap)
             expect(steveAxios.get).toHaveBeenCalledWith(
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
                     params: {
-                        type: 'STOPPED',
-                        periodType: 'FROM_TO',
+                        type: TxnType.ACTIVE,
+                        periodType: TxnPeriodType.FROM_TO,
+                        from: expect.any(String),
+                        to: expect.any(String),
+                    },
+                },
+            );
+
+            expect(steveAxios.get).toHaveBeenCalledWith(
+                STEVE_CONFIG.TRANSACTIONS_URI,
+                {
+                    params: {
+                        type: TxnType.STOPPED,
+                        periodType: TxnPeriodType.FROM_TO,
                         from: expect.any(String),
                         to: expect.any(String),
                     },
@@ -143,6 +156,7 @@ describe('Steve Transactions Service', () => {
             // Verify returned result matches expected format
             expect(result).toEqual({
                 fetched: 1,
+                billed: 1,
                 high_water_mark: expect.any(DateTime),
             });
         });
@@ -167,8 +181,18 @@ describe('Steve Transactions Service', () => {
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
                     params: {
-                        type: 'STOPPED',
-                        periodType: 'ALL',
+                        type: TxnType.ACTIVE,
+                        periodType: TxnPeriodType.ALL,
+                    },
+                },
+            );
+
+            expect(steveAxios.get).toHaveBeenCalledWith(
+                STEVE_CONFIG.TRANSACTIONS_URI,
+                {
+                    params: {
+                        type: TxnType.STOPPED,
+                        periodType: TxnPeriodType.ALL,
                     },
                 },
             );
@@ -179,6 +203,7 @@ describe('Steve Transactions Service', () => {
             // Verify returned result matches expected format for no transactions
             expect(result).toEqual({
                 fetched: 0,
+                billed: 0,
                 high_water_mark: expect.any(DateTime),
             });
         });
@@ -315,7 +340,7 @@ describe('Steve Transactions Service', () => {
             const invalidTransaction = {id: 12345};
             steveAxios.get.mockResolvedValue({status: 200, data: [invalidTransaction]});
             // Patch the schema validate to always return error
-            jest.spyOn(require('../../../utils/joi').steveTransactionSchema, 'validate').mockReturnValue({error: new Error('Invalid')});
+            jest.spyOn(require('#utils/joi').steveTransactionSchema, 'validate').mockReturnValue({error: new Error('Invalid')});
             await expect(runIncremental()).rejects.toThrow();
         });
 

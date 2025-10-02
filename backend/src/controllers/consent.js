@@ -33,14 +33,15 @@ const {
     withdrawConsent,
     hasLatestConsent,
     createConsentRevision
-} = require('../services/consent');
-const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('../utils/errors');
-const logger = require('../services/logger');
+  
+} = require('#services/consent');
+const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('#utils/errors');
+const logger = require('#services/logger');
 const fs = require('fs');
 const path = require('path');
-const {userOperations} = require("../services/user_operations");
-const {validateOIDCProperties} = require("../helpers/auth");
-const {db} = require('../utils/queries');
+const {userOperations} = require('#services/user_operations');
+const {validateOIDCProperties} = require('#helpers/auth');
+const {db} = require('#utils/queries');
 
 
 /**
@@ -116,9 +117,9 @@ consent_controller.get('/consent', async (req, res) => {
         if (!activeConsent) {
             logger.error('No active consent revision found');
             if (process.env.NODE_ENV !== 'production') {
-                await createConsentRevision("0.1.1",
+                createConsentRevision('0.1.1',
                     "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung",
-                    "Initial consent created automatically, for testing purposes",
+                    'Initial consent created automatically',
                     "https://min2sol.com/datenschutz/",
                     "https://min2sol.com/datenschutz/");
                 activeConsent = await getActiveConsentRevision();

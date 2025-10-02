@@ -53,7 +53,7 @@ const clearTestData = async (pool) => {
     try {
         await client.query('BEGIN');
 
-        // Truncate all tables (adjust table names as needed based on your schema)
+        // Truncate all tables
         await client.query(`
       TRUNCATE 
         users, 
@@ -176,7 +176,7 @@ const insertTestTransaction = async (pool, user) => {
         // Notice that we removed delivered_energy_wh from the columns list
         // as it's a computed field in the database
         const txResult = await client.query(`
-            INSERT INTO charging_transactions (tx_steve_id,
+            INSERT INTO charging_transactions (txn_steve_id,
                                                ocpp_id_tag,
                                                start_timestamp,
                                                stop_timestamp,

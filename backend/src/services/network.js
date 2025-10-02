@@ -8,8 +8,7 @@
  */
 const axios = require('axios');
 const logger = require('./logger');
-const {STEVE_CONFIG, ODOO_CONFIG} = require('../config');
-
+const {STEVE_CONFIG, ODOO_CONFIG, GLOBAL_CONFIG} = require('#config');
 
 
 const odooAxios = axios.create({
@@ -30,16 +29,25 @@ const odooUserAxios = axios.create({
 });
 
 
-const steveAxios = axios.create({
-    baseURL: STEVE_CONFIG.URL,
-    auth: {
-        username: process.env.STEVE_AUTH_USERNAME,
-        password: process.env.STEVE_API_PASSWORD,
-    },
-    headers: {
-        'Content-Type': 'application/json',
-    },
-});
+const steveAxios = (() => {
+    const config = {
+        baseURL: STEVE_CONFIG.URL,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    };
+
+    if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+        config.headers[process.env.STEVE_API_KEY_HEADER] = process.env.STEVE_API_KEY;
+    } else {
+        config.auth = {
+            username: process.env.STEVE_AUTH_USERNAME,
+            password: process.env.STEVE_API_PASSWORD,
+        };
+    }
+
+    return axios.create(config);
+})();
 
 // Test the connection to Steve
 steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {

@@ -9,15 +9,15 @@ const {
     withdrawConsent,
     getUserConsentHistory,
     createConsentRevision
-} = require('../../../services/consent');
-const pool = require('../../../services/db_conn');
-const logger = require('../../../services/logger');
-const {db} = require('../../../utils/queries');
+} = require('#services/consent');
+const pool = require('#services/db_conn');
+const logger = require('#services/logger');
+const {db} = require('#utils/queries');
 
 // Mock dependencies
-jest.mock('../../../services/db_conn');
-jest.mock('../../../services/logger');
-jest.mock('../../../utils/queries');
+jest.mock('#services/db_conn');
+jest.mock('#services/logger');
+jest.mock('#utils/queries');
 
 describe('Consent Service', () => {
     let mockClient;

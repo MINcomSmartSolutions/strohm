@@ -8,17 +8,17 @@ const {
     rotateOdooUserAuth,
     createOdooTxnInvoice,
     checkValidPaymentMethod,
-} = require('../../../services/odoo');
-const {odooAxios, odooUserAxios} = require('../../../services/network');
-const {db} = require('../../../utils/queries');
-const {ValidationError, SystemError, ResponseError, ErrorCodes} = require('../../../utils/errors');
-const {generateOdooHash, generateSalt} = require('../../../helpers/auth');
-const {ODOO_CONFIG} = require('../../../config');
-const logger = require('../../../services/logger');
-const {dbTransactionSchema} = require('../../../utils/joi');
+} = require('#services/odoo');
+const {odooAxios, odooUserAxios} = require('#services/network');
+const {db} = require('#utils/queries');
+const {ValidationError, SystemError, ResponseError, ErrorCodes} = require('#utils/errors');
+const {generateOdooHash, generateSalt} = require('#helpers/auth');
+const {ODOO_CONFIG} = require('#config');
+const logger = require('#services/logger');
+const {dbTransactionSchema} = require('#utils/joi');
 
 // Mock dependencies
-jest.mock('../../../services/network', () => ({
+jest.mock('#services/network', () => ({
     odooAxios: {
         post: jest.fn(),
         get: jest.fn(),
@@ -28,7 +28,7 @@ jest.mock('../../../services/network', () => ({
     },
 }));
 
-jest.mock('../../../utils/queries', () => ({
+jest.mock('#utils/queries', () => ({
     db: {
         setUserOdooCredentials: jest.fn(),
         getUserOdooCredentials: jest.fn(),
@@ -39,12 +39,12 @@ jest.mock('../../../utils/queries', () => ({
     },
 }));
 
-jest.mock('../../../helpers/auth', () => ({
+jest.mock('#helpers/auth', () => ({
     generateOdooHash: jest.fn(),
     generateSalt: jest.fn(),
 }));
 
-jest.mock('../../../config', () => ({
+jest.mock('#config', () => ({
     ODOO_CONFIG: {
         USER_CREATION_URI: '/api/create_user',
         PORTAL_LOGIN_URI: '/web/login',
@@ -56,7 +56,7 @@ jest.mock('../../../config', () => ({
     },
 }));
 
-jest.mock('../../../services/logger', () => ({
+jest.mock('#services/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),

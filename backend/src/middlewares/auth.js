@@ -3,8 +3,8 @@
  * @file Middleware for API key authentication between Odoo and the server, and SCIM HTTP Basic authentication.
  */
 
-const {SystemError, ErrorCodes} = require('../utils/errors');
-const logger = require('../services/logger');
+const {SystemError, ErrorCodes} = require('#utils/errors');
+const logger = require('#services/logger');
 
 const verifyOdooApiKey = (req, res, next) => {
     const api_key = req.headers['authorization'];

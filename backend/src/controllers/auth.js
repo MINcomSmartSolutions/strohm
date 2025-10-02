@@ -8,7 +8,7 @@
 const express = require('express');
 const auth_controller = express();
 
-const logger = require("../services/logger");
+const logger = require('#services/logger');
 
 
 auth_controller.get('/logout', async (req, res) => {
