@@ -43,14 +43,26 @@ command_exists() {
 
 # Check required tools
 echo -e "${BLUE}Checking required tools...${NC}"
-for cmd in docker "docker compose" git; do
-    if ! command_exists "$cmd"; then
-        echo -e "${RED} Error: $cmd is not installed${NC}"
-        exit 1
-    fi
-done
-echo -e "${GREEN} All required tools are available${NC}"
 
+# Check docker binary
+if ! command_exists docker; then
+    echo -e "${RED} Error: docker is not installed${NC}"
+    exit 1
+fi
+
+# Check docker compose availability (supports both 'docker compose' and 'docker-compose')
+if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
+    echo -e "${RED} Error: docker compose is not available (neither 'docker compose' nor 'docker-compose')${NC}"
+    exit 1
+fi
+
+# Check git
+if ! command_exists git; then
+    echo -e "${RED} Error: git is not installed${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN} All required tools are available${NC}"
 # Check Docker daemon
 if ! docker info >/dev/null 2>&1; then
     echo -e "${RED} Error: Docker daemon is not running${NC}"
