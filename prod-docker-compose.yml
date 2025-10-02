@@ -6,13 +6,13 @@ services:
     image: postgres:16.6
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d postgres'" ]
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     environment:
-      POSTGRES_DB: "postgres"
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PRODUCTION_PASSWORD}
     volumes:
@@ -41,7 +41,6 @@ services:
       ODOO_HOST: odoo
       ODOO_PORT: 8069
       ODOO_EXTERNAL_HOST: ${ODOO_EXTERNAL_HOST}
-      ODOO_EXTERNAL_PORT: 443
       WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
       DB_HOST: db
       DB_NAME: ${STROHM_DB}
