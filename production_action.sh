@@ -42,9 +42,9 @@ command_exists() {
 }
 
 # Check required tools
-echo -e "${BLUE}🔍 Checking required tools...${NC}"
-for cmd in docker docker-compose git; do
-    if ! command_exists $cmd; then
+echo -e "${BLUE}Checking required tools...${NC}"
+for cmd in docker "docker compose" git; do
+    if ! command_exists "$cmd"; then
         echo -e "${RED} Error: $cmd is not installed${NC}"
         exit 1
     fi
@@ -68,11 +68,11 @@ create_backup() {
     mkdir -p "$BACKUP_DIR"
     
     # Backup database
-    if docker-compose -f $COMPOSE_FILE ps db | grep -q "Up"; then
+    if docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
         echo "Backing up PostgreSQL database..."
-        docker-compose -f $COMPOSE_FILE exec -T db pg_dump -U "$POSTGRES_USER" postgres > "$BACKUP_DIR/postgres_backup.sql"
-        docker-compose -f $COMPOSE_FILE exec -T db pg_dump -U "$STROHM_DB_USER" "$STROHM_DB" > "$BACKUP_DIR/strohm_backup.sql"
-        docker-compose -f $COMPOSE_FILE exec -T db pg_dump -U "$ODOO_DB_USER" "$ODOO_DB" > "$BACKUP_DIR/odoo_backup.sql"
+        docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$POSTGRES_USER" postgres > "$BACKUP_DIR/postgres_backup.sql"
+        docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$STROHM_DB_USER" "$STROHM_DB" > "$BACKUP_DIR/strohm_backup.sql"
+        docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$ODOO_DB_USER" "$ODOO_DB" > "$BACKUP_DIR/odoo_backup.sql"
     fi
     
     # Backup volumes
@@ -88,19 +88,19 @@ deploy() {
     
     # Pull latest images
     echo "Pulling latest images..."
-    docker-compose -f $COMPOSE_FILE pull
+    docker compose -f "$COMPOSE_FILE" pull
     
     # Build custom images
     echo "Building custom images..."
-    docker-compose -f $COMPOSE_FILE build --no-cache
+    docker compose -f "$COMPOSE_FILE" build --no-cache
     
     # Stop existing containers
     echo "Stopping existing containers..."
-    docker-compose -f $COMPOSE_FILE down
+    docker compose -f "$COMPOSE_FILE" down
     
     # Start services
     echo "Starting services..."
-    docker-compose -f $COMPOSE_FILE up -d
+    docker compose -f "$COMPOSE_FILE" up -d
     
     # Wait for services to be healthy
     echo "Waiting for services to start..."
@@ -118,11 +118,11 @@ check_health() {
     
     for service in "${services[@]}"; do
         echo -n "Checking $service... "
-        if docker-compose -f $COMPOSE_FILE ps "$service" | grep -q "Up"; then
+        if docker compose -f "$COMPOSE_FILE" ps "$service" | grep -q "Up"; then
             echo -e "${GREEN} Running${NC}"
         else
             echo -e "${RED} Not running${NC}"
-            docker-compose -f $COMPOSE_FILE logs --tail=20 "$service"
+            docker compose -f "$COMPOSE_FILE" logs --tail=20 "$service"
         fi
     done
 }
@@ -130,7 +130,7 @@ check_health() {
 # Function to show logs
 show_logs() {
     echo -e "${BLUE} Recent logs:${NC}"
-    docker-compose -f $COMPOSE_FILE logs --tail=50
+    docker compose -f "$COMPOSE_FILE" logs --tail=50
 }
 
 # Function to cleanup old images
@@ -169,12 +169,12 @@ case "${1:-deploy}" in
         ;;
     "down")
         echo "Stopping all services..."
-        docker-compose -f $COMPOSE_FILE down
+        docker compose -f "$COMPOSE_FILE" down
         echo -e "${GREEN} All services stopped${NC}"
         ;;
     "restart")
         echo "Restarting all services..."
-        docker-compose -f $COMPOSE_FILE restart
+        docker compose -f "$COMPOSE_FILE" restart
         echo -e "${GREEN} All services restarted${NC}"
         ;;
     "update")
@@ -183,8 +183,8 @@ case "${1:-deploy}" in
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             create_backup
-            docker-compose -f $COMPOSE_FILE pull
-            docker-compose -f $COMPOSE_FILE up -d --build
+            docker compose -f "$COMPOSE_FILE" pull
+            docker compose -f "$COMPOSE_FILE" up -d --build
             check_health
             echo -e "${GREEN} Update completed successfully!${NC}"
         fi

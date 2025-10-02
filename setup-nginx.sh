@@ -74,7 +74,7 @@ fi
 # Create log directories if they don't exist
 mkdir -p /var/log/nginx
 
-echo -e "${BLUE}🔒 SSL Certificate Setup${NC}"
+echo -e "${BLUE}SSL Certificate Setup${NC}"
 echo "Before starting nginx, you need SSL certificates."
 echo ""
 echo -e "${YELLOW}Option 1: Get Let's Encrypt certificates (recommended):${NC}"
