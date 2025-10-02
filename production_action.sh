@@ -74,6 +74,88 @@ set -a
 source $ENV_FILE
 set +a
 
+# Function to check if system is already deployed
+is_fresh_deployment() {
+    # Check if databases exist
+    if ! docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
+        return 0  # Fresh deployment - no running database
+    fi
+
+    # Check if strohm database exists
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "$STROHM_DB"; then
+        return 0  # Fresh deployment - strohm database doesn't exist
+    fi
+
+    # Check if odoo database exists
+    if ! docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "$ODOO_DB"; then
+        return 0  # Fresh deployment - odoo database doesn't exist
+    fi
+
+    return 1  # Existing deployment
+}
+
+# Function to initialize fresh deployment
+initialize_fresh_deployment() {
+    echo -e "${BLUE}Initializing fresh deployment...${NC}"
+
+    # Wait for database to be ready
+    echo "Waiting for database to be ready..."
+    sleep 10
+
+    # Create databases and users using environment variables
+    echo "Creating databases and users..."
+
+    # Create strohm user and database
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -c "
+        CREATE USER $STROHM_DB_USER WITH PASSWORD '$STROHM_DB_PASSWORD';
+        CREATE DATABASE $STROHM_DB WITH OWNER $STROHM_DB_USER ENCODING 'UTF8';
+        GRANT ALL PRIVILEGES ON DATABASE $STROHM_DB TO $STROHM_DB_USER;
+    "
+
+    # Create odoo user and database
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -c "
+        CREATE USER $ODOO_DB_USER WITH PASSWORD '$ODOO_DB_PRODUCTION_PASSWORD' CREATEDB;
+        CREATE DATABASE $ODOO_DB WITH OWNER $ODOO_DB_USER ENCODING 'UTF8';
+        GRANT ALL PRIVILEGES ON DATABASE $ODOO_DB TO $ODOO_DB_USER;
+    "
+
+    # Apply database structure for strohm (modify to use env variables)
+    echo "Applying Strohm database structure..."
+    # Create a temporary SQL file that uses environment variables
+    cat > /tmp/strohm_init.sql << EOF
+CREATE DATABASE $STROHM_DB WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.utf8';
+ALTER DATABASE $STROHM_DB OWNER TO $STROHM_DB_USER;
+COMMENT ON DATABASE $STROHM_DB IS 'Database for stroHM project. All datetime''s are in UTC timezone';
+EOF
+
+    # Copy the structure file and modify it
+    sed "s/strohm_admin/$STROHM_DB_USER/g; s/DROP DATABASE strohm;//g; s/CREATE DATABASE strohm/-- Database already created/g" \
+        ./database/db-structure-strohm.sql > /tmp/strohm_structure_modified.sql
+
+    # Apply the modified structure
+    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$STROHM_DB_USER" -d "$STROHM_DB" -f - < /tmp/strohm_structure_modified.sql
+
+    # Initialize Odoo database
+    echo "Initializing Odoo database..."
+    docker compose -f "$COMPOSE_FILE" exec odoo odoo -d "$ODOO_DB" -i base --stop-after-init --without-demo=all
+
+    # Clean up temporary files
+    rm -f /tmp/strohm_init.sql /tmp/strohm_structure_modified.sql
+
+    echo -e "${GREEN}Fresh deployment initialization completed${NC}"
+}
+
+# Function to handle updates
+handle_update_deployment() {
+    echo -e "${BLUE}Handling update deployment...${NC}"
+
+    # Update Odoo modules if needed
+    echo "Updating Odoo modules..."
+    docker compose -f "$COMPOSE_FILE" exec odoo odoo -d "$ODOO_DB" -u all --stop-after-init
+
+    echo -e "${GREEN}Update deployment completed${NC}"
+}
+
 # Function to create backup
 create_backup() {
     echo -e "${BLUE}Creating backup...${NC}"
@@ -98,26 +180,48 @@ create_backup() {
 deploy() {
     echo -e "${BLUE} Starting deployment...${NC}"
     
-    # Pull latest images
-    echo "Pulling latest images..."
-    docker compose -f "$COMPOSE_FILE" pull
-    
-    # Build custom images
-    echo "Building custom images..."
-    docker compose -f "$COMPOSE_FILE" build --no-cache
-    
-    # Stop existing containers
-    echo "Stopping existing containers..."
-    docker compose -f "$COMPOSE_FILE" down
-    
-    # Start services
-    echo "Starting services..."
-    docker compose -f "$COMPOSE_FILE" up -d
-    
-    # Wait for services to be healthy
-    echo "Waiting for services to start..."
-    sleep 30
-    
+    # Check if this is a fresh deployment or update
+    if is_fresh_deployment; then
+        echo -e "${YELLOW}Fresh deployment detected${NC}"
+
+        # Pull latest images
+        echo "Pulling latest images..."
+        docker compose -f "$COMPOSE_FILE" pull
+
+        # Start services
+        echo "Starting services..."
+        docker compose -f "$COMPOSE_FILE" up -d
+
+        # Wait for database to be ready
+        echo "Waiting for database service to be ready..."
+        sleep 30
+
+        # Initialize fresh deployment
+        initialize_fresh_deployment
+
+    else
+        echo -e "${YELLOW}Existing deployment detected - performing update${NC}"
+
+        # Pull latest images
+        echo "Pulling latest images..."
+        docker compose -f "$COMPOSE_FILE" pull
+
+        # Stop existing containers
+        echo "Stopping existing containers..."
+        docker compose -f "$COMPOSE_FILE" down
+
+        # Start services
+        echo "Starting services..."
+        docker compose -f "$COMPOSE_FILE" up -d
+
+        # Wait for services to be healthy
+        echo "Waiting for services to start..."
+        sleep 30
+
+        # Handle update deployment
+        handle_update_deployment
+    fi
+
     # Check service health
     check_health
 }
@@ -196,7 +300,7 @@ case "${1:-deploy}" in
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             create_backup
             docker compose -f "$COMPOSE_FILE" pull
-            docker compose -f "$COMPOSE_FILE" up -d --build
+            docker compose -f "$COMPOSE_FILE" up -d
             check_health
             echo -e "${GREEN} Update completed successfully!${NC}"
         fi

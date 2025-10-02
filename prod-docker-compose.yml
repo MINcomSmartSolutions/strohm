@@ -17,7 +17,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PRODUCTION_PASSWORD}
     volumes:
       - main-db-data:/var/lib/postgresql/data
-      - ./database/init.d:/docker-entrypoint-initdb.d:ro
     networks:
       - strohm-network
     # ports are only accessible within the docker network
