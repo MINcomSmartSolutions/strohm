@@ -135,7 +135,7 @@ initialize_fresh_deployment() {
 
     # Initialize Odoo database
     echo "Initializing Odoo database..."
-    docker compose -f "$COMPOSE_FILE" exec odoo odoo -d "$ODOO_DB" -i base --stop-after-init --without-demo=all
+    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -i base --stop-after-init --without-demo=all
 
     # Clean up temporary files
     rm -f /tmp/strohm_structure_modified.sql
@@ -149,7 +149,7 @@ handle_update_deployment() {
 
     # Update Odoo modules if needed
     echo "Updating Odoo modules..."
-    docker compose -f "$COMPOSE_FILE" exec odoo odoo -d "$ODOO_DB" -u all --stop-after-init
+    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -u all --stop-after-init
 
     echo -e "${GREEN}Update deployment completed${NC}"
 }
@@ -199,6 +199,8 @@ deploy() {
 
     else
         echo -e "${YELLOW}Existing deployment detected - performing update${NC}"
+
+        create_backup
 
         # Pull latest images
         echo "Pulling latest images..."
@@ -262,7 +264,6 @@ case "${1:-deploy}" in
         read -p "> " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            create_backup
             deploy
             echo -e "${GREEN}Deployment completed successfully!${NC}"
         else
