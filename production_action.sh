@@ -188,7 +188,7 @@ deploy() {
 
         # Start services
         echo "Starting services..."
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" up -d --build
 
         # Wait for database to be ready
         echo "Waiting for database service to be ready..."
