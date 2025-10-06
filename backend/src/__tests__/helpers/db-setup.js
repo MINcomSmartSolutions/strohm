@@ -13,7 +13,7 @@ require('dotenv').config({path: path.resolve(__dirname, '../../../test.env')});
  */
 const setupTestDatabase = async () => {
 
-    if (!process.env.DB_USER || !process.env.DB_HOST || !process.env.DB_NAME || !process.env.DB_PASSWORD || !process.env.DB_PORT) {
+    if (!process.env.STROHM_DB_USER || !process.env.STROHM_DB_HOST || !process.env.STROHM_DB_NAME || !process.env.STROHM_DB_PASSWORD || !process.env.STROHM_DB_PORT) {
         throw new Error('Database environment variables are not set. Please check your test.env file.');
     }
 
@@ -36,11 +36,11 @@ const setupTestDatabase = async () => {
 
     // Create a new connection pool for tests
     return new Pool({
-        user: process.env.DB_USER,
-        host: process.env.DB_HOST,
-        database: process.env.DB_NAME,
-        password: process.env.DB_PASSWORD,
-        port: process.env.DB_PORT,
+        user: process.env.STROHM_DB_USER,
+        host: process.env.STROHM_DB_HOST,
+        database: process.env.STROHM_DB_NAME,
+        password: process.env.STROHM_DB_PASSWORD,
+        port: process.env.STROHM_DB_PORT,
     });
 };
 
