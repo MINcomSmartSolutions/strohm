@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# Production deployment script for Strohm
-
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -16,7 +14,7 @@ COMPOSE_FILE="prod-docker-compose.yml"
 ENV_FILE=".env.prod"
 BACKUP_DIR="./backups/$(date +%Y%m%d_%H%M%S)"
 
-echo -e "${BLUE}Ladeabrechnung Production Deployment Script${NC}"
+echo -e "${GREEN}Ladeabrechnung Production Deployment${NC}"
 echo "=================================="
 
 # Check if running as root (not recommended for production)
@@ -33,6 +31,12 @@ fi
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${RED}Error: $ENV_FILE not found!${NC}"
     echo -e "${YELLOW}Please copy .env.prod.template to $ENV_FILE and configure it with production values.${NC}"
+    exit 1
+fi
+
+# Check if required database files exist
+if [ ! -f "./database/db-structure-strohm.sql" ]; then
+    echo -e "${RED}Error: ./database/db-structure-strohm.sql not found!${NC}"
     exit 1
 fi
 
@@ -71,8 +75,27 @@ fi
 
 # Load environment variables
 set -a
-source $ENV_FILE
+source "$ENV_FILE"
 set +a
+
+# Validate required environment variables
+required_vars=(
+    "POSTGRES_USER"
+    "POSTGRES_PASSWORD"
+    "STROHM_DB"
+    "STROHM_DB_USER"
+    "STROHM_DB_PASSWORD"
+    "ODOO_DB"
+    "ODOO_DB_USER"
+    "ODOO_DB_PASSWORD"
+)
+
+for var in "${required_vars[@]}"; do
+    if [ -z "${!var:-}" ]; then
+        echo -e "${RED}Error: Required environment variable $var is not set${NC}"
+        exit 1
+    fi
+done
 
 # Function to check if system is already deployed
 is_fresh_deployment() {
@@ -94,51 +117,148 @@ is_fresh_deployment() {
     return 1  # Existing deployment
 }
 
+# Function to wait for database to be ready
+wait_for_database() {
+    echo "Waiting for database to be ready..."
+    local max_attempts=30
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        if docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; then
+            echo -e "${GREEN}Database is ready${NC}"
+            return 0
+        fi
+        echo "Attempt $attempt/$max_attempts: Database not ready yet..."
+        sleep 2
+        ((attempt++))
+    done
+
+    echo -e "${RED}Error: Database did not become ready in time${NC}"
+    return 1
+}
+
+# Function to wait for service health
+wait_for_service_health() {
+    local service=$1
+    local max_attempts=30
+    local attempt=1
+
+    echo "Waiting for $service to be healthy..."
+
+    while [ $attempt -le $max_attempts ]; do
+        local health_status=$(docker compose -f "$COMPOSE_FILE" ps "$service" --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 || echo "")
+
+        if [ "$health_status" = "healthy" ] || docker compose -f "$COMPOSE_FILE" ps "$service" 2>/dev/null | grep -q "Up"; then
+            echo -e "${GREEN}$service is healthy${NC}"
+            return 0
+        fi
+
+        echo "Attempt $attempt/$max_attempts: $service not healthy yet (status: ${health_status:-unknown})..."
+        sleep 2
+        ((attempt++))
+    done
+
+    echo -e "${YELLOW}Warning: $service did not report healthy status in time${NC}"
+    return 1
+}
+
 # Function to initialize fresh deployment
 initialize_fresh_deployment() {
     echo -e "${BLUE}Initializing fresh deployment...${NC}"
 
-    # Wait for database to be ready
-    echo "Waiting for database to be ready..."
-    sleep 10
+    # Wait for database to be ready with proper health check
+    if ! wait_for_database; then
+        echo -e "${RED}Failed to initialize: database not ready${NC}"
+        return 1
+    fi
 
     # Create databases and users using environment variables
     echo "Creating databases and users..."
 
-    # Create strohm user first
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE USER $STROHM_DB_USER WITH PASSWORD '$STROHM_DB_PASSWORD';"
+    # Create strohm user first using PGPASSWORD to avoid password in process list
+    echo "Creating Strohm user..."
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
+		DO \$\$
+		BEGIN
+		    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$STROHM_DB_USER') THEN
+		        CREATE ROLE "$STROHM_DB_USER";
+		        ALTER ROLE "$STROHM_DB_USER" WITH SUPERUSER INHERIT NOCREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD '$STROHM_DB_PASSWORD';
+		    END IF;
+		END
+		\$\$;
+	EOSQL
+    then
+        echo -e "${RED}Failed to create Strohm user${NC}"
+        return 1
+    fi
 
-    # Create strohm database (separate command to avoid transaction block)
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE $STROHM_DB WITH OWNER $STROHM_DB_USER ENCODING 'UTF8';"
+    # Create strohm database if it doesn't exist
+    echo "Creating Strohm database..."
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
+		    SELECT 'CREATE DATABASE "$STROHM_DB" WITH OWNER "$STROHM_DB_USER" ENCODING ''UTF8'''
+		    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$STROHM_DB')\gexec
+	EOSQL
+    then
+        echo -e "${RED}Failed to create Strohm database${NC}"
+        return 1
+    fi
 
     # Grant privileges to strohm user
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $STROHM_DB TO $STROHM_DB_USER;"
+    PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE \"$STROHM_DB\" TO \"$STROHM_DB_USER\";" || true
 
-    # Create odoo user first
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE USER $ODOO_DB_USER WITH PASSWORD '$ODOO_DB_PRODUCTION_PASSWORD' CREATEDB;"
+    # Create Odoo user
+    echo "Creating Odoo user..."
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
+		DO \$\$
+		BEGIN
+		    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$ODOO_DB_USER') THEN
+            CREATE ROLE "$ODOO_DB_USER";
+            ALTER ROLE "$ODOO_DB_USER" WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD '$ODOO_DB_PASSWORD';
+		    END IF;
+		END
+		\$\$;
+	EOSQL
+    then
+        echo -e "${RED}Failed to create Odoo user${NC}"
+        return 1
+    fi
 
-    # Create odoo database (separate command to avoid transaction block)
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "CREATE DATABASE $ODOO_DB WITH OWNER $ODOO_DB_USER ENCODING 'UTF8';"
-
-    # Grant privileges to odoo user
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $ODOO_DB TO $ODOO_DB_USER;"
-
-    # Apply database structure for strohm (modify to use env variables)
+    # Apply database structure for strohm
     echo "Applying Strohm database structure..."
+    if ! PGPASSWORD="$STROHM_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$STROHM_DB_USER" -d "$STROHM_DB" < ./database/db-structure-strohm.sql; then
+        echo -e "${RED}Failed to apply database structure${NC}"
+        return 1
+    fi
 
-    # Copy the structure file and modify it (skip database creation since it's already done)
-    sed "s/strohm_admin/$STROHM_DB_USER/g; s/DROP DATABASE strohm;//g; s/CREATE DATABASE.*;//g; /^\\\\connect strohm/d" \
-        ./database/db-structure-strohm.sql > /tmp/strohm_structure_modified.sql
+    echo "Granting schema permissions..."
+    PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$STROHM_DB" <<-EOSQL
+		GRANT ALL ON SCHEMA public TO "$STROHM_DB_USER";
+		GRANT ALL ON ALL TABLES IN SCHEMA public TO "$STROHM_DB_USER";
+		GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "$STROHM_DB_USER";
+		ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$STROHM_DB_USER";
+		ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$STROHM_DB_USER";
+	EOSQL
 
-    # Apply the modified structure
-    docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$STROHM_DB_USER" -d "$STROHM_DB" -f - < /tmp/strohm_structure_modified.sql
+    # Wait for Odoo service to be ready
+    wait_for_service_health "odoo"
 
     # Initialize Odoo database
     echo "Initializing Odoo database..."
-    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -i base --stop-after-init --without-demo=all
+    if ! docker compose -f "$COMPOSE_FILE" exec odoo odoo -d "$ODOO_DB" -i base --stop-after-init --without-demo=all --load-language=de_DE; then
+        echo -e "${RED}Failed to initialize Odoo database${NC}"
+        return 1
+    fi
 
-    # Clean up temporary files
-    rm -f /tmp/strohm_structure_modified.sql
+    echo "Setting ownership and permissions for Odoo database..."
+    PGPASSWORD="$ODOO_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$ODOO_DB_USER" -d "$ODOO_DB" <<-EOSQL
+    ALTER DATABASE "$ODOO_DB" OWNER TO "$ODOO_DB_USER";
+    GRANT ALL ON SCHEMA public TO "$ODOO_DB_USER";
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO "$ODOO_DB_USER";
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "$ODOO_DB_USER";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$ODOO_DB_USER";
+	EOSQL
+
+
 
     echo -e "${GREEN}Fresh deployment initialization completed${NC}"
 }
@@ -159,25 +279,61 @@ create_backup() {
     echo -e "${BLUE}Creating backup...${NC}"
     mkdir -p "$BACKUP_DIR"
     
+    local backup_failed=0
+
     # Backup database
     if docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
-        echo "Backing up PostgreSQL database..."
-        docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$POSTGRES_USER" postgres > "$BACKUP_DIR/postgres_backup.sql"
-        docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$STROHM_DB_USER" "$STROHM_DB" > "$BACKUP_DIR/strohm_backup.sql"
-        docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$ODOO_DB_USER" "$ODOO_DB" > "$BACKUP_DIR/odoo_backup.sql"
+        echo "Backing up PostgreSQL databases..."
+
+        if ! docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$POSTGRES_USER" postgres > "$BACKUP_DIR/postgres_backup.sql"; then
+            echo -e "${RED}Failed to backup postgres database${NC}"
+            backup_failed=1
+        fi
+
+        if ! PGPASSWORD="$STROHM_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db pg_dump -U "$STROHM_DB_USER" "$STROHM_DB" > "$BACKUP_DIR/strohm_backup.sql"; then
+            echo -e "${RED}Failed to backup strohm database${NC}"
+            backup_failed=1
+        fi
+
+        if ! PGPASSWORD="$ODOO_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db pg_dump -U "$ODOO_DB_USER" "$ODOO_DB" > "$BACKUP_DIR/odoo_backup.sql"; then
+            echo -e "${RED}Failed to backup odoo database${NC}"
+            backup_failed=1
+        fi
+
+        # Verify backup files are not empty
+        for backup_file in "$BACKUP_DIR"/*.sql; do
+            if [ ! -s "$backup_file" ]; then
+                echo -e "${RED}Warning: Backup file $backup_file is empty${NC}"
+                backup_failed=1
+            fi
+        done
+    else
+        echo -e "${YELLOW}Database container is not running, skipping database backup${NC}"
     fi
     
-    # Backup volumes
     echo "Backing up Docker volumes..."
-    docker run --rm -v strohm_odoo-web-data:/data -v "$PWD"/"$BACKUP_DIR":/backup alpine tar czf /backup/odoo-web-data.tar.gz -C /data .
-    
-    echo -e "${GREEN} Backup created in $BACKUP_DIR${NC}"
+    if docker volume inspect odoo-prod-web-data >/dev/null 2>&1; then
+        if ! docker run --rm -v odoo-prod-web-data:/data -v "$PWD/$BACKUP_DIR":/backup alpine tar czf /backup/odoo-web-data.tar.gz -C /data .; then
+            echo -e "${RED}Failed to backup odoo volume${NC}"
+            backup_failed=1
+        fi
+    else
+        echo -e "${YELLOW}Volume odoo-prod-web-data does not exist, skipping volume backup${NC}"
+    fi
+
+    if [ $backup_failed -eq 0 ]; then
+        echo -e "${GREEN}Backup created successfully in $BACKUP_DIR${NC}"
+        return 0
+    else
+        echo -e "${YELLOW}Backup completed with warnings in $BACKUP_DIR${NC}"
+        return 1
+    fi
 }
 
 # Function to deploy
 deploy() {
-    echo -e "${BLUE} Starting deployment...${NC}"
-    
+    echo -e "${BLUE}Starting deployment...${NC}"
+
     # Check if this is a fresh deployment or update
     if is_fresh_deployment; then
         echo -e "${YELLOW}Fresh deployment detected${NC}"
@@ -190,17 +346,20 @@ deploy() {
         echo "Starting services..."
         docker compose -f "$COMPOSE_FILE" up -d --build
 
-        # Wait for database to be ready
-        echo "Waiting for database service to be ready..."
-        sleep 30
-
         # Initialize fresh deployment
-        initialize_fresh_deployment
+        if ! initialize_fresh_deployment; then
+            echo -e "${RED}Fresh deployment initialization failed${NC}"
+            return 1
+        fi
 
     else
         echo -e "${YELLOW}Existing deployment detected - performing update${NC}"
 
-        create_backup
+        if ! create_backup; then
+            echo -e "${RED}Backup failed! Aborting update.${NC}"
+            echo -e "${YELLOW}Fix backup issues before proceeding with update.${NC}"
+            return 1
+        fi
 
         # Pull latest images
         echo "Pulling latest images..."
@@ -215,11 +374,16 @@ deploy() {
         docker compose -f "$COMPOSE_FILE" up -d
 
         # Wait for services to be healthy
-        echo "Waiting for services to start..."
-        sleep 30
+        wait_for_database
+        wait_for_service_health "server"
+        wait_for_service_health "odoo"
 
         # Handle update deployment
-        handle_update_deployment
+        if ! handle_update_deployment; then
+            echo -e "${RED}Update deployment failed${NC}"
+            echo -e "${YELLOW}Backup is available at: $BACKUP_DIR${NC}"
+            return 1
+        fi
     fi
 
     # Check service health
@@ -246,7 +410,7 @@ check_health() {
 # Function to show logs
 show_logs() {
     echo -e "${BLUE} Recent logs:${NC}"
-    docker compose -f "$COMPOSE_FILE" logs --tail=50
+    docker compose -f "$COMPOSE_FILE" logs --tail=75
 }
 
 # Function to cleanup old images
@@ -260,7 +424,7 @@ cleanup() {
 # Main menu
 case "${1:-deploy}" in
     "deploy")
-        echo -e "${YELLOW}This will deploy to production. Continue? (y/N)${NC}"
+        echo -e "${YELLOW}This will deploy production environment in this machine. Continue? (y/N)${NC}"
         read -p "> " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -282,10 +446,15 @@ case "${1:-deploy}" in
     "cleanup")
         cleanup
         ;;
-    "down")
+    "stop")
         echo "Stopping all services..."
-        docker compose -f "$COMPOSE_FILE" down
+        docker compose -f "$COMPOSE_FILE" stop
         echo -e "${GREEN} All services stopped${NC}"
+        ;;
+    "down")
+        echo "Downing all services..."
+        docker compose -f "$COMPOSE_FILE" down
+        echo -e "${GREEN} All services downed${NC}"
         ;;
     "restart")
         echo "Restarting all services..."
@@ -304,8 +473,17 @@ case "${1:-deploy}" in
             echo -e "${GREEN} Update completed successfully!${NC}"
         fi
         ;;
+    "delete")
+        echo -e "${RED}This will DELETE the volumes and stop all services! Continue? (y/N)${NC}"
+        read -p "> " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            docker compose -f "$COMPOSE_FILE" down -v
+            echo -e "${GREEN} All services stopped and volumes cleaned${NC}"
+        fi
+        ;;
     *)
-        echo "Usage: $0 {deploy|backup|health|logs|cleanup|down|restart|update}"
+        echo "Usage: $0 {deploy|backup|health|logs|cleanup|stop|down|restart|update|delete}"
         echo ""
         echo "Commands:"
         echo "  deploy  - Full deployment with backup"
@@ -313,9 +491,11 @@ case "${1:-deploy}" in
         echo "  health  - Check service health"
         echo "  logs    - Show recent logs"
         echo "  cleanup - Clean up Docker images and volumes"
-        echo "  down    - Down all services"
+        echo "  stop    - Stop all services. Stop services only."
+        echo "  down    - Down all services. Stop and remove containers, networks..."
         echo "  restart - Restart all services"
         echo "  update  - Update and restart services"
+        echo "  delete  - Delete the volumes and stop all services and remove containers, networks..."
         exit 1
         ;;
 esac

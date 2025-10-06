@@ -14,11 +14,11 @@ const logger = require('./logger');
 
 // Create a new pool instance with connection parameters from environment variables
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT,
+    user: process.env.STROHM_DB_USER,
+    host: process.env.STROHM_DB_HOST,
+    database: process.env.STROHM_DB_NAME,
+    password: process.env.STROHM_DB_PASSWORD,
+    port: process.env.STROHM_DB_PORT,
 });
 
 // Function to test database connection
