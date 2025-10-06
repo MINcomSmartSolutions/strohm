@@ -48,7 +48,7 @@ axios.interceptors.response.use(function (response) {
 
 // Session configuration
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'a-very-secret-key',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
     cookie: {
