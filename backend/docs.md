@@ -204,14 +204,17 @@ Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
 <a name="module_controllers/auth"></a>
 
 ## controllers/auth
+
 Controller for handling user authentication and logout.
 
 <a name="module_controllers/consent"></a>
 
 ## controllers/consent
+
 Controller for handling user consent pages and operations.
 
 This controller manages the complete consent workflow including:
+
 - Displaying consent forms to users
 - Processing consent submissions
 - Handling consent withdrawals
@@ -224,6 +227,7 @@ transaction handling and enhanced audit capabilities required for GDPR complianc
 
 **SERVICE DEPENDENCIES**: The controller uses several key functions from the consent
 service that bypass the centralized queries.js mechanism:
+
 - `getActiveConsentRevision()` - Direct database query for active consent
 - `recordConsent()` - Specialized audit trail recording with transactions
 - `withdrawConsent()` - GDPR-compliant consent withdrawal with preservation
@@ -237,11 +241,13 @@ service that bypass the centralized queries.js mechanism:
 <a name="module_controllers/odoo"></a>
 
 ## controllers/odoo
+
 Controller for handling Odoo internal user sync webhooks.
 
 <a name="module_middlewares/consent"></a>
 
 ## middlewares/consent
+
 Middleware for checking user consent status and enforcing consent requirements.
 
 This middleware ensures that authenticated users have provided valid consent
@@ -265,7 +271,9 @@ GDPR compliance requirements.
 <a name="module_middlewares/consent..requireConsent"></a>
 
 ### middlewares/consent~requireConsent(req, res, next) ⇒ <code>void</code>
+
 Middleware Flow:
+
 1. **Route Filtering**: Checks if current route should skip consent validation
     - Skipped routes: /consent, /logout, /health, /welcome, /login, /callback, /scim, /assets, /favicon
 2. **Consent Revision Check**: Uses `getActiveConsentRevision()` to verify system has active consent
@@ -286,6 +294,7 @@ Middleware Flow:
 - <code>Error</code> Logs errors but does not throw to prevent application blocking
 
 **Security**: Security Considerations:
+
 - Always validates OIDC properties before proceeding
 - Gracefully handles errors to prevent application blocking
 - Maintains session integrity during user operations
@@ -307,9 +316,11 @@ Middleware Flow:
 <a name="module_services/consent"></a>
 
 ## services/consent
+
 Service for handling user consent operations and consent revision management.
 
 This service provides a comprehensive API for managing user consent workflows including:
+
 - Active consent revision retrieval and management
 - User consent validation and verification
 - Consent recording with audit trail capabilities
@@ -323,6 +334,7 @@ centralized database operations, this consent service implements its own
 database queries for specialized consent management requirements.
 
 This approach provides:
+
 - Enhanced audit trail capabilities for compliance
 - Specialized transaction handling for consent operations
 - Fine-grained control over consent-related database operations
@@ -354,7 +366,9 @@ services/db\_conn</code>, [<code>services/logger</code>](#module_services/logger
 <a name="module_services/consent..getActiveConsentRevision"></a>
 
 ### services/consent~getActiveConsentRevision() ⇒ <code>Promise.&lt;(Object\|null)&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code>
+
 Query Logic:
+
 1. Filters for revisions marked as active (is_active = true)
 2. Excludes expired revisions (expires_at IS NULL OR expires_at > NOW())
 3. Orders by creation date descending to get the most recent
@@ -365,9 +379,10 @@ Query Logic:
 exists<code>number</code> - returns.id - Unique identifier for the consent revision<code>string</code> -
 returns.version - Version identifier (e.g., "1.0", "2.1.3")<code>string</code> - returns.title - Human-readable title
 for the consent<code>string</code> - returns.content - Full consent text content<code>string</code> \| <code>
-null</code> - returns.privacy_policy_url - URL to privacy policy (optional)<code>string</code> \| <code>null</code> -
-returns.terms_url - URL to terms of service (optional)<code>Date</code> - returns.created_at - Timestamp when revision
-was created<code>Date</code> \| <code>null</code> - returns.expires_at - Expiration timestamp (null for no expiration)  
+null</code> - returns.privacy_policy_url - INTERNAL_BASE_URL to privacy policy (optional)<code>string</code> \| <code>
+null</code> - returns.terms_url - INTERNAL_BASE_URL to terms of service (optional)<code>Date</code> -
+returns.created_at - Timestamp when revision was created<code>Date</code> \| <code>null</code> - returns.expires_at -
+Expiration timestamp (null for no expiration)  
 **Throws**:
 
 - <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
@@ -375,7 +390,9 @@ was created<code>Date</code> \| <code>null</code> - returns.expires_at - Expirat
 <a name="module_services/consent..hasValidConsent"></a>
 
 ### services/consent~hasValidConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Validation Criteria:
+
 1. User has a consent record (user_consents table)
 2. Consent is linked to an active revision (is_active = true)
 3. Consent has not been withdrawn (is_withdrawn = false)
@@ -396,20 +413,24 @@ For ensuring users have the most recent consent, use `hasLatestConsent()` instea
 ```js
 const isValid = await hasValidConsent(123);
 if (isValid) {
-  console.log('User has valid consent');
+    console.log('User has valid consent');
 } else {
-  console.log('User needs to provide consent');
+    console.log('User needs to provide consent');
 }
 ```
+
 <a name="module_services/consent..hasLatestConsent"></a>
 
 ### services/consent~hasLatestConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Validation Process:
+
 1. **Latest Revision Lookup**: Finds the most recent active, non-optional consent revision
 2. **Consent Verification**: Checks if user has specifically consented to this revision
 3. **Withdrawal Check**: Ensures the consent has not been withdrawn
 
 Filtering Criteria for Latest Revision:
+
 - is_active = true (currently active)
 - expires_at IS NULL OR expires_at > NOW() (not expired)
 - optional = false (mandatory consent only)
@@ -425,7 +446,9 @@ Filtering Criteria for Latest Revision:
 <a name="module_services/consent..recordConsent"></a>
 
 ### services/consent~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>number</code> \| <code>number</code> \| <code>Date</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
+
 Audit Trail Features:
+
 - **Immutable Records**: Consent records cannot be modified once created
 - **IP Address Tracking**: Records user's IP for geographical compliance
 - **Device Fingerprinting**: User agent helps identify consent device
@@ -434,6 +457,7 @@ Audit Trail Features:
 - **Transaction Safety**: Uses database transactions for data integrity
 
 Supported Consent Methods:
+
 - 'web_form' (default) - HTML form submission
 - 'api' - Direct API call
 - 'import' - Bulk import from external system
@@ -457,11 +481,11 @@ evidence that consent was freely given, specific, informed, and unambiguous.
 
 ```js
 const consentRecord = await recordConsent(
-  123,                    // userId
-  5,                      // consentRevisionId
-  '192.168.1.100',       // ipAddress
-  'Mozilla/5.0...',      // userAgent
-  'web_form'             // consentMethod
+    123,                    // userId
+    5,                      // consentRevisionId
+    '192.168.1.100',       // ipAddress
+    'Mozilla/5.0...',      // userAgent
+    'web_form'             // consentMethod
 );
 console.log(`Consent recorded with ID: ${consentRecord.id}`);
 ```
@@ -474,10 +498,13 @@ const ipAddress = req.ip || req.connection.remoteAddress;
 const userAgent = req.get('User-Agent');
 await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
 ```
+
 <a name="module_services/consent..withdrawConsent"></a>
 
 ### services/consent~withdrawConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Withdrawal Process:
+
 1. **Transaction Safety**: Uses database transaction for atomic operations
 2. **Batch Update**: Updates all non-withdrawn consent records for the user
 3. **Timestamp Recording**: Records exact time of withdrawal
@@ -503,10 +530,10 @@ while honoring the user's right to withdraw consent at any time.
 ```js
 const wasWithdrawn = await withdrawConsent(123);
 if (wasWithdrawn) {
-  console.log('User consent successfully withdrawn');
-  // Typically followed by session destruction and logout
+    console.log('User consent successfully withdrawn');
+    // Typically followed by session destruction and logout
 } else {
-  console.log('No active consent found to withdraw');
+    console.log('No active consent found to withdraw');
 }
 ```
 
@@ -516,16 +543,19 @@ if (wasWithdrawn) {
 // Used in consent withdrawal endpoint
 const success = await withdrawConsent(req.session.user.user_id);
 if (success) {
-  req.session.destroy();
-  res.json({ success: true, message: 'Consent withdrawn successfully' });
+    req.session.destroy();
+    res.json({success: true, message: 'Consent withdrawn successfully'});
 } else {
-  res.status(404).json({ error: 'No active consent found to withdraw' });
+    res.status(404).json({error: 'No active consent found to withdraw'});
 }
 ```
+
 <a name="module_services/consent..getUserConsentHistory"></a>
 
 ### services/consent~getUserConsentHistory(userId) ⇒ <code>Promise.&lt;Array.&lt;Object&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
+
 History Data Includes:
+
 - **Chronological Order**: Most recent consent actions first
 - **Version Tracking**: Which consent version was accepted
 - **Withdrawal Status**: Clear indication of current consent state
@@ -549,7 +579,9 @@ principle by providing complete documentation of consent lifecycle events.
 <a name="module_services/consent..createConsentRevision"></a>
 
 ### services/consent~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;Object&gt;</code> \| <code>number</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>string</code> \| <code>null</code> \| <code>string</code> \| <code>null</code> \| <code>Date</code> \| <code>Date</code> \| <code>null</code> \| <code>boolean</code>
+
 Creation Process:
+
 1. **Transaction Start**: Begins database transaction for atomicity
 2. **Deactivation**: Sets all existing active revisions to inactive
 3. **Creation**: Creates new revision with is_active = true
@@ -564,8 +596,8 @@ validation throughout the application.
 **Returns**: <code>Promise.&lt;Object&gt;</code> - The created consent revision record<code>number</code> - returns.id -
 Unique identifier for the new revision<code>string</code> - returns.version - Version identifier<code>string</code> -
 returns.title - Consent title<code>string</code> - returns.content - Consent content<code>string</code> \| <code>
-null</code> - returns.privacy_policy_url - Privacy policy URL<code>string</code> \| <code>null</code> -
-returns.terms_url - Terms of service URL<code>Date</code> - returns.created_at - Creation timestamp<code>
+null</code> - returns.privacy_policy_url - Privacy policy INTERNAL_BASE_URL<code>string</code> \| <code>null</code> -
+returns.terms_url - Terms of service INTERNAL_BASE_URL<code>Date</code> - returns.created_at - Creation timestamp<code>
 Date</code> \| <code>null</code> - returns.expires_at - Expiration timestamp<code>boolean</code> - returns.is_active -
 Always true for newly created revisions  
 **Throws**:
@@ -575,6 +607,7 @@ Always true for newly created revisions
 <a name="module_services/cron"></a>
 
 ## services/cron
+
 Cron job service for periodic transaction fetching.
 
 - Schedules a job to run every 20 second.
@@ -584,35 +617,87 @@ Cron job service for periodic transaction fetching.
 <a name="module_services/logger"></a>
 
 ## services/logger : <code>winston</code>
+
 Logger service using winston with file rotation and enhanced console output
 
 <a name="module_services/network"></a>
 
 ## services/network
+
 Network service module for external API clients.
 
 - Exports pre-configured Axios instances for Odoo and SteVe APIs.
 - Tests connections to SteVe and Odoo on module load.
 
+
+* [services/network](#module_services/network)
+    * [~odooAuthedAxios](#module_services/network..odooAuthedAxios) : <code>AxiosInstance</code>
+    * [~odooPlainAxios](#module_services/network..odooPlainAxios) : <code>AxiosInstance</code>
+    * [~steveAxios](#module_services/network..steveAxios)
+    * [~createOdooAxios([includeAuth])](#module_services/network..createOdooAxios) ⇒ <code>AxiosInstance</code>
+
+<a name="module_services/network..odooAuthedAxios"></a>
+
+### services/network~odooAuthedAxios : <code>AxiosInstance</code>
+
+An Axios instance for interacting with the Odoo API with authentication.
+
+**Kind**: inner constant of [<code>services/network</code>](#module_services/network)  
+<a name="module_services/network..odooPlainAxios"></a>
+
+### services/network~odooPlainAxios : <code>AxiosInstance</code>
+
+An Axios instance for interacting with the Odoo API without authentication.
+
+**Kind**: inner constant of [<code>services/network</code>](#module_services/network)  
+<a name="module_services/network..steveAxios"></a>
+
+### services/network~steveAxios
+
+Creates a pre-configured Axios instance for interacting with the SteVe API.
+
+The configuration depends on the environment:
+
+- In production, it uses an API key for authentication, which is passed as a custom header.
+- In non-production environments, it uses basic authentication with a username and password.
+
+**Kind**: inner constant of [<code>services/network</code>](#module_services/network)  
+**Throws**:
+
+- <code>SystemError</code> If required environment variables for authentication are not set.
+
+<a name="module_services/network..createOdooAxios"></a>
+
+### services/network~createOdooAxios([includeAuth]) ⇒ <code>AxiosInstance</code>
+
+Creates a pre-configured Axios instance for interacting with the Odoo API.
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
+**Returns**: <code>AxiosInstance</code> - A configured Axios instance for Odoo API requests.  
+**Throws**:
+
+- <code>SystemError</code> If `includeAuth` is true and the Odoo admin API key is not set in the environment variables.
+
 <a name="module_services/odoo"></a>
 
 ## services/odoo
+
 Odoo Integration Service
 
 It is responsible for user creation, login, key rotation, and invoicing with Odoo via REST API.
-
 
 * [services/odoo](#module_services/odoo)
     * [~createOdooUser(user)](#module_services/odoo..createOdooUser)
     * [~getOdooPortalLogin(user)](#module_services/odoo..getOdooPortalLogin) ⇒ <code>string</code>
     * [~rotateOdooUserAuth(user)](#module_services/odoo..rotateOdooUserAuth) ⇒ <code>Promise.&lt;Object&gt;</code>
-  * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;Number&gt;</code>
-  * [~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>
-    Promise.&lt;boolean&gt;</code>
+    * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;Number&gt;</code>
+    * [~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>
+      Promise.&lt;boolean&gt;</code>
 
 <a name="module_services/odoo..createOdooUser"></a>
 
 ### services/odoo~createOdooUser(user)
+
 Creates a new Odoo user.
 
 - Throws if the user already has an Odoo user ID.
@@ -629,15 +714,16 @@ Creates a new Odoo user.
 <a name="module_services/odoo..getOdooPortalLogin"></a>
 
 ### services/odoo~getOdooPortalLogin(user) ⇒ <code>string</code>
-Generates a secure Odoo portal login URL for the given user.
+
+Generates a secure Odoo portal login INTERNAL_BASE_URL for the given user.
 
 - Validates the user object.
 - Fetches Odoo credentials from the database.
-- Constructs a login URL with required query parameters for authentication.
+- Constructs a login INTERNAL_BASE_URL with required query parameters for authentication.
 - Throws if credentials are missing or invalid.
 
 **Kind**: inner method of [<code>services/odoo</code>](#module_services/odoo)  
-**Returns**: <code>string</code> - Odoo portal login URL.  
+**Returns**: <code>string</code> - Odoo portal login INTERNAL_BASE_URL.  
 **Throws**:
 
 - <code>ValidationError</code> If user or credentials are invalid.
@@ -645,6 +731,7 @@ Generates a secure Odoo portal login URL for the given user.
 <a name="module_services/odoo..rotateOdooUserAuth"></a>
 
 ### services/odoo~rotateOdooUserAuth(user) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Rotates the Odoo user API key for the given user.
 
 - Validates the user object.
@@ -662,6 +749,7 @@ Rotates the Odoo user API key for the given user.
 <a name="module_services/odoo..createOdooTxnInvoice"></a>
 
 ### services/odoo~createOdooTxnInvoice(db_txn) ⇒ <code>Promise.&lt;Number&gt;</code>
+
 Creates a bill/invoice in Odoo for a given transaction.
 
 Request payload to Odoo:
@@ -692,6 +780,7 @@ lines_data (list[dict]): Invoice line data dict with the following fields:
 <a name="module_services/odoo..checkValidPaymentMethod"></a>
 
 ### services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Checks if the given user has a valid payment method in Odoo.
 
 - Validates the user object.
@@ -709,6 +798,7 @@ Checks if the given user has a valid payment method in Odoo.
 <a name="module_services/steve_transactions"></a>
 
 ## services/steve\_transactions
+
 SteVe Transactions Service
 
 Incremental fetch of all transactions since last high‑water mark (T0).
@@ -726,22 +816,23 @@ Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/i
 * [services/steve_transactions](#module_services/steve_transactions)
     * [~TEMPORARY_STOP_REASONS](#module_services/steve_transactions..TEMPORARY_STOP_REASONS)
     * [~PERMANENT_STOP_REASONS](#module_services/steve_transactions..PERMANENT_STOP_REASONS)
-  * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>
-    Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
-  * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>
-    boolean</code>
-  * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime,
-    processedCount: number, billedCount: number}&gt;</code>
-  * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
-    billed: number, high\_water\_mark: DateTime}&gt;</code>
-  * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
-    high\_water\_mark: DateTime}&gt;</code>
-  * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
-    high\_water\_mark: DateTime}&gt;</code>
+    * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>
+      Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+    * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>
+      boolean</code>
+    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime,
+      processedCount: number, billedCount: number}&gt;</code>
+    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number,
+      billed: number, high\_water\_mark: DateTime}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
+      high\_water\_mark: DateTime}&gt;</code>
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number,
+      high\_water\_mark: DateTime}&gt;</code>
 
 <a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
 
 ### services/steve_transactions~TEMPORARY\_STOP\_REASONS
+
 Stop reasons that indicate a transaction is temporarily stopped/paused
 and should not be billed yet (may resume later).
 According to OCPP1.6 spec
@@ -750,6 +841,7 @@ According to OCPP1.6 spec
 <a name="module_services/steve_transactions..PERMANENT_STOP_REASONS"></a>
 
 ### services/steve_transactions~PERMANENT\_STOP\_REASONS
+
 Stop reasons that indicate a permanent transaction end
 and should be processed for billing.
 According to OCPP1.6 spec
@@ -758,6 +850,7 @@ According to OCPP1.6 spec
 <a name="module_services/steve_transactions..fetchTxnsSince"></a>
 
 ### services/steve_transactions~fetchTxnsSince(since) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+
 Fetch all transactions since a given timestamp (exclusive)
 If no timestamp is provided, fetch all transactions
 
@@ -766,6 +859,7 @@ If no timestamp is provided, fetch all transactions
 <a name="module_services/steve_transactions..shouldProcessTransaction"></a>
 
 ### services/steve_transactions~shouldProcessTransaction(txn) ⇒ <code>boolean</code>
+
 Determines if a transaction should be processed for billing based on its stop reason
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -773,6 +867,7 @@ Determines if a transaction should be processed for billing based on its stop re
 <a name="module_services/steve_transactions..processTxns"></a>
 
 ### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code>
+
 Record all transactions and create bills for permanently stopped transactions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -785,12 +880,14 @@ high‑water mark (max stopTimestamp), count of all processed transactions, and 
 <a name="module_services/steve_transactions..runIncremental"></a>
 
 ### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+
 Run incremental billing cycle: fetch and process since last watermark
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
 ### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+
 Fetches all transactions from Steve, processes them, and updates the high-water mark.
 Use for a full sync (no time filter).
 
@@ -798,22 +895,24 @@ Use for a full sync (no time filter).
 <a name="module_services/steve_transactions..runToday"></a>
 
 ### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+
 Fetch and process all of today's transactions and updates the high-water mark.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_user"></a>
 
 ## services/steve\_user
+
 SteVe User Service
 
 Provides functions to create, fetch, block, and unblock users in the SteVe OCPP backend.
+
 - createSteveUser: Creates a new user in SteVe with the given RFID.
 - getSteveUser: Fetches a user from SteVe by RFID.
 - blockSteveUser: Blocks a user in SteVe (sets maxActiveTransactionCount to 0).
 - unblockSteveUser: Unblocks a user in SteVe (sets maxActiveTransactionCount to 1).
 
 All functions validate input and handle errors using custom error types.
-
 
 * [services/steve_user](#module_services/steve_user)
     * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>
@@ -826,7 +925,9 @@ All functions validate input and handle errors using custom error types.
 <a name="module_services/steve_user..createSteveUser"></a>
 
 ### services/steve_user~createSteveUser(user, [blocked]) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Creates a new user in SteVe with the given RFID.
+
 - Checks if the user already exists.
 - Creates the user with the specified block status.
 - Validates the response and stores the steve_id in the database.
@@ -841,6 +942,7 @@ Creates a new user in SteVe with the given RFID.
 <a name="module_services/steve_user..getSteveUser"></a>
 
 ### services/steve_user~getSteveUser(user_rfid) ⇒ <code>Promise.&lt;(Array.&lt;Object&gt;\|null)&gt;</code>
+
 Fetches a user from SteVe by RFID.
 Returns null if not found, throws if multiple found or on error.
 Validates the user data.
@@ -854,6 +956,7 @@ Validates the user data.
 <a name="module_services/steve_user..blockSteveUser"></a>
 
 ### services/steve_user~blockSteveUser(user)
+
 Blocks a user in SteVe by setting their maxActiveTransactionCount to 0.
 Validates input, updates the user, checks the block status, and logs the action.
 
@@ -865,6 +968,7 @@ Validates input, updates the user, checks the block status, and logs the action.
 <a name="module_services/steve_user..unblockSteveUser"></a>
 
 ### services/steve_user~unblockSteveUser(user)
+
 Unblocks a user in SteVe by setting their maxActiveTransactionCount to 1.
 Validates input, updates the user, checks the unblock status, and logs the action.
 
@@ -876,11 +980,13 @@ Validates input, updates the user, checks the unblock status, and logs the actio
 <a name="module_services/user_operations"></a>
 
 ## services/user\_operations
+
 Service for checking overall user integrity and creating users with proper links to external systems.
 
 <a name="module_services/user_operations..userOperations"></a>
 
 ### services/user_operations~userOperations(oidc_user) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Handles user creation and linking with external systems.
 
 - Checks if a user exists by OIDC ID.
@@ -893,6 +999,7 @@ Handles user creation and linking with external systems.
 <a name="module_utils/oidc_config"></a>
 
 ## utils/oidc\_config
+
 OIDC configuration for authentication middleware.
 
 - Uses environment variables for secrets and endpoints.
@@ -901,38 +1008,39 @@ OIDC configuration for authentication middleware.
 <a name="module_utils/queries"></a>
 
 ## utils/queries
-Global database queries
 
+Global database queries
 
 * [utils/queries](#module_utils/queries)
     * [~handleQueryError(error, operation, silent)](#module_utils/queries..handleQueryError)
     * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
-  * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
-    &gt;</code>
-  * [~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt)](#module_utils/queries..setUserOdooCredentials) ⇒ <code>
-    Promise.&lt;number&gt;</code>
-  * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(Object\|null)
-    &gt;</code>
-  * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
-    Promise.&lt;boolean&gt;</code>
-  * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
-    Object\|undefined)&gt;</code>
-  * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>
-    Promise.&lt;void&gt;</code>
-  * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>
-    Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
-  * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
-    Promise.&lt;void&gt;</code>
-  * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
-    &gt;</code>
+    * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)
+      &gt;</code>
+    * [~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt)](#module_utils/queries..setUserOdooCredentials) ⇒ <code>
+      Promise.&lt;number&gt;</code>
+    * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(
+      Object\|null)&gt;</code>
+    * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>
+      Promise.&lt;boolean&gt;</code>
+    * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(
+      Object\|undefined)&gt;</code>
+    * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>
+      Promise.&lt;void&gt;</code>
+    * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>
+      Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
+    * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>
+      Promise.&lt;void&gt;</code>
+    * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)
+      &gt;</code>
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
-  * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
-    Promise.&lt;number&gt;</code> \| <code>null</code>
+    * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>
+      Promise.&lt;number&gt;</code> \| <code>null</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
 
 <a name="module_utils/queries..handleQueryError"></a>
 
 ### utils/queries~handleQueryError(error, operation, silent)
+
 Handles query errors.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -943,6 +1051,7 @@ Handles query errors.
 <a name="module_utils/queries..getUsers"></a>
 
 ### utils/queries~getUsers(filters, options) ⇒ <code>Promise.&lt;Array&gt;</code>
+
 Gets users based on dynamic filter parameters.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -954,13 +1063,31 @@ Gets users based on dynamic filter parameters.
 **Example**
 
 ```js
-getUsers({ first_name: 'John' }) - Get all users named John
-getUsers({ active: true }, { limit: 10, offset: 20 }) - Get 10 active users, skipping first 20
-getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users ordered by creation date descending
+getUsers({first_name: 'John'}) - Get
+all
+users
+named
+John
+getUsers({active: true}, {limit: 10, offset: 20}) - Get
+10
+active
+users, skipping
+first
+20
+getUsers({}, {orderBy: 'created_at', orderDirection: 'DESC'}) - Get
+all
+users
+ordered
+by
+creation
+date
+descending
 ```
+
 <a name="module_utils/queries..getUserUnique"></a>
 
 ### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code>
+
 Gets a single user with uniqueness validation.
 Throws an error if multiple users match the criteria.
 
@@ -974,6 +1101,7 @@ Throws an error if multiple users match the criteria.
 <a name="module_utils/queries..setUserOdooCredentials"></a>
 
 ### utils/queries~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt) ⇒ <code>Promise.&lt;number&gt;</code>
+
 Sets Odoo credentials for a user in the database.
 Updates the users table with Odoo IDs and stores encrypted API key information.
 
@@ -987,6 +1115,7 @@ Updates the users table with Odoo IDs and stores encrypted API key information.
 <a name="module_utils/queries..getUserOdooCredentials"></a>
 
 ### utils/queries~getUserOdooCredentials(user_id) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+
 Retrieves the latest valid Odoo API key credentials for a user.
 Returns null if no credentials are found.
 
@@ -999,6 +1128,7 @@ Returns null if no credentials are found.
 <a name="module_utils/queries..rotateOdooUserKey"></a>
 
 ### utils/queries~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt) ⇒ <code>Promise.&lt;boolean&gt;</code>
+
 Rotates a user's Odoo API key.
 Revokes the old key and inserts a new one for the user.
 
@@ -1011,6 +1141,7 @@ Revokes the old key and inserts a new one for the user.
 <a name="module_utils/queries..setSteveUserParamaters"></a>
 
 ### utils/queries~setSteveUserParamaters(user, steve_id) ⇒ <code>Promise.&lt;(Object\|undefined)&gt;</code>
+
 Sets the SteVe user ID for a user in the database.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -1023,12 +1154,14 @@ Sets the SteVe user ID for a user in the database.
 <a name="module_utils/queries..recordActivityLog"></a>
 
 ### utils/queries~recordActivityLog(user_id, event_type, target, rfid, reason) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Records an activity event for a user in the activity log.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..recordSteveTxn"></a>
 
 ### utils/queries~recordSteveTxn(steve_txn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
+
 Record a transaction record into the `charging_transactions` table.
 If transaction already exists and is complete, returns it without modification.
 Otherwise, inserts a new record with proper user association or updates existing one.
@@ -1038,6 +1171,7 @@ Otherwise, inserts a new record with proper user association or updates existing
 <a name="module_utils/queries..setLastStopTimestamp"></a>
 
 ### utils/queries~setLastStopTimestamp(new_watermark) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Sets the last stop timestamp watermark.
 Inserts or updates the `watermark` table with the given timestamp.
 
@@ -1045,6 +1179,7 @@ Inserts or updates the `watermark` table with the given timestamp.
 <a name="module_utils/queries..getLastStopTimestamp"></a>
 
 ### utils/queries~getLastStopTimestamp() ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
+
 Retrieves the most recent `last_stop_timestamp` aka watermark from the watermark table.
 Returns a Luxon DateTime if found, otherwise null.
 
@@ -1054,6 +1189,7 @@ watermark fetch.
 <a name="module_utils/queries..saveInvoiceId"></a>
 
 ### utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Updates the `invoice_ref` field for a transaction in `charging_transactions`.
 This is used to link a transaction to an invoice in Odoo.
 
@@ -1065,6 +1201,7 @@ This is used to link a transaction to an invoice in Odoo.
 <a name="module_utils/queries..getCurrentElectricityPrice"></a>
 
 ### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code> \| <code>null</code>
+
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
 If no price is found, it returns null.
@@ -1075,6 +1212,7 @@ datetime's if not, the current electricity price in cents per kWh.
 <a name="module_utils/queries..getUsersCount"></a>
 
 ### utils/queries~getUsersCount(filters) ⇒ <code>Promise.&lt;number&gt;</code>
+
 Get total count of users matching the given filters
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
@@ -1082,12 +1220,15 @@ Get total count of users matching the given filters
 <a name="module_utils/steve"></a>
 
 ## utils/steve
+
 Utility functions for Steve user data.
 
 <a name="module_utils/steve..validateSteveUser"></a>
 
 ### utils/steve~validateSteveUser(response_data, userRfid)
+
 Validates Steve user response data.
+
 - Checks structure using Joi schema.
 - Ensures idTag matches the expected RFID.
 
@@ -1099,18 +1240,19 @@ Validates Steve user response data.
 <a name="module_utils/typedef"></a>
 
 ## utils/typedef
-Type definitions
 
+Type definitions
 
 * [utils/typedef](#module_utils/typedef)
     * [~User](#module_utils/typedef..User) : <code>Object</code>
-  * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
+    * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
     * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
     * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
 
 <a name="module_utils/typedef..User"></a>
 
 ### utils/typedef~User : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -1129,6 +1271,7 @@ Type definitions
 <a name="module_utils/typedef..steve_txn"></a>
 
 ### utils/typedef~steve\_txn : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -1150,6 +1293,7 @@ Type definitions
 <a name="module_utils/typedef..db_txn"></a>
 
 ### utils/typedef~db\_txn : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -1175,6 +1319,7 @@ Type definitions
 <a name="module_utils/typedef..electricity_price"></a>
 
 ### utils/typedef~electricity\_price : <code>Object</code>
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -1189,11 +1334,13 @@ Type definitions
 <a name="module_app"></a>
 
 ## app
+
 Express app instance.
 
 <a name="SCIMUserHandler"></a>
 
 ## SCIMUserHandler
+
 SCIM User Resource Handler
 Handles CRUD operations for users via SCIM protocol
 
@@ -1209,6 +1356,7 @@ Handles CRUD operations for users via SCIM protocol
 <a name="SCIMUserHandler.read"></a>
 
 ### SCIMUserHandler.read(request) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Retrieve users with optional filtering and pagination
 
 **Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
@@ -1216,6 +1364,7 @@ Retrieve users with optional filtering and pagination
 <a name="SCIMUserHandler.write"></a>
 
 ### SCIMUserHandler.write(resource) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 NOT TESTED
 Create a new user via SCIM. Should not be used since users are created via OIDC.
 Does not trigger Odoo or SteVe user creation.
@@ -1225,6 +1374,7 @@ Does not trigger Odoo or SteVe user creation.
 <a name="SCIMUserHandler.patch"></a>
 
 ### SCIMUserHandler.patch(id, resource) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Update an existing user via SCIM
 
 **Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
@@ -1232,12 +1382,14 @@ Update an existing user via SCIM
 <a name="SCIMUserHandler.delete"></a>
 
 ### SCIMUserHandler.delete(id) ⇒ <code>Promise.&lt;void&gt;</code>
+
 Delete a user via SCIM
 
 **Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
 <a name="SCIMUserHandler.toSCIMUser"></a>
 
 ### SCIMUserHandler.toSCIMUser(user) ⇒ <code>Object</code>
+
 Convert database user to SCIM user format
 
 **Kind**: static method of [<code>SCIMUserHandler</code>](#SCIMUserHandler)  
@@ -1245,12 +1397,14 @@ Convert database user to SCIM user format
 <a name="AppError"></a>
 
 ## AppError
+
 Base class for custom application errors
 
 **Kind**: global class  
 <a name="config"></a>
 
 ## config : <code>object</code>
+
 Configuration settings for SteVe and Odoo integrations
 
 **Kind**: global namespace  
@@ -1261,16 +1415,16 @@ Configuration settings for SteVe and Odoo integrations
 | STEVE_CONFIG                         | <code>object</code> | Configuration for SteVe server and API endpoints |
 | STEVE_CONFIG.HOST                    | <code>string</code> | SteVe server host                                |
 | STEVE_CONFIG.PORT                    | <code>string</code> | SteVe server port                                |
-| STEVE_CONFIG.URL                     | <code>string</code> | SteVe base URL                                   |
+| STEVE_CONFIG.INTERNAL_BASE_URL       | <code>string</code> | SteVe base INTERNAL_BASE_URL                     |
 | STEVE_CONFIG.OCPP_TAGS_URI           | <code>string</code> | OCPP tags API endpoint                           |
 | STEVE_CONFIG.TRANSACTIONS_URI        | <code>string</code> | Transactions API endpoint                        |
 | ODOO_CONFIG                          | <code>object</code> | Configuration for Odoo server and API endpoints  |
 | ODOO_CONFIG.HOST                     | <code>string</code> | Odoo server host                                 |
 | ODOO_CONFIG.PORT                     | <code>string</code> | Odoo server port                                 |
-| ODOO_CONFIG.URL                      | <code>string</code> | Odoo base URL                                    |
+| ODOO_CONFIG.INTERNAL_BASE_URL        | <code>string</code> | Odoo base INTERNAL_BASE_URL                      |
 | ODOO_CONFIG.EXTERNAL_HOST            | <code>string</code> | Odoo external host                               |
 | ODOO_CONFIG.EXTERNAL_PORT            | <code>string</code> | Odoo external port                               |
-| ODOO_CONFIG.EXTERNAL_URL             | <code>string</code> | Odoo external URL                                |
+| ODOO_CONFIG.EXTERNAL_BASE_URL        | <code>string</code> | Odoo external INTERNAL_BASE_URL                  |
 | ODOO_CONFIG.API_SECRET               | <code>string</code> | Odoo API secret                                  |
 | ODOO_CONFIG.USER_CREATION_URI        | <code>string</code> | User creation endpoint                           |
 | ODOO_CONFIG.INVOICE_CREATION_URI     | <code>string</code> | Invoice creation endpoint                        |
@@ -1281,6 +1435,7 @@ Configuration settings for SteVe and Odoo integrations
 <a name="logger"></a>
 
 ## logger
+
 Application Error Codes
 
 This module defines standardized error codes and messages for the application.
@@ -1290,18 +1445,21 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <a name="validateSCIMResource"></a>
 
 ## validateSCIMResource(resource, schema, operation)
+
 Validate SCIM resource using Joi and throw appropriate errors
 
 **Kind**: global function  
 <a name="scimErrorHandler"></a>
 
 ## scimErrorHandler()
+
 SCIM Error Handler Middleware
 
 **Kind**: global function  
 <a name="generateOdooHash"></a>
 
 ## generateOdooHash(message, secret) ⇒ <code>string</code>
+
 Generate HMAC signature matching Odoo implementation
 
 **Kind**: global function  
@@ -1309,6 +1467,7 @@ Generate HMAC signature matching Odoo implementation
 <a name="generateSalt"></a>
 
 ## generateSalt(length) ⇒ <code>string</code>
+
 Generate a cryptographically secure random salt
 
 **Kind**: global function  
@@ -1325,6 +1484,7 @@ checks.
 <a name="identifyUser"></a>
 
 ## identifyUser(identifier, options) ⇒ <code>Promise.&lt;Object&gt;</code>
+
 Gets a user by either user_id or oauth_id
 
 **Kind**: global function  
@@ -1336,6 +1496,7 @@ Gets a user by either user_id or oauth_id
 <a name="scimAuth"></a>
 
 ## scimAuth(req, res, next)
+
 SCIM HTTP Basic Authentication Middleware
 Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
 
@@ -1343,12 +1504,14 @@ Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
 <a name="fmt"></a>
 
 ## fmt(dt, toUTC) ⇒ <code>string</code>
+
 Format a Luxon DateTime into format of ISO_NO_ZONE (e.g. 2025-08-25T14:30:00)
 
 **Kind**: global function  
 <a name="createError"></a>
 
 ## createError(errorDef, [customMessage], [originalError]) ⇒ <code>Object</code>
+
 Create an application error with standard format
 
 **Kind**: global function  
@@ -1356,6 +1519,7 @@ Create an application error with standard format
 <a name="appErrorHandler"></a>
 
 ## appErrorHandler()
+
 Express error handler for AppErrors
 
 **Kind**: global function  

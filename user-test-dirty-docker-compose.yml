@@ -50,9 +50,7 @@ services:
       ODOO_API_SECRET: "anothersecret" # This should match when the snapshot of odoo is taken
       ODOO_HOST: odoo
       ODOO_PORT: ${ODOO_PORT:-8069}
-      ODOO_EXTERNAL_HOST: localhost
-      ODOO_EXTERNAL_PORT: ${ODOO_EXTERNAL_PORT:-18069}
-
+      ODOO_EXTERNAL_BASE_URL: http://localhost:${ODOO_PORT:-8069}
 
   odoo:
     container_name: strohm_user_test_odoo

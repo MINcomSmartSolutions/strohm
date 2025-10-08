@@ -25,6 +25,7 @@ const odoo_controller = require('./controllers/odoo');
 const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
 const {requireConsent} = require('./middlewares/consent');
+const {GLOBAL_CONFIG} = require("#config");
 
 Settings.defaultZoneName = 'utc';
 Settings.defaultLocale = 'de-DE';
@@ -52,12 +53,12 @@ app.use(session({
     resave: false,
     saveUninitialized: true,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: GLOBAL_CONFIG.ENV.IS_PRODUCTION,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
 }));
 
-if (process.env.NODE_ENV === 'production') {
+if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
     app.set('trust proxy', 1 /* number of proxies between user and server */);
 }
 

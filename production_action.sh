@@ -35,8 +35,8 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 # Check if required database files exist
-if [ ! -f "./database/db-structure-strohm.sql" ]; then
-    echo -e "${RED}Error: ./database/db-structure-strohm.sql not found!${NC}"
+if [ ! -f "./backend/database/db-structure-strohm.sql" ]; then
+    echo -e "${RED}Error: ./backend/database/db-structure-strohm.sql not found!${NC}"
     exit 1
 fi
 
@@ -192,14 +192,10 @@ initialize_fresh_deployment() {
         return 1
     fi
 
-    # Create strohm database if it doesn't exist
-    echo "Creating Strohm database..."
-    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
-		    SELECT 'CREATE DATABASE "$STROHM_DB" WITH OWNER "$STROHM_DB_USER" ENCODING ''UTF8'''
-		    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$STROHM_DB')\gexec
-	EOSQL
-    then
-        echo -e "${RED}Failed to create Strohm database${NC}"
+    # Apply database structure for strohm
+    echo "Applying Strohm database structure..."
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < ./backend/database/db-structure-strohm.sql; then
+        echo -e "${RED}Failed to apply database structure${NC}"
         return 1
     fi
 
@@ -223,12 +219,6 @@ initialize_fresh_deployment() {
         return 1
     fi
 
-    # Apply database structure for strohm
-    echo "Applying Strohm database structure..."
-    if ! PGPASSWORD="$STROHM_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$STROHM_DB_USER" -d "$STROHM_DB" < ./database/db-structure-strohm.sql; then
-        echo -e "${RED}Failed to apply database structure${NC}"
-        return 1
-    fi
 
     echo "Granting schema permissions..."
     PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$STROHM_DB" <<-EOSQL
@@ -258,19 +248,17 @@ initialize_fresh_deployment() {
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$ODOO_DB_USER";
 	EOSQL
 
-
-
     echo -e "${GREEN}Fresh deployment initialization completed${NC}"
 }
 
 # Function to handle updates
-handle_update_deployment() {
+handle_odoo_update_deployment() {
     echo -e "${BLUE}Handling update deployment...${NC}"
 
     # Update Odoo modules if needed
-    echo "Updating Odoo modules..."
-    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -u all --stop-after-init
-
+#    echo "Updating Odoo modules..."
+#    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -u all --stop-after-init
+#FIXME: Might brake the system
     echo -e "${GREEN}Update deployment completed${NC}"
 }
 
@@ -379,7 +367,7 @@ deploy() {
         wait_for_service_health "odoo"
 
         # Handle update deployment
-        if ! handle_update_deployment; then
+        if ! handle_odoo_update_deployment; then
             echo -e "${RED}Update deployment failed${NC}"
             echo -e "${YELLOW}Backup is available at: $BACKUP_DIR${NC}"
             return 1

@@ -26,17 +26,20 @@ If no default is provided below, the variable is required to be set.
 - SERVER_OIDC_SECRET
 - SERVER_OIDC_CLIENT_ID
 - SERVER_OIDC_ISSUER_BASE_URL
-- SERVER_OIDC_BASE_URL: The servers base url (e.g. http://localhost:3000). For callbacks and redirects.
+- SERVER_OIDC_BASE_URL: The servers base url (e.g. http://localhost:3000, https://domain.com). This has to be
+  whitelisted at OIDC IdP.
 - SERVER_OIDC_CLIENT_SECRET
 
 #### ODOO
 
-- ODOO_ADMIN_API_KEY: This api key needs to be created for admin user in Odoo
+- ODOO_ADMIN_API_KEY: This api key needs to be created for admin user in Odoo and provided here to allow the server to
+  create users and do other operations in Odoo by admin rights.
 - ODOO_API_SECRET: This is used to verify the redirections or requests hashed with this secret.
-- ODOO_HOST
-- ODOO_PORT: (default: 8069)
-- ODOO_EXTERNAL_HOST: The host used to access Odoo from outside the docker network (e.g. https://odoo.domain.com). For
-  redirects and webhooks.
+- ODOO_HOST: (default: "odoo") Used for making calls by internal docker network
+- ODOO_PORT: (default: 8069) Used for making calls by internal docker network
+- ODOO_EXTERNAL_BASE_URL: The full base URL used to access Odoo from outside the docker network (
+  e.g. https://odoo.domain.com). For
+  redirects.
 - WEBHOOK_API_KEY: This api key is used to secure the endpoint when server makes calls to Odoo
 
 #### Database (PostgreSQL 16.6)
@@ -55,13 +58,14 @@ dev/test we use basic auth.
 
 ##### Production
 
-- STEVE_HOST
+- STEVE_BASE_URL
 - STEVE_API_KEY_HEADER
 - STEVE_API_KEY
 
 ##### Dev/Test
 
 - STEVE_HOST: (default: "steve")
+- STEVE_PORT: (default: 8180)
 - STEVE_AUTH_USERNAME: (default: "admin")
 - STEVE_API_PASSWORD: (default: "1234api")
 
@@ -93,12 +97,12 @@ in default, but not specified here.
 - SMTP_PASSWORD: (default: false)
 - SMTP_SSL: (default: false)
 
-#### Database (PostgreSQL)
+#### Database (PostgreSQL 16.6)
 
 Same instance of database used with the Server but with different user and database.
 
 - PGHOST
-- PGDATABASE: (default: "odoo_db")
+- PGDATABASE: (default: "odoo")
 - PGUSER
 - PGPASSWORD
 - PGPORT: (default: 5432)
@@ -108,7 +112,7 @@ Same instance of database used with the Server but with different user and datab
 - ODOO_API_SECRET: To be the same as SERVER --> ODOO --> ODOO_API_SECRET
 - WEBHOOK_API_KEY: To be the same as SERVER --> ODOO --> WEBHOOK_API_KEY
 - BACKEND_HOST
-- BACKEND_PORT: (default: 3000)
+- BACKEND_PORT: (default: 3000) To be the same as SERVER --> General --> SERVER_PORT
 
 ----
 
