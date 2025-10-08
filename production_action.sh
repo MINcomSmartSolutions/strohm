@@ -88,6 +88,9 @@ required_vars=(
     "ODOO_DB"
     "ODOO_DB_USER"
     "ODOO_DB_PASSWORD"
+    "STEVE_BASE_URL"
+    "STEVE_API_KEY_HEADER"
+    "STEVE_API_KEY"
 )
 
 for var in "${required_vars[@]}"; do
@@ -332,7 +335,7 @@ deploy() {
 
         # Start services
         echo "Starting services..."
-        docker compose -f "$COMPOSE_FILE" up -d --build
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
 
         # Initialize fresh deployment
         if ! initialize_fresh_deployment; then
@@ -359,7 +362,7 @@ deploy() {
 
         # Start services
         echo "Starting services..."
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
         # Wait for services to be healthy
         wait_for_database
