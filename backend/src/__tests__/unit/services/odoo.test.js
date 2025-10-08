@@ -9,21 +9,20 @@ const {
     createOdooTxnInvoice,
     checkValidPaymentMethod,
 } = require('#services/odoo');
-const {odooAxios, odooUserAxios} = require('#services/network');
+const {odooAuthedAxios, odooPlainAxios} = require('#services/network');
 const {db} = require('#utils/queries');
-const {ValidationError, SystemError, ResponseError, ErrorCodes} = require('#utils/errors');
+const {ValidationError, SystemError, ErrorCodes} = require('#utils/errors');
 const {generateOdooHash, generateSalt} = require('#helpers/auth');
 const {ODOO_CONFIG} = require('#config');
-const logger = require('#services/logger');
 const {dbTransactionSchema} = require('#utils/joi');
 
 // Mock dependencies
 jest.mock('#services/network', () => ({
-    odooAxios: {
+    odooAuthedAxios: {
         post: jest.fn(),
         get: jest.fn(),
     },
-    odooUserAxios: {
+    odooPlainAxios: {
         post: jest.fn(),
     },
 }));
@@ -52,7 +51,7 @@ jest.mock('#config', () => ({
         INVOICE_CREATION_URI: '/api/create_invoice',
         CHECK_PAYMENT_METHOD_URI: '/api/check_payment',
         API_SECRET: 'test_secret',
-        EXTERNAL_URL: 'https://example.com',
+        EXTERNAL_BASE_URL: 'https://domain.com',
     },
 }));
 
@@ -115,7 +114,7 @@ describe('Odoo Service', () => {
                 },
             };
 
-            odooAxios.post.mockResolvedValue(mockResponse);
+            odooAuthedAxios.post.mockResolvedValue(mockResponse);
 
             generateSalt.mockReturnValue('test_salt');
 
@@ -125,7 +124,7 @@ describe('Odoo Service', () => {
             await createOdooUser(userWithoutOdooId);
 
             // Verify that the API was called with the correct data
-            expect(odooAxios.post).toHaveBeenCalledWith(
+            expect(odooAuthedAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.USER_CREATION_URI,
                 expect.objectContaining({
                     timestamp: expect.any(String),
@@ -155,7 +154,7 @@ describe('Odoo Service', () => {
         });
 
         it('should throw error when Odoo returns user exists status', async () => {
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 409,
             });
 
@@ -165,7 +164,7 @@ describe('Odoo Service', () => {
 
         it('should throw error with message when Odoo creation fails', async () => {
             const error_mesage = 'Internal server error';
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 500,
                 data: {
                     error: error_mesage,
@@ -196,7 +195,7 @@ describe('Odoo Service', () => {
                 },
             };
 
-            odooAxios.post.mockResolvedValue(mockResponse);
+            odooAuthedAxios.post.mockResolvedValue(mockResponse);
 
             // Return a different hash to simulate verification failure
             generateOdooHash.mockReturnValue('calculated_hash_456');
@@ -253,7 +252,7 @@ describe('Odoo Service', () => {
             const result = await getOdooPortalLogin(testUser);
 
             // Verify URL construction
-            expect(result).toContain(ODOO_CONFIG.EXTERNAL_URL);
+            expect(result).toContain(ODOO_CONFIG.EXTERNAL_BASE_URL);
             expect(result).toContain(ODOO_CONFIG.PORTAL_LOGIN_URI);
             expect(result).toContain('timestamp=');
             expect(result).toContain('key=test_key');
@@ -295,7 +294,7 @@ describe('Odoo Service', () => {
                 .mockImplementationOnce(() => 'response_hash'); // for response
 
             // Mock Odoo response
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:10:00Z',
@@ -313,7 +312,7 @@ describe('Odoo Service', () => {
             const result = await rotateOdooUserAuth(fullQualifiedUser);
 
             // Verify Odoo API call
-            expect(odooAxios.post).toHaveBeenCalledWith(
+            expect(odooAuthedAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.ROTATE_APIKEY_URI,
                 expect.objectContaining({
                     timestamp: expect.any(String),
@@ -358,7 +357,7 @@ describe('Odoo Service', () => {
             generateOdooHash.mockReturnValueOnce('request_hash');
 
             // Mock Odoo response
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:00:00',
@@ -395,7 +394,7 @@ describe('Odoo Service', () => {
                 .mockReturnValue('response_hash');   // For response verification
 
             // Mock Odoo response with different user_id
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:00:00',
@@ -428,7 +427,7 @@ describe('Odoo Service', () => {
                 .mockReturnValue('response_hash');   // For response verification
 
             // Mock Odoo response with matching hash
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:00:00',
@@ -460,7 +459,7 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('response_hash');   // For response verification
 
             // Mock Odoo error response
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 400,
                 data: {
                     error: 'Bad request',
@@ -528,7 +527,7 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('response_hash');   // Second call - for response verification
 
             // Mock successful Odoo response
-            odooUserAxios.post.mockResolvedValue({
+            odooPlainAxios.post.mockResolvedValue({
                 status: 201,
                 data: {
                     bill_id: 12345,
@@ -538,7 +537,7 @@ describe('Odoo Service', () => {
             const result = await createOdooTxnInvoice(testTransaction);
 
             // Verify Odoo API call
-            expect(odooUserAxios.post).toHaveBeenCalledWith(
+            expect(odooPlainAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.INVOICE_CREATION_URI,
                 expect.objectContaining({
                     timestamp: expect.toBeDateString(),
@@ -592,7 +591,7 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('response_hash');   // For response verification
 
             // Mock failed Odoo response
-            odooUserAxios.post.mockResolvedValue({
+            odooPlainAxios.post.mockResolvedValue({
                 status: 400,
                 data: {
                     error: 'Invalid invoice data',
@@ -624,7 +623,7 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('response_hash');   // For response verification
 
             // Mock successful Odoo response
-            odooUserAxios.post.mockResolvedValue({
+            odooPlainAxios.post.mockResolvedValue({
                 status: 201,
                 data: {
                     bill_id: 12345,
@@ -634,7 +633,7 @@ describe('Odoo Service', () => {
             await createOdooTxnInvoice(testTransaction);
 
             // Verify Odoo API call with default price
-            expect(odooUserAxios.post).toHaveBeenCalledWith(
+            expect(odooPlainAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.INVOICE_CREATION_URI,
                 expect.objectContaining({
                     lines_data: expect.arrayContaining([
@@ -684,7 +683,7 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('response_hash');   // Second call - for response verification
 
             // Mock successful Odoo response with valid payment method
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:00:00',
@@ -697,7 +696,7 @@ describe('Odoo Service', () => {
             const result = await checkValidPaymentMethod(fullQualifiedUser);
 
             // Verify API call
-            expect(odooAxios.post).toHaveBeenCalledWith(
+            expect(odooAuthedAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI,
                 expect.objectContaining({
                     timestamp: expect.toBeDateString(),
@@ -729,7 +728,7 @@ describe('Odoo Service', () => {
                 .mockReturnValue('response_hash');   // For response verification
 
             // Mock Odoo response with invalid payment method
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:00:00',
@@ -758,7 +757,7 @@ describe('Odoo Service', () => {
             generateOdooHash.mockReturnValueOnce('expected_hash'); // Should not match response
 
             // Mock Odoo response with wrong hash
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     timestamp: '2025-06-12T12:00:00',
@@ -784,7 +783,7 @@ describe('Odoo Service', () => {
             generateOdooHash.mockReturnValue('request_hash');
 
             // Mock Odoo response with missing fields
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 200,
                 data: {
                     // Missing timestamp
@@ -810,7 +809,7 @@ describe('Odoo Service', () => {
             generateOdooHash.mockReturnValue('request_hash');
 
             // Mock Odoo error response
-            odooAxios.post.mockResolvedValue({
+            odooAuthedAxios.post.mockResolvedValue({
                 status: 500,
                 data: {
                     error: 'Internal server error',

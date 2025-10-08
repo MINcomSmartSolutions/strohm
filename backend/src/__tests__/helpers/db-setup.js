@@ -3,10 +3,6 @@
  */
 const {Pool} = require('pg');
 const {execSync} = require('child_process');
-const path = require('path');
-
-// Load test environment variables
-require('dotenv').config({path: path.resolve(__dirname, '../../../test.env')});
 
 /**
  * Initialize a clean test database for integration tests
@@ -17,7 +13,6 @@ const setupTestDatabase = async () => {
         throw new Error('Database environment variables are not set. Please check your test.env file.');
     }
 
-    // Database initialization is now fully handled by db-init.sh
     try {
         // Make sure the initialization script is executable
         execSync('chmod +x ./src/__tests__/helpers/db-init.sh', {

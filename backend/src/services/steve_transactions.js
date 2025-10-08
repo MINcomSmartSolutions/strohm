@@ -103,15 +103,16 @@ async function fetchTxnsSince(since) {
 
     logger.verbose(`Fetched ${stoppedTxns.length} stopped transactions from SteVe`, stoppedTxns ? {
         sample: stoppedTxns.slice(0, 2),
-    } : undefined);
+    } : 0);
     logger.verbose(`Fetched ${activeTxns.length} active transactions from SteVe`, activeTxns ? {
         sample: activeTxns.slice(0, 2),
-    } : undefined);
+    } : 0);
 
     return [...stoppedTxns, ...activeTxns];
 }
 
 
+// TODO: If TEMPORARY_STOP_REASON IS set for too long (e.g., >24h), consider alerting or processing it anyway.
 /**
  * Stop reasons that indicate a transaction is temporarily stopped/paused
  * and should not be billed yet (may resume later).
