@@ -49,8 +49,7 @@ services:
       ODOO_API_SECRET: "anothersecret"
       ODOO_HOST: odoo
       ODOO_PORT: 8069
-      ODOO_EXTERNAL_HOST: localhost
-      ODOO_EXTERNAL_PORT: 18069
+      ODOO_EXTERNAL_BASE_URL: http://localhost:8069
       WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
       DB_HOST: db
       DB_NAME: ${STROHM_DB}

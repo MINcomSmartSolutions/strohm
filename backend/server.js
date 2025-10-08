@@ -1,4 +1,4 @@
-require('dotenv').config();
+
 /**
  * Starts the server and listens on the specified port.
  * @function
@@ -10,4 +10,3 @@ const port = process.env.SERVER_PORT || 3000;
 const app = require('./src/app');
 
 app.listen(port, () => console.log(`server listening on port ${port}`));
-

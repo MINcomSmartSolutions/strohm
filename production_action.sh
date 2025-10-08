@@ -252,13 +252,13 @@ initialize_fresh_deployment() {
 }
 
 # Function to handle updates
-handle_update_deployment() {
+handle_odoo_update_deployment() {
     echo -e "${BLUE}Handling update deployment...${NC}"
 
     # Update Odoo modules if needed
-    echo "Updating Odoo modules..."
-    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -u all --stop-after-init
-
+#    echo "Updating Odoo modules..."
+#    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -u all --stop-after-init
+#FIXME: Might brake the system
     echo -e "${GREEN}Update deployment completed${NC}"
 }
 
@@ -367,7 +367,7 @@ deploy() {
         wait_for_service_health "odoo"
 
         # Handle update deployment
-        if ! handle_update_deployment; then
+        if ! handle_odoo_update_deployment; then
             echo -e "${RED}Update deployment failed${NC}"
             echo -e "${YELLOW}Backup is available at: $BACKUP_DIR${NC}"
             return 1
