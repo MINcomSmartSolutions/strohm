@@ -95,8 +95,7 @@ jobs:
           STEVE_API_PASSWORD: mockpass
           ODOO_HOST: mock
           ODOO_PORT: 8069
-          ODOO_EXTERNAL_HOST: mock
-          ODOO_EXTERNAL_PORT: 8069
+          ODOO_EXTERNAL_BASE_URL: 'http://mock:8069'
           ODOO_API_SECRET: mock_secret
           ODOO_ADMIN_API_KEY: mock_api_key
           SERVER_OIDC_SECRET: mock_oidc_secret
@@ -124,8 +123,7 @@ jobs:
           STEVE_API_PASSWORD: mockpass
           ODOO_HOST: mock
           ODOO_PORT: 8069
-          ODOO_EXTERNAL_HOST: mock
-          ODOO_EXTERNAL_PORT: 8069
+          ODOO_EXTERNAL_BASE_URL: 'http://mock:8069'
           ODOO_API_SECRET: mock_secret
           ODOO_ADMIN_API_KEY: mock_api_key
           SERVER_OIDC_SECRET: mock_oidc_secret

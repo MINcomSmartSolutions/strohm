@@ -9,7 +9,7 @@ const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('#util
 const {db} = require('#utils/queries');
 
 const {generateOdooHash, generateSalt} = require('#helpers/auth');
-const {odooAxios, odooUserAxios} = require('./network');
+const {odooAuthedAxios, odooPlainAxios} = require('./network');
 const {DateTime} = require('luxon');
 const {fmt} = require('#utils/datetime_format');
 const {ODOO_CONFIG} = require('#config');
@@ -43,7 +43,7 @@ async function createOdooUser(user) {
     const message = `${data.timestamp}${data.name}${data.email}${data.salt}`;
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
-    const response = await odooAxios.post(ODOO_CONFIG.USER_CREATION_URI, data);
+    const response = await odooAuthedAxios.post(ODOO_CONFIG.USER_CREATION_URI, data);
     if (response.status === 201) {
         const response_data = response.data;
         const timestamp = response_data['timestamp'];
@@ -88,17 +88,17 @@ async function createOdooUser(user) {
 
 
 /**
- * Generates a secure Odoo portal login URL for the given user.
+ * Generates a secure Odoo portal login INTERNAL_BASE_URL for the given user.
  *
  * - Validates the user object.
  * - Fetches Odoo credentials from the database.
- * - Constructs a login URL with required query parameters for authentication.
+ * - Constructs a login INTERNAL_BASE_URL with required query parameters for authentication.
  * - Throws if credentials are missing or invalid.
  *
  * @async
  * @param {Object} user - User object with odoo_user_id and user_id.
  * @throws {ValidationError} If user or credentials are invalid.
- * @returns {string} Odoo portal login URL.
+ * @returns {string} Odoo portal login INTERNAL_BASE_URL.
  */
 async function getOdooPortalLogin(user) {
     const {error} = fullyQualifiedUserSchema.validate(user);
@@ -115,10 +115,10 @@ async function getOdooPortalLogin(user) {
     const {key, key_salt} = odoo_credentials;
     const _salt = generateSalt();
 
-    // Construct the Odoo portal login URL
-    // Used URL constructor to ensure proper encoding instead of String concatenation
+    // Construct the Odoo portal login INTERNAL_BASE_URL
+    // Used INTERNAL_BASE_URL constructor to ensure proper encoding instead of String concatenation
     // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials
-    const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.EXTERNAL_URL);
+    const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.EXTERNAL_BASE_URL);
 
     let timestamp = fmt(DateTime.now());
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
@@ -179,7 +179,7 @@ async function rotateOdooUserAuth(user) {
 
         // Send request with the *old* key/key_salt
         // Clone requestData to prevent mutation before Jest matcher evaluates it
-        const response = await odooAxios.post(ODOO_CONFIG.ROTATE_APIKEY_URI, {...requestData});
+        const response = await odooAuthedAxios.post(ODOO_CONFIG.ROTATE_APIKEY_URI, {...requestData});
         if (response.status === 200) {
             const respData = response.data;
             const timestamp = respData['timestamp'];
@@ -301,7 +301,7 @@ async function createOdooTxnInvoice(db_txn) {
     const message = `${data.timestamp}${user.odoo_user_id}${user.odoo_partner_id}${data.session_start}${data.session_end}${data.key}${data.key_salt}${salt}`;
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
-    const response = await odooUserAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
+    const response = await odooPlainAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
     const response_data = response.data;
     if (response.status !== 201) {
         const errorMSG = response_data['error'];
@@ -356,7 +356,7 @@ async function checkValidPaymentMethod(user) {
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     try {
-        const response = await odooAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
+        const response = await odooAuthedAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
         if (response.status === 200) {
             const response_data = response.data;
             const timestamp = response_data['timestamp'];
