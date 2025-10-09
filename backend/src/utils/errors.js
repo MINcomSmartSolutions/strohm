@@ -188,7 +188,10 @@ const appErrorHandler = (err, res) => {
     }
 
     if (err instanceof AppError) {
-        return res.status(err.getStatusCode()).json(err.toResponse());
+        const status = err.getStatusCode();
+        const resp = err.toResponse();
+        const messageWithStatus = `${status} - ${resp.msg}`;
+        return res.redirect('/logout?message=' + encodeURIComponent(messageWithStatus) + '&type=error');
     }
 
     // Handle unexpected errors
