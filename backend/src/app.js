@@ -16,6 +16,7 @@ const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
 const session = require('express-session');
+const MemoryStore = require('memorystore')(session);
 const logger = require('./services/logger');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
@@ -52,9 +53,13 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
+    proxy: GLOBAL_CONFIG.ENV.IS_PRODUCTION,
+    store: new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+    }),
     cookie: {
         secure: GLOBAL_CONFIG.ENV.IS_PRODUCTION,
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 86400000, // 24 hours
     },
 }));
 
