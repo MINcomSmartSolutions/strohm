@@ -61,6 +61,7 @@ dev/test we use basic auth.
 - STEVE_BASE_URL
 - STEVE_API_KEY_HEADER
 - STEVE_API_KEY
+- STEVE_FETCH_INTERVAL: (default: 120) Interval to fetch new sessions from SteVe in seconds.
 
 ##### Dev/Test
 
@@ -68,6 +69,7 @@ dev/test we use basic auth.
 - STEVE_PORT: (default: 8180)
 - STEVE_AUTH_USERNAME: (default: "admin")
 - STEVE_API_PASSWORD: (default: "1234api")
+- STEVE_FETCH_INTERVAL: (default: 120) Interval to fetch new sessions from SteVe in seconds.
 
 ----
 

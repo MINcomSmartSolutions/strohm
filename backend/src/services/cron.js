@@ -12,7 +12,10 @@ const {CronJob} = require('cron');
 const {runIncremental} = require('./steve_transactions');
 const logger = require('./logger');
 
-const transactionFetchLoop = new CronJob('1 * * * * *', async () => {
+const intervalSeconds = process.env.STEVE_FETCH_INTERVAL || 120;
+const cronExpression = `*/${intervalSeconds} * * * * *`; // Every 'intervalSeconds' seconds
+
+const transactionFetchLoop = new CronJob(cronExpression, async () => {
     try {
         await runIncremental();
     } catch (error) {
