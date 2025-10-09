@@ -17,7 +17,7 @@ const ExceptionCodes = Object.freeze({
         USER_INVALID: {code: 1011, status: 200, message: 'ungültiger Benutzer'},
         USER_DELETED: {code: 1012, status: 200, message: 'ungültiger Benutzer'},
         USER_MISMATCH: {code: 1013, status: 401, message: 'ungültiger Benutzer'},
-        USER_NOT_AUTHORIZED: {code: 1014, status: 401, message: 'User is not authorized'},
+        USER_NOT_AUTHORIZED: {code: 1014, status: 401, message: 'User is not authorized to perform this action'},
     }),
 
     // Validation errors (2000-2099)
@@ -55,8 +55,14 @@ const ExceptionCodes = Object.freeze({
         UNKNOWN_ERROR: {code: 5000, status: 500, message: 'An unknown error occurred'},
         NOT_IMPLEMENTED: {code: 5001, status: 500, message: 'Feature not implemented'},
         SERVICE_UNAVAILABLE: {code: 5002, status: 500, message: 'Service temporarily unavailable'},
-        PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check failed'},
         SESSION_SAVE_FAILED: {code: 5003, status: 500, message: 'Failed to save session'},
+        INVALID_SESSION: {code: 5004, status: 401, message: 'Invalid session'},
+        SESSION_EXPIRED: {code: 5005, status: 401, message: 'Session has expired'},
+        ENV_VARIABLE_MISSING: {code: 5006, status: 500, message: 'Required environment variable is missing'},
+        ENV_VARIABLE_INVALID: {code: 5007, status: 500, message: 'Environment variable has invalid value'},
+        RATE_LIMIT_EXCEEDED: {code: 5008, status: 429, message: 'Rate limit exceeded'},
+        CONFIGURATION_ERROR: {code: 5009, status: 500, message: 'Configuration error'},
+        PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 5010, message: 'Payment method validity check failed'},
     }),
 
     // Related to user operation errors in backend (6000-6099)
@@ -103,6 +109,7 @@ const ExceptionCodes = Object.freeze({
         INVOICE_CREATE_FAILED: {code: 7009, message: 'Transaction bill creation in Odoo failed'},
         PAYMENT_METHOD_VALIDITY_CHECK_FAILED: {code: 7010, message: 'Payment method validity check in Odoo failed'},
         INVALID_RESPONSE: {code: 7011, status: 400, message: 'Invalid response from Odoo'},
+        NO_RESPONSE: {code: 7012, status: 500, message: 'No response from Odoo'},
     }),
 
     STEVE: Object.freeze({

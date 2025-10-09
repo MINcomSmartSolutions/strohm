@@ -135,14 +135,16 @@ describe('Error Utilities', () => {
             const error = new AuthError(errorDef);
 
             const res = {
-                status: jest.fn().mockReturnThis(),
-                json: jest.fn(),
+                redirect: jest.fn(),
             };
 
             appErrorHandler(error, res);
 
-            expect(res.status).toHaveBeenCalledWith(errorDef.status);
-            expect(res.json).toHaveBeenCalledWith(error.toResponse());
+            const status = error.getStatusCode();
+            const resp = error.toResponse();
+            const messageWithStatus = `${status} - ${resp.msg}`;
+
+            expect(res.redirect).toHaveBeenCalledWith('/logout?message=' + encodeURIComponent(messageWithStatus) + '&type=error');
         });
 
         it('should handle unknown errors with SystemError', () => {
