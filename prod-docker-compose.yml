@@ -82,6 +82,7 @@ services:
       INITIAL_LANG: "de_DE"
       BACKEND_HOST: server
       BACKEND_PORT: ${SERVER_PORT:-3000}
+      BACKEND_EXTERNAL_URL: ${SERVER_BASE_URL}
       WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
       WITHOUT_DEMO: "all"
       PROXY_MODE: "true"

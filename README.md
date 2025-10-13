@@ -115,6 +115,7 @@ Same instance of database used with the Server but with different user and datab
 - WEBHOOK_API_KEY: To be the same as SERVER --> ODOO --> WEBHOOK_API_KEY
 - BACKEND_HOST
 - BACKEND_PORT: (default: 3000) To be the same as SERVER --> General --> SERVER_PORT
+- BACKEND_EXTERNAL_URL: The servers base url (e.g. http://localhost:3000, https://domain.com).
 
 ----
 
