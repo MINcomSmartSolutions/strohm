@@ -32,16 +32,15 @@ const {
     recordConsent,
     withdrawConsent,
     hasLatestConsent,
-    createConsentRevision
-  
 } = require('#services/consent');
 const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('#utils/errors');
 const logger = require('#services/logger');
 const fs = require('fs');
 const path = require('path');
 const {userOperations} = require('#services/user_operations');
-const {validateOIDCProperties} = require('#helpers/auth');
+const {validateOIDCProperties, createRequestId} = require('#helpers/auth');
 const {db} = require('#utils/queries');
+const {initializeConsent} = require("#utils/init-consent");
 
 
 /**
@@ -85,15 +84,21 @@ const {db} = require('#utils/queries');
  * @see {@link module:services/consent.hasLatestConsent} For consent validation
  */
 consent_controller.get('/consent', async (req, res) => {
+    const requestId = req.requestId || createRequestId();
+    req.requestId = requestId;
+
     try {
+        const sessionUser = req.session ? req.session.user : null;
+
         // In this point either we need to have a valid user session or OIDC properties
-        // If neither is present, redirect to login
-        if (!req.session.user || !req.oidc) {
-            logger.warn('No user session found, redirecting to login');
-            return res.redirect('/login');
+        // If neither is present, redirect to logout to clear any invalid state
+        if (!sessionUser && !(req.oidc && req.oidc.isAuthenticated())) {
+            logger.warn(`[${requestId}] No user session or OIDC authentication found`);
+            return res.redirect('/logout?reason=invalid_session');
         }
 
         if (!await validateOIDCProperties(req)) {
+            logger.error(`[${requestId}] OIDC validation failed in consent GET`);
             throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
         }
 
@@ -102,12 +107,13 @@ consent_controller.get('/consent', async (req, res) => {
 
         let user = await db.getUserUnique({oauth_id: oidcUser.sub});
 
-        // Check if user already has latest consent
+        // Check if user already has latest consent. Here would not be reached because the middleware already checks it,
+        // but in case someone disables the middleware for /consent route, this double-check ensures safety.
         if (user) {
-            if (req.session.user) {
-                const hasConsent = await hasLatestConsent(req.session.user.user_id);
+            if (sessionUser) {
+                const hasConsent = await hasLatestConsent(sessionUser.user_id);
                 if (hasConsent) {
-                    logger.debug(`User ${req.session.user.user_id} has already latest consent`);
+                    logger.debug(`[${requestId}] User ${sessionUser.user_id} has already latest consent`);
                     return res.redirect('/');
                 }
             }
@@ -115,41 +121,51 @@ consent_controller.get('/consent', async (req, res) => {
 
         let activeConsent = await getActiveConsentRevision();
         if (!activeConsent) {
-            logger.error('No active consent revision found');
-            if (process.env.NODE_ENV !== 'production') {
-                createConsentRevision('0.1.1',
-                    "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung",
-                    'Initial consent created automatically',
-                    "https://min2sol.com/datenschutz/",
-                    "https://min2sol.com/datenschutz/");
-                activeConsent = await getActiveConsentRevision();
-                if (!activeConsent) {
-                    return res.redirect('/logout')
-                }
-            } else {
-                throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
+            logger.error(`[${requestId}] No active consent revision found`);
+            await initializeConsent();
+            activeConsent = await getActiveConsentRevision();
+            if (!activeConsent) {
+                return res.redirect('/logout?reason=consent_system_error')
             }
         }
-        logger.debug('Rendering consent page for user:', req.session.user ? req.session.user.user_id : 'not logged in');
+        logger.debug(`[${requestId}] Rendering consent page for user:`, sessionUser ? sessionUser.user_id : 'not logged in');
 
         // Read the HTML template file
         const templatePath = path.join(__dirname, '../../public/consent/consent.html');
         let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
 
-        // Replace placeholders with dynamic content
-        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, activeConsent.title);
-        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, activeConsent.content.replace(/\n/g, '<br>'));
-        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, activeConsent.version);
+        // Escape content to prevent XSS in consent content
+        const escapeHtml = (text) => {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
 
-        // Generate links section if URLs are provided
+        // Replace placeholders with dynamic content (escaped)
+        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
+        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, activeConsent.content.replace(/\n/g, '<br>'));
+        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
+
+        // Generate links section if URLs are provided (validate URLs)
         let linksSection = '';
         if (activeConsent.privacy_policy_url || activeConsent.terms_url) {
             linksSection = '<div class="links">';
             if (activeConsent.privacy_policy_url) {
-                linksSection += `<a href="${activeConsent.privacy_policy_url}" target="_blank">Datenschutzbestimmungen</a>`;
+                // Validate URL is safe (starts with http/https)
+                const privacyUrl = activeConsent.privacy_policy_url;
+                if (privacyUrl.startsWith('http://') || privacyUrl.startsWith('https://')) {
+                    linksSection += `<a href="${escapeHtml(privacyUrl)}" target="_blank" rel="noopener noreferrer">Datenschutzbestimmungen</a>`;
+                }
             }
             if (activeConsent.terms_url) {
-                linksSection += `<a href="${activeConsent.terms_url}" target="_blank">Bedingungen der Dienstleistung</a>`;
+                // Validate URL is safe (starts with http/https)
+                const termsUrl = activeConsent.terms_url;
+                if (termsUrl.startsWith('http://') || termsUrl.startsWith('https://')) {
+                    linksSection += `<a href="${escapeHtml(termsUrl)}" target="_blank" rel="noopener noreferrer">Bedingungen der Dienstleistung</a>`;
+                }
             }
             linksSection += '</div>';
         }
@@ -174,6 +190,10 @@ consent_controller.get('/consent', async (req, res) => {
  * from the consent service. These functions implement direct database queries with
  * specialized transaction handling, bypassing the standard `db.[query]` pattern
  * for enhanced GDPR compliance and audit trail capabilities.
+ *
+ * One thing to consider in future is that, what if
+ * - user opens two tabs with different consent versions and submits both?
+ * - user submitted consent that is not the latest version?
  *
  * @async
  * @function
@@ -204,62 +224,49 @@ consent_controller.get('/consent', async (req, res) => {
  * 7. Establishes user session with user data
  * 8. Redirects to home page on successful completion
  *
- * @example
- * // POST /consent with body: { consent_given: true }
- * // Creates user session and redirects to home page
- *
- * @example
- * // POST /consent with body: { consent_given: false }
- * // Shows alert message and returns to consent page
- *
  * @see {@link module:services/consent.getActiveConsentRevision} For consent retrieval
  * @see {@link module:services/consent.recordConsent} For audit trail recording
  */
 consent_controller.post('/consent', async (req, res) => {
+    const requestId = req.requestId || createRequestId();
+    req.requestId = requestId;
+
     try {
         if (!await validateOIDCProperties(req)) {
+            logger.error(`[${requestId}] OIDC validation failed in consent POST`);
             throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
         }
 
         const {consent_given, consent_version} = req.body;
 
         if (!consent_given) {
-            return res.redirect('/logout')
+            logger.info(`[${requestId}] User declined consent`);
+            return res.redirect('/logout?reason=consent_declined');
         }
 
         // Get user info from OIDC session (now validated)
         const oidcUser = req.oidc.user;
 
-        // Create or get user
+        logger.info(`[${requestId}] Creating user and external system accounts for oauth_id: ${oidcUser.sub}`);
+
+        // Now we can create (or get if this is n-th consent given for the) user
+        // This also creates Odoo and Steve users if they don't exist
         const user = await userOperations(oidcUser);
 
+        // Do we have to check for existing consent here again, because the request couldn't have reached here if thay had the latest consent
+        // unless the middleware was disabled for this route. But just in case, we double-check.
+        // This also prevents multiple consent records for the same user if they submit the form multiple times.
         const hasConsent = await hasLatestConsent(user.user_id);
         if (hasConsent) {
-            logger.info(`User ${user.user_id} already has latest consent, redirecting to home page`);
+            logger.info(`[${requestId}] User ${user.user_id} already has latest consent, redirecting to home page`);
             return res.redirect('/');
         }
 
-        let activeConsent = await getActiveConsentRevision();
-        if (!activeConsent) {
-            logger.error('No active consent revision found');
-            if (process.env.NODE_ENV !== 'production') {
-                await createConsentRevision("0.1.1",
-                    "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung",
-                    "Initial consent created automatically, for testing purposes",
-                    "https://min2sol.com/datenschutz/",
-                    "https://min2sol.com/datenschutz/");
-                activeConsent = await getActiveConsentRevision();
-                if (!activeConsent) {
-                    return res.redirect('/logout')
-                }
-            } else {
-                throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'No active consent revision available');
-            }
-        }
+        let activeConsent = await getActiveConsentRevision(); // A consent must exist if we are here, if not let it fail
 
         // Verify that the consent version matches the current active version
         if (consent_version && consent_version !== activeConsent.version) {
-            logger.warn(`Consent version mismatch: submitted ${consent_version}, current ${activeConsent.version}`);
+            logger.warn(`[${requestId}] Consent version mismatch: submitted ${consent_version}, current ${activeConsent.version}`);
             return res.status(400).send(`
                 <script>
                     alert('Die Einverständniserklärung wurde aktualisiert. Bitte laden Sie die Seite neu.');
@@ -273,6 +280,7 @@ consent_controller.post('/consent', async (req, res) => {
             (req.connection.socket ? req.connection.socket.remoteAddress : null);
         const userAgent = req.get('User-Agent');
 
+        logger.info(`[${requestId}] Recording consent for user ${user.user_id}`);
         const consentRecord = await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
 
         // Store user in session with consent info
@@ -282,10 +290,10 @@ consent_controller.post('/consent', async (req, res) => {
             consent_granted_at: consentRecord.consented_at
         };
 
-        // Use promise-based session save for better error handling
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
                 if (err) {
+                    logger.error(`[${requestId}] Session save failed:`, err);
                     reject(new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED, null, err));
                 } else {
                     resolve();
@@ -293,7 +301,7 @@ consent_controller.post('/consent', async (req, res) => {
             });
         });
 
-        logger.info(`Consent v${activeConsent.version} recorded and user session created for user ${user.user_id}`);
+        logger.info(`[${requestId}] Consent v${activeConsent.version} recorded and user session created for user ${user.user_id}`);
 
         // Check for redirect URL in session or query params
         const redirectUrl = req.session.returnTo || req.query.returnTo || '/';
@@ -302,7 +310,7 @@ consent_controller.post('/consent', async (req, res) => {
         // Redirect to the intended destination
         res.redirect(redirectUrl);
     } catch (error) {
-        logger.error('Error processing consent submission:', error);
+        logger.error(`[${requestId}] Error processing consent submission:`, error);
         appErrorHandler(error, res);
     }
 });
@@ -344,37 +352,30 @@ consent_controller.post('/consent', async (req, res) => {
  * 6. If no active consent found, returns 404 error
  * 7. Logs any session destruction errors for monitoring
  *
- * @example
- * // POST /consent/withdraw (authenticated user)
- * // Returns: { "success": true, "message": "Consent withdrawn successfully" }
- *
- * @example
- * // POST /consent/withdraw (unauthenticated user)
- * // Returns: 401 { "error": "Unauthorized" }
- *
- * @example
- * // POST /consent/withdraw (no active consent)
- * // Returns: 404 { "error": "No active consent found to withdraw" }
  *
  * @see {@link module:services/consent.withdrawConsent} For GDPR-compliant withdrawal
  */
 consent_controller.post('/consent/withdraw', async (req, res) => {
     try {
         if (!req.oidc.isAuthenticated() || !req.session.user) {
-            return res.status(401).json({error: 'Unauthorized'});
+            return res.status(401);
         }
 
         const success = await withdrawConsent(req.session.user.user_id);
 
         if (success) {
-            // Clear session and redirect to logout
+            // Clear session and redirect to logout with notification
             req.session.destroy((err) => {
                 if (err) {
                     logger.error('Error destroying session after consent withdrawal:', err);
                 }
             });
 
-            res.json({success: true, message: 'Consent withdrawn successfully'});
+            res.json({
+                success: true,
+                message: 'Consent withdrawn successfully',
+                redirectUrl: '/logout?reason=consent_withdrawn'
+            });
         } else {
             res.status(404).json({error: 'No active consent found to withdraw'});
         }

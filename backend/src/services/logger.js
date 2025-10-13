@@ -38,19 +38,19 @@ const logger = winston.createLogger({
     ],
 });
 
-
 logger.add(new winston.transports.Console({
     format: format.combine(
         format.colorize(),
         format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
-        format.printf(({timestamp, level, message, file, line, label, ...meta}) => {
+        format.printf(({timestamp, level, message, stack, file, line, label, ...meta}) => {
+            const logStack = stack ? `\n${stack}` : '';
             let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
             let envLabel = label ? `[${label.toUpperCase()}]` : '';
-            return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr}`.trim();
+            return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${logStack}`.trim();
         }),
+        format.errors({stack: true}),
     ),
 }));
-
 
 const morganMiddleware = morgan(
     ':method :url :status :res[content-length] - :response-time ms - :remote-addr',

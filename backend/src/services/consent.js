@@ -40,15 +40,7 @@ const {db} = require('#utils/queries');
  *
  * @async
  * @function getActiveConsentRevision
- * @returns {Promise<Object|null>} The active consent revision object or null if none exists
- * @returns {number} returns.id - Unique identifier for the consent revision
- * @returns {string} returns.version - Version identifier (e.g., "1.0", "2.1.3")
- * @returns {string} returns.title - Human-readable title for the consent
- * @returns {string} returns.content - Full consent text content
- * @returns {string|null} returns.privacy_policy_url - URL to privacy policy (optional)
- * @returns {string|null} returns.terms_url - URL to terms of service (optional)
- * @returns {Date} returns.created_at - Timestamp when revision was created
- * @returns {Date|null} returns.expires_at - Expiration timestamp (null for no expiration)
+ * @returns {Promise<db_consent_revision|null>} The active consent revision object or null if none exists
  *
  * @throws {Error} Database connection or query errors (handled via db.handleQueryError)
  *
@@ -223,15 +215,7 @@ const hasLatestConsent = async (userId) => {
  * @param {string} ipAddress - IP address of the user when consent was given
  * @param {string} userAgent - Browser user agent string for device identification
  * @param {string} [consentMethod='web_form'] - Method used to collect consent
- * @returns {Promise<Object>} The created consent record with audit information
- * @returns {number} returns.id - Unique identifier for the consent record
- * @returns {number} returns.user_id - User who provided consent
- * @returns {number} returns.consent_revision_id - Consent revision that was accepted
- * @returns {Date} returns.consented_at - Timestamp when consent was provided
- * @returns {string} returns.ip_address - IP address recorded for audit trail
- * @returns {string} returns.user_agent - User agent recorded for audit trail
- * @returns {string} returns.consent_method - Method used to collect consent
- *
+ * @returns {Promise<db_user_consent>} The created consent record with audit information
  * @throws {Error} Database connection or query errors (handled via db.handleQueryError)
  *
  * @description
@@ -242,28 +226,6 @@ const hasLatestConsent = async (userId) => {
  * - **Method Tracking**: Records how consent was collected (web_form, api, etc.)
  * - **Timestamp Precision**: Exact time of consent for legal requirements
  * - **Transaction Safety**: Uses database transactions for data integrity
- *
- * Supported Consent Methods:
- * - 'web_form' (default) - HTML form submission
- * - 'api' - Direct API call
- * - 'import' - Bulk import from external system
- * - 'admin' - Administrative action
- *
- * @example
- * const consentRecord = await recordConsent(
- *   123,                    // userId
- *   5,                      // consentRevisionId
- *   '192.168.1.100',       // ipAddress
- *   'Mozilla/5.0...',      // userAgent
- *   'web_form'             // consentMethod
- * );
- * console.log(`Consent recorded with ID: ${consentRecord.id}`);
- *
- * @example
- * // Recording consent from Express middleware
- * const ipAddress = req.ip || req.connection.remoteAddress;
- * const userAgent = req.get('User-Agent');
- * await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
  *
  * @legal
  * **Legal Compliance**: This function is designed to meet GDPR Article 7
@@ -318,25 +280,6 @@ const recordConsent = async (userId, consentRevisionId, ipAddress, userAgent, co
  * audit purposes. This approach ensures compliance with data protection
  * regulations that require maintaining proof of both consent and withdrawal.
  *
- * @example
- * const wasWithdrawn = await withdrawConsent(123);
- * if (wasWithdrawn) {
- *   console.log('User consent successfully withdrawn');
- *   // Typically followed by session destruction and logout
- * } else {
- *   console.log('No active consent found to withdraw');
- * }
- *
- * @example
- * // Used in consent withdrawal endpoint
- * const success = await withdrawConsent(req.session.user.user_id);
- * if (success) {
- *   req.session.destroy();
- *   res.json({ success: true, message: 'Consent withdrawn successfully' });
- * } else {
- *   res.status(404).json({ error: 'No active consent found to withdraw' });
- * }
- *
  * @legal
  * **GDPR Compliance**: Implements Article 7(3) requirement that withdrawal
  * must be as easy as giving consent. The function preserves audit trails
@@ -380,14 +323,14 @@ const withdrawConsent = async (userId) => {
  * @async
  * @function getUserConsentHistory
  * @param {number} userId - Unique identifier for the user
- * @returns {Promise<Array<Object>>} Array of consent history records ordered by date (newest first)
- * @returns {number} returns[].id - Unique identifier for the consent record
- * @returns {Date} returns[].consented_at - When consent was originally given
- * @returns {boolean} returns[].is_withdrawn - Whether this consent has been withdrawn
- * @returns {Date|null} returns[].withdrawn_at - When consent was withdrawn (null if not withdrawn)
- * @returns {string} returns[].consent_method - Method used to collect consent
- * @returns {string} returns[].version - Version of the consent revision
- * @returns {string} returns[].title - Title of the consent revision
+ * @returns {Promise<Array<db_user_consent>>} Array of consent history records ordered by date (newest first)
+ * @returns {number} id - Unique identifier for the consent record
+ * @returns {Date} consented_at - When consent was originally given
+ * @returns {boolean} is_withdrawn - Whether this consent has been withdrawn
+ * @returns {Date|null} withdrawn_at - When consent was withdrawn (null if not withdrawn)
+ * @returns {string} consent_method - Method used to collect consent
+ * @returns {string} version - Version of the consent revision
+ * @returns {string} title - Title of the consent revision
  *
  * @throws {Error} Database connection or query errors (handled via db.handleQueryError)
  *
@@ -444,16 +387,7 @@ const getUserConsentHistory = async (userId) => {
  * @param {string|null} [termsUrl=null] - URL to terms of service document
  * @param {Date|null} [expiresAt=null] - Optional expiration date for the revision
  * @param {boolean} [optional=false] - Whether this revision is optional (default false)
- * @returns {Promise<Object>} The created consent revision record
- * @returns {number} returns.id - Unique identifier for the new revision
- * @returns {string} returns.version - Version identifier
- * @returns {string} returns.title - Consent title
- * @returns {string} returns.content - Consent content
- * @returns {string|null} returns.privacy_policy_url - Privacy policy URL
- * @returns {string|null} returns.terms_url - Terms of service URL
- * @returns {Date} returns.created_at - Creation timestamp
- * @returns {Date|null} returns.expires_at - Expiration timestamp
- * @returns {boolean} returns.is_active - Always true for newly created revisions
+ * @returns {Promise<db_consent_revision>} The created consent revision record
  *
  * @throws {Error} Database connection or query errors (handled via db.handleQueryError)
  *

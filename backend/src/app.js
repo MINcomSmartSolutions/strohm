@@ -15,7 +15,9 @@ const oidc_config = require('./utils/oidc_config');
 const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
+const {db} = require('./utils/queries');
 const session = require('express-session');
+const MemoryStore = require('memorystore')(session);
 const logger = require('./services/logger');
 const {transactionFetchLoop} = require('./services/cron');
 const {Settings} = require('luxon');
@@ -26,6 +28,8 @@ const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
 const {requireConsent} = require('./middlewares/consent');
 const {GLOBAL_CONFIG} = require("#config");
+const {createRequestId} = require("#helpers/auth");
+const {AuthError, ErrorCodes, SystemError} = require("#utils/errors");
 
 Settings.defaultZoneName = 'utc';
 Settings.defaultLocale = 'de-DE';
@@ -52,9 +56,13 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
+    proxy: GLOBAL_CONFIG.ENV.IS_PRODUCTION,
+    store: new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+    }),
     cookie: {
         secure: GLOBAL_CONFIG.ENV.IS_PRODUCTION,
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 86400000, // 24 hours
     },
 }));
 
@@ -92,21 +100,47 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/', async (req, res) => {
+    const requestId = req.requestId || createRequestId();
+    req.requestId = requestId;
+
     try {
         if (req.oidc.isAuthenticated()) {
-            if (req.session.user) {
+            const sessionUser = req.session.user || null;
+            // Always working with the OIDC data, since session data can be stale/corrupted/missing/manipulated!
+            const oidcUser = req.oidc.user;
+            if (sessionUser) {
+                const currentUser = await db.getUserUnique({oauth_id: oidcUser.sub});
+
+                if (!currentUser) {
+                    // User should've been already created but somehow is missing
+                    logger.error(`[${requestId}] Seems user consent --> creation did not worked properly. User with OIDC ID ${oidcUser.sub} not found in DB`);
+                    throw new AuthError(ErrorCodes.USER.NOT_FOUND);
+                }
+                if (currentUser.user_id !== sessionUser.user_id) {
+                    logger.warn(`[${requestId}] Session user ${sessionUser.user_id} mismatch with database user ${currentUser.user_id}`);
+                    throw new AuthError(ErrorCodes.AUTH.USER_MISMATCH);
+                }
+                if (currentUser.deactivated_at !== null) {
+                    logger.warn(`[${requestId}] User ${currentUser.user_id} is deactivated`);
+                    throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
+                }
+
                 try {
-                    // noinspection ES6RedundantAwait
-                    const redirect_url = await getOdooPortalLogin(req.session.user);
+                    logger.debug(`[${requestId}] Getting Odoo portal login for user ${sessionUser.user_id}`);
+                    const redirect_url = await getOdooPortalLogin(sessionUser);
+                    logger.info(`[${requestId}] Redirecting user ${sessionUser.user_id} to Odoo portal`);
                     return res.redirect(redirect_url);
-                } catch (e) {
-                    logger.warn('Failed to get Odoo portal login URL:', e.message);
-                    return res.redirect('/welcome');
+                } catch (error) {
+                    logger.error(`[${requestId}] Failed to get Odoo portal login URL:`, error);
+                    // Caution: Redirecting to "/login, /, /welcome routes creates infinite redirect loop
+                    throw new SystemError(ErrorCodes.SYSTEM.UNKNOWN_ERROR, null, error);
                 }
             }
         }
+        logger.debug(`[${requestId}] User not authenticated or no session, redirecting to welcome`);
         return res.redirect('/welcome');
     } catch (error) {
+        logger.error(`[${requestId}] Error in / route handler:`, error);
         appErrorHandler(error, res);
     }
 });

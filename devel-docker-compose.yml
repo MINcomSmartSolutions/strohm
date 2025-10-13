@@ -51,11 +51,11 @@ services:
       ODOO_PORT: 8069
       ODOO_EXTERNAL_BASE_URL: http://localhost:8069
       WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
-      DB_HOST: db
-      DB_NAME: ${STROHM_DB}
-      DB_USER: ${STROHM_DB_USER}
-      DB_PASSWORD: ${STROHM_DB_PASSWORD}
-      DB_PORT: 5432
+      STROHM_DB_HOST: db
+      STROHM_DB_NAME: ${STROHM_DB}
+      STROHM_DB_USER: ${STROHM_DB_USER}
+      STROHM_DB_PASSWORD: ${STROHM_DB_PASSWORD}
+      STROHM_DB_PORT: 5432
     command: npm run debug
 
   odoo:

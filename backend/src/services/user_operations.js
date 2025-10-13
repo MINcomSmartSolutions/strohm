@@ -12,6 +12,7 @@ const {createSteveUser} = require('./steve_user');
 const logger = require('#services/logger');
 const {AuthError, ErrorCodes} = require('#utils/errors');
 const {validateUser} = require('#utils/joi');
+const {GLOBAL_CONFIG} = require("#config");
 
 /**
  * Handles user creation and linking with external systems.
@@ -27,14 +28,14 @@ const {validateUser} = require('#utils/joi');
  */
 const userOperations = async (oidc_user) => {
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
-    const env = process.env.NODE_ENV || 'production';
 
     if (!user) {
         // Use random RFID for development
         let rfid = Math.random().toString(36).substring(2, 10);
         // const rfid = oidc_user.rfid,
 
-        if (env === 'dev' || env === 'test') {
+        // FOR DEVELOPMENT ONLY: Assign fixed RFIDs to known test users
+        if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
             if (oidc_user.email === "tester@tester2.com") {
                 rfid = "4doiy7pg"
             } else if (oidc_user.email === "test@mincom.com") {
@@ -56,7 +57,6 @@ const userOperations = async (oidc_user) => {
         await checkANDcreateUserInExternalSystems(createdUser);
         user = await db.getUserUnique({oauth_id: oidc_user.sub});
     } else if (user.deactivated_at !== null) {
-        //TODO: Deactivated user show error message
         throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
     } else {
         await checkANDcreateUserInExternalSystems(user);
