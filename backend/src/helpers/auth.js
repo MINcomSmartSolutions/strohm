@@ -35,14 +35,18 @@ function generateSalt(length = 16) {
 }
 
 /**
- * Validates that the OIDC authentication, most of the checks are done by the OIDC library, but we add some little extra checks.
+ * Validates that the OIDC authentication properties like access token and user info are present.
+ * Most of the checks are done by the OIDC library, but we add some little extra checks.
  *
  * @async
  * @param {Object} req - Express request object
  * @returns {boolean} - True if authentication is valid, false otherwise
  */
 async function validateOIDCProperties(req) {
-    if (!req) return false;
+    if (!req) {
+        logger.warn('Request object is missing in OIDC validation');
+        return false;
+    }
 
     try {
         const oidcSet = req.oidc;
@@ -75,8 +79,13 @@ async function validateOIDCProperties(req) {
     }
 }
 
+function createRequestId() {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 module.exports = {
     generateOdooHash,
     generateSalt,
     validateOIDCProperties,
+    createRequestId,
 };

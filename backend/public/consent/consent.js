@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (confirmDecline) {
                     console.log('User declined consent version:', consentVersion);
-                    window.location.href = '/logout';
+                    window.location.href = '/logout?reason=consent_declined';
                 }
             });
         }
