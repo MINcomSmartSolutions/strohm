@@ -20,11 +20,10 @@
  * @see {@link module:controllers/consent} For consent page handling
  */
 
-const {getActiveConsentRevision, hasLatestConsent, createConsentRevision} = require('#services/consent');
+const {hasLatestConsent} = require('#services/consent');
 const logger = require('#services/logger');
 const {db} = require('#utils/queries');
-const {userOperations} = require('#services/user_operations');
-const {validateOIDCProperties} = require('#helpers/auth');
+const {validateOIDCProperties, createRequestId} = require('#helpers/auth');
 
 /**
  * Express middleware that validates user consent status before allowing access to protected routes.
@@ -61,16 +60,14 @@ const {validateOIDCProperties} = require('#helpers/auth');
  * Middleware Flow:
  * 1. **Route Filtering**: Checks if current route should skip consent validation
  *    - Skipped routes: /consent, /logout, /health, /welcome, /login, /callback, /scim, /assets, /favicon
- * 2. **Consent Revision Check**: Uses `getActiveConsentRevision()` to verify system has active consent
- *    - If no active revision exists, allows access without consent check
- * 3. **OIDC Validation**: Validates OIDC authentication properties via `validateOIDCProperties()`
+ * 2. **OIDC Validation**: Validates OIDC authentication properties via `validateOIDCProperties()`
  *    - Redirects to /logout if validation fails
- * 4. **User Resolution**: Queries database directly using `db.getUserUnique()` (standard pattern)
+ * 3. **User Resolution**: Queries database directly using `db.getUserUnique()` (standard pattern)
  *    - Updates session with user data if user exists via `userOperations()`
- * 5. **Session Management**: Ensures authenticated users have proper session state
- * 6. **Consent Validation**: Uses `hasLatestConsent()` to check current consent status
+ * 4. **Session Management**: Ensures authenticated users have proper session state
+ * 5. **Consent Validation**: Uses `hasLatestConsent()` to check current consent status
  *    - Redirects to /consent page if consent is missing or outdated
- * 7. **Access Control**: Allows or denies access based on consent status
+ * 6. **Access Control**: Allows or denies access based on consent status
  *
  * @security
  * Security Considerations:
@@ -93,6 +90,10 @@ const {validateOIDCProperties} = require('#helpers/auth');
  * @see {@link module:services/consent.hasLatestConsent} For consent validation logic
  */
 const requireConsent = async (req, res, next) => {
+    // Generate request ID for tracing
+    const requestId = createRequestId();
+    req.requestId = requestId;
+
     try {
         // Skip consent check for certain routes
         const skipRoutes = ['/consent', '/logout', '/health', '/welcome', '/login', '/callback', '/scim', '/assets', '/favicon'];
@@ -102,54 +103,55 @@ const requireConsent = async (req, res, next) => {
             return next();
         }
 
-        // Check if there's an active consent revision
-        let activeConsent = await getActiveConsentRevision();
-        if (!activeConsent) {
-            logger.warn('No active consent revision found');
-            if (process.env.NODE_ENV !== 'production') {
-                await createConsentRevision("0.1.0", "Allgemeine Geschäftsbedingungen und Datenschutzvereinbarung", "Initial consent created automatically, for testing purposes", "https://min2sol.com/datenschutz/", "https://min2sol.com/datenschutz/");
-                activeConsent = await getActiveConsentRevision();
-                if (activeConsent) {
-                    logger.info('Created initial consent revision for testing purposes');
-                }
-            } else {
-                logger.warn('Allowing access without consent check');
-                return next();
-            }
-        }
-
         if (!await validateOIDCProperties(req)) {
-            return res.redirect('/logout');
+            logger.warn(`[${requestId}] OIDC validation failed`);
+            return res.redirect('/logout?reason=invalid_session');
         }
 
-        const user = await db.getUserUnique({oauth_id: req.oidc.user.sub});
+        const oidcUser = req.oidc.user;
+        let sessionUser = req.session.user;
+        const user = await db.getUserUnique({oauth_id: oidcUser.sub});
         if (user) {
-            req.session.user = await userOperations(req.oidc.user)
-            req.session.save();
-        }
-
-        // If user is in session, check their consent status
-        if (req.session.user) {
-            const hasConsent = await hasLatestConsent(req.session.user.user_id);
+            // User exists in DB - check if we need to update session
+            if (!sessionUser || sessionUser.user_id !== user.user_id) {
+                // Session doesn't have user or has different user - update it
+                // Note: We don't call userOperations here to avoid creating external system users on every request
+                // External system creation only happens during consent POST when user gives consent
+                req.session.user = user;
+                // Properly await session save to prevent race conditions
+                await new Promise((resolve, reject) => {
+                    req.session.save((err) => {
+                        if (err) {
+                            logger.error(`[${requestId}] Session save failed:`, err);
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+                sessionUser = req.session.user;
+                logger.debug(`[${requestId}] Updated session for user ${user.user_id}`);
+            }
+            const hasConsent = await hasLatestConsent(sessionUser.user_id);
             if (!hasConsent) {
-                logger.info(`User ${req.session.user.user_id} does not have latest consent - redirecting to consent page`);
+                logger.info(`[${requestId}] User ${sessionUser.user_id} does not have latest consent - redirecting to consent page`);
                 return res.redirect('/consent');
             }
         } else {
-            // User is authenticated but not in session yet - redirect to consent page
-            // The consent controller will handle user creation after consent is given
-            logger.info('Authenticated user without session - redirecting to consent page');
+            // User doesn't exist in DB yet - they need to give consent first before we create them
+            logger.info(`[${requestId}] New user (oauth_id: ${oidcUser.sub}) - redirecting to consent page`);
             return res.redirect('/consent');
         }
-
-
         return next();
     } catch (error) {
-        logger.error('Error in consent middleware:', error);
-        // In case of error, allow the request to proceed to avoid blocking the entire application
-        return next();
+        // CRITICAL: Do NOT allow access on error - this is a security risk
+        logger.error(`[${requestId}] Critical error in consent middleware:`, error);
+
+        // For any other error, redirect to logout with error reason
+        // This ensures consent is always properly validated before granting access
+        return res.redirect('/logout?reason=consent_validation_error');
     }
-};
+}
 
 module.exports = {
     requireConsent
