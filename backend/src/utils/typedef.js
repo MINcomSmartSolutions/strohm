@@ -82,3 +82,18 @@
  * @property {Date} created_at - Timestamp when revision was created
  * @property {Date|null} expires_at - Expiration timestamp (null for no expiration)
  */
+
+
+/**
+ * @typedef {Object} db_user_consent
+ *
+ * @property {number} id - Unique identifier for the user consent record
+ * @property {string} user_id - Identifier of the user who gave consent
+ * @property {number} consent_revision_id - Identifier of the consent revision agreed to
+ * @property {Date} consented_at - Timestamp when the user gave consent
+ * @property {string} ip_address - IP address from which consent was given
+ * @property {string|null} user_agent - User agent string of the browser/device (optional)
+ * @property {string} consent_method - Method by which consent was obtained (e.g., "web", "mobile")
+ * @property {boolean} is_withdrawn - Indicates if the user has withdrawn consent
+ * @property {Date} withdrawn_at - Timestamp when consent was withdrawn (null if not withdrawn)
+ */
