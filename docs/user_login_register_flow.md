@@ -1,11 +1,12 @@
-1. For a new user, user is only created after the consent is accepted/given.
-2. You might realise some functions like `validateOIDCProperties` or `db.getUserUnique` is used multiple times even
-   tough the flow before it already checked or used it, the reason for that is critical functions also checks their
-   inputs' validity before processing to prevent uncaught exceptions.
-3. Throw's are catched in the main controller function and returned to user/Requester as flash messages or json with
-   error details.
+1. Für einen neuen Benutzer wird der Benutzer erst erstellt, nachdem die Einwilligung akzeptiert/gegeben wurde.
+2. Sie werden möglicherweise feststellen, dass einige Funktionen wie `validateOIDCProperties` oder `db.getUserUnique`
+   mehrfach verwendet werden, obwohl der vorherige Ablauf sie bereits überprüft oder verwendet hat. Der Grund dafür ist,
+   dass kritische Funktionen auch die Gültigkeit ihrer Eingaben überprüfen, bevor sie verarbeitet werden, um nicht
+   abgefangene Ausnahmen zu verhindern.
+3. Throws werden in der Hauptcontroller-Funktion abgefangen und dem Benutzer/Anforderer als Flash-Nachrichten oder JSON
+   mit Fehlerdetails zurückgegeben.
 
-The function documantations are here
+Die Funktionsdokumentation finden Sie [hier](../docs/docs.md)
 
 ```mermaid
 flowchart TD
