@@ -8,7 +8,7 @@
     "debug": "node --watch ./server.js",
     "test": "NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/",
     "test coverage": "NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --coverage",
-    "docs": "npx jsdoc2md -c jsdoc.config.json -p package.json  src/**/*.js > Docs.md"
+    "docs": "npx jsdoc2md -c jsdoc.config.json -p package.json  src/**/*.js > ../docs/docs.md"
   },
   "imports": {
     "#utils/*": "./src/utils/*.js",

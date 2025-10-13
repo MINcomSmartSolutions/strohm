@@ -30,8 +30,8 @@
  * @property {string} ocppIdTag - The Ocpp Tag used in the transaction
  * @property {Date} startTimestamp - The timestamp at which the transaction started
  * @property {Date|null} stopTimestamp - The timestamp at which the transaction ended
- * @property {string} startValue - The meter value reading at the start of the transaction
- * @property {string|null} stopValue - The meter value reading at the end of the transaction
+ * @property {string} startValue - The meter value reading at the start of the transactionin watt-hours
+ * @property {string|null} stopValue - The meter value reading at the end of the transaction in watt-hours
  * @property {string|null} stopReason - The reason for the transaction being stopped
  * @property {'station'|'manual'|null} stopEventActor - The actor who stopped the transaction
  */
@@ -45,8 +45,8 @@
  * @property {Date} start_timestamp - The timestamp at which the transaction started
  * @property {Date} stop_timestamp - The timestamp at which the transaction ended
  * @property {number} delivered_energy_wh - The amount of energy delivered during the transaction in watt-hours
- * @property {number} start_value - The meter value reading at the start of the transaction
- * @property {number} stop_value - The meter value reading at the end of the transaction
+ * @property {number} start_value - The meter value reading at the start of the transaction in watt-hours
+ * @property {number} stop_value - The meter value reading at the end of the transaction in watt-hours
  * @property {string} stop_reason - The reason for the transaction being stopped
  * @property {string} stop_event_actor - The actor who stopped the transaction
  * @property {number} connector_id - Connector ID of the charge box at which the transaction took place
@@ -67,4 +67,18 @@
  * @property {Date} valid_from - The date from which the electricity price is valid
  * @property {Date} valid_till - The date until which the electricity price is valid
  * @property {number} price - The price as per kWh in cents
+ */
+
+
+/**
+ * @typedef {Object} db_consent_revision
+ *
+ * @property {number} id - Unique identifier for the consent revision
+ * @property {string} version - Version identifier (e.g., "1.0", "2.1.3")
+ * @property {string} title - Human-readable title for the consent
+ * @property {string} content - Full consent text content
+ * @property {string|null} privacy_policy_url - URL to privacy policy (optional)
+ * @property {string|null} terms_url - URL to terms of service (optional)
+ * @property {Date} created_at - Timestamp when revision was created
+ * @property {Date|null} expires_at - Expiration timestamp (null for no expiration)
  */

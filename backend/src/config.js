@@ -36,7 +36,7 @@ const STEVE_CONFIG = {
 const ODOO_CONFIG = {
     HOST: process.env.ODOO_HOST,
     PORT: process.env.ODOO_PORT || 8069,
-    INTERNAL_BASE_URL: `http://${process.env.ODOO_HOST}:${process.env.ODOO_PORT}`, // Internal INTERNAL_BASE_URL accesing through docker network
+    INTERNAL_BASE_URL: `http://${process.env.ODOO_HOST}:${process.env.ODOO_PORT}`, // Internal URL accesing through docker network
     EXTERNAL_BASE_URL: process.env.ODOO_EXTERNAL_BASE_URL,
     API_SECRET: process.env.ODOO_API_SECRET,
     USER_CREATION_URI: '/internal/user/create',
