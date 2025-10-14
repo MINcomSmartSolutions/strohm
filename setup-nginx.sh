@@ -32,7 +32,7 @@ fi
 
 # Check if certbot is installed
 if ! command -v certbot >/dev/null 2>&1; then
-    echo -e "${YELLOW}📦 Installing certbot...${NC}"
+    echo -e "${YELLOW}Installing certbot...${NC}"
     apt install -y certbot python3-certbot-nginx
 else
     echo -e "${GREEN}Certbot is already installed${NC}"
@@ -63,7 +63,7 @@ if [ -L "/etc/nginx/sites-enabled/default" ]; then
 fi
 
 # Test nginx configuration
-echo -e "${BLUE}🔍 Testing nginx configuration...${NC}"
+echo -e "${BLUE} Testing nginx configuration...${NC}"
 if nginx -t; then
     echo -e "${GREEN}Nginx configuration is valid${NC}"
 else
@@ -78,12 +78,12 @@ echo -e "${BLUE}SSL Certificate Setup${NC}"
 echo "Before starting nginx, you need SSL certificates."
 echo ""
 echo -e "${YELLOW}Option 1: Get Let's Encrypt certificates (recommended):${NC}"
-echo "sudo certbot certonly --standalone -d laden.hm.edu -d ladenportal.hm.edu"
+echo "sudo certbot certonly --standalone -d backend.laden.hm.edu -d laden.hm.edu"
 echo ""
 echo -e "${YELLOW}Option 2: Use existing certificates:${NC}"
 echo "Make sure certificates are available at:"
+echo "  - /etc/letsencrypt/live/backend.laden.hm.edu/"
 echo "  - /etc/letsencrypt/live/laden.hm.edu/"
-echo "  - /etc/letsencrypt/live/ladenportal.hm.edu/"
 echo ""
 
 read -p "Do you want to get Let's Encrypt certificates now? (y/N): " -n 1 -r
@@ -95,7 +95,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     systemctl stop nginx 2>/dev/null || true
     
     # Get certificates
-    certbot certonly --standalone -d laden.hm.edu -d ladenportal.hm.edu
+    certbot certonly --standalone -d backend.laden.hm.edu -d laden.hm.edu
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}SSL certificates obtained successfully${NC}"
@@ -107,7 +107,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Start and enable nginx
-echo -e "${BLUE}🚀 Starting nginx...${NC}"
+echo -e "${BLUE} Starting nginx...${NC}"
 systemctl enable nginx
 systemctl start nginx
 
@@ -134,12 +134,6 @@ echo ""
 echo -e "${BLUE}Next steps:${NC}"
 echo "1. Start your Docker containers: ./production_action.sh deploy"
 echo "2. Test your endpoints:"
-echo "   - https://laden.hm.edu/health"
-echo "   - https://ladenportal.hm.edu/web/health"
+echo "   - https://backend.laden.hm.edu/health"
+echo "   - https://laden.hm.edu/web/health"
 echo "3. Monitor logs: sudo tail -f /var/log/nginx/error.log"
-echo ""
-echo -e "${YELLOW}Useful commands:${NC}"
-echo "- Test nginx config: sudo nginx -t"
-echo "- Reload nginx: sudo systemctl reload nginx"
-echo "- View nginx status: sudo systemctl status nginx"
-echo "- Renew certificates: sudo certbot renew --dry-run"
