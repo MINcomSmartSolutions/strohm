@@ -19,7 +19,7 @@ const {db} = require('./utils/queries');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session);
 const logger = require('./services/logger');
-const {transactionFetchLoop} = require('./services/cron');
+const {startCronWithHealthCheck} = require('./services/cron');
 const {Settings} = require('luxon');
 const {morganMiddleware} = require('./services/logger');
 const auth_controller = require('./controllers/auth');
@@ -166,8 +166,7 @@ app.use(odoo_controller);
 app.use(scim_controller);
 
 
-// Start the cron job
-transactionFetchLoop.start();
+startCronWithHealthCheck();
 
 
 module.exports = app;

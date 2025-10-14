@@ -12,6 +12,71 @@ const {STEVE_CONFIG, ODOO_CONFIG, GLOBAL_CONFIG} = require('#config');
 const {SystemError, ErrorCodes} = require("#utils/errors");
 
 
+// Track SteVe health status
+let steveHealthStatus = {
+    isHealthy: false,
+    lastCheck: null,
+    lastError: null,
+};
+
+/**
+ * Get SteVe health status
+ * @returns {{isHealthy: boolean, lastCheck: Date|null, lastError: string|null}}
+ */
+function getSteveHealth() {
+    return {...steveHealthStatus};
+}
+
+/**
+ * Update SteVe health status
+ * @param {boolean} isHealthy
+ * @param {string|null} error
+ */
+function updateSteveHealth(isHealthy, error = null) {
+    steveHealthStatus = {
+        isHealthy,
+        lastCheck: new Date(),
+        lastError: error,
+    };
+    STEVE_CONFIG.IS_HEALTHY = isHealthy;
+
+    if (isHealthy) {
+        logger.info('SteVe health status: HEALTHY');
+    } else {
+        logger.warn(`SteVe health status: UNHEALTHY - ${error || 'Unknown error'}`);
+    }
+}
+
+/**
+ * Check SteVe connection health
+ * @returns {Promise<boolean>}
+ */
+async function checkSteveHealth() {
+    try {
+        const response = await steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
+            params: {idTag: 'HEALTH_CHECK'},
+            timeout: 5000,
+        });
+
+        const contentType = response.headers['content-type'] || '';
+        const isJson = contentType.includes('application/json');
+
+        if (response.status !== 200) {
+            updateSteveHealth(false, `HTTP ${response.status}`);
+            return false;
+        } else if (!isJson) {
+            updateSteveHealth(false, `Non-JSON response (${contentType})`);
+            return false;
+        } else {
+            updateSteveHealth(true);
+            return true;
+        }
+    } catch (error) {
+        updateSteveHealth(false, error.message);
+        return false;
+    }
+}
+
 /**
  * Creates a pre-configured Axios instance for interacting with the Odoo API.
  *
@@ -74,6 +139,7 @@ const steveAxios = (() => {
         baseURL: STEVE_CONFIG.URL,
         headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
         },
     };
 
@@ -108,15 +174,25 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
     },
 })
     .then(response => {
+        const contentType = response.headers['content-type'] || '';
+        const isJson = contentType.includes('application/json');
+
         if (response.status !== 200) {
             logger.error('Error connecting to SteVe: "' + response.status + '" returned. Response: ' + JSON.stringify(response.data));
+            updateSteveHealth(false, `HTTP ${response.status}`);
             throw new Error('Failed to connect to SteVe');
+        } else if (!isJson) {
+            logger.error('Error connecting to SteVe: Expected JSON response but got "' + contentType + '". This usually indicates wrong endpoint or authentication failure.');
+            updateSteveHealth(false, `Non-JSON response (${contentType})`);
+            throw new Error('Failed to connect to SteVe - received non-JSON response');
         } else {
             logger.info('Steve connection successful');
+            updateSteveHealth(true);
         }
     })
     .catch(error => {
         logger.error('Error connecting to SteVe:' + error);
+        updateSteveHealth(false, error.message);
     });
 
 // Test the connection to Odoo
@@ -138,4 +214,7 @@ module.exports = {
     odooAuthedAxios,
     odooPlainAxios,
     steveAxios,
+    getSteveHealth,
+    checkSteveHealth,
+    updateSteveHealth,
 };

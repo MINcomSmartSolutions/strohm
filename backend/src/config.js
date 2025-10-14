@@ -29,6 +29,8 @@ const STEVE_CONFIG = {
     URL: process.env.STEVE_BASE_URL || `http://${process.env.STEVE_HOST}:${process.env.STEVE_PORT}/steve`,
     OCPP_TAGS_URI: '/api/v1/ocppTags',
     TRANSACTIONS_URI: '/api/v1/transactions',
+    // Dynamic
+    IS_HEALTHY: false,
 };
 
 const ODOO_CONFIG = {
