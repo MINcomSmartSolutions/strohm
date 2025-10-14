@@ -1,0 +1,129 @@
+services:
+  db:
+    container_name: strohm_db_debug
+    image: postgres:16.6
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - debug-db-data:/var/lib/postgresql/data
+    networks:
+      - strohm-network-debug
+    # ports are only accessible within the docker network
+
+  server:
+    container_name: strohm_server_debug
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      SERVER_PORT: ${SERVER_PORT:-3000}
+      SESSION_SECRET: ${SESSION_SECRET}
+      SERVER_OIDC_SECRET: ${SERVER_OIDC_SECRET}
+      SERVER_OIDC_CLIENT_ID: ${SERVER_OIDC_CLIENT_ID}
+      SERVER_OIDC_ISSUER_BASE_URL: ${SERVER_OIDC_ISSUER_BASE_URL}
+      SERVER_OIDC_BASE_URL: ${SERVER_BASE_URL}
+      SERVER_OIDC_CLIENT_SECRET: ${SERVER_OIDC_CLIENT_SECRET}
+      ODOO_ADMIN_API_KEY: ${ODOO_ADMIN_API_KEY}
+      ODOO_API_SECRET: ${ODOO_API_SECRET}
+      ODOO_HOST: odoo
+      ODOO_PORT: 8069
+      ODOO_EXTERNAL_BASE_URL: ${ODOO_EXTERNAL_BASE_URL}
+      WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
+      STROHM_DB_HOST: db
+      STROHM_DB_PORT: 5432
+      STROHM_DB_NAME: ${STROHM_DB}
+      STROHM_DB_USER: ${STROHM_DB_USER}
+      STROHM_DB_PASSWORD: ${STROHM_DB_PASSWORD}
+      STEVE_BASE_URL: ${STEVE_BASE_URL}
+      STEVE_API_KEY_HEADER: ${STEVE_API_KEY_HEADER}
+      STEVE_API_KEY: ${STEVE_API_KEY}
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
+      - "127.0.0.1:9229:9229"  # Node.js debug port
+    networks:
+      - strohm-network-debug
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${SERVER_PORT:-3000}/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: [ "node", "--inspect=0.0.0.0:9229", "./server.js" ]
+
+  odoo:
+    container_name: strohm_odoo_debug
+    image: ghcr.io/mincomsmartsolutions/odoo:18.0
+    restart: unless-stopped
+    environment:
+      DOODBA_ENVIRONMENT: "prod"
+      ODOO_ENV: "production"
+      LIST_DB: "false"
+      PGHOST: db
+      PGDATABASE: ${ODOO_DB}
+      PGUSER: ${ODOO_DB_USER}
+      PGPASSWORD: ${ODOO_DB_PASSWORD}
+      ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD}
+      DB_FILTER: "^odoo"
+      ODOO_BUS_PUBLIC_SAMESITE_WS: 1
+      ODOO_API_SECRET: ${ODOO_API_SECRET}
+      INITIAL_LANG: "de_DE"
+      BACKEND_HOST: server
+      BACKEND_PORT: ${SERVER_PORT:-3000}
+      BACKEND_EXTERNAL_URL: ${SERVER_BASE_URL}
+      WEBHOOK_API_KEY: ${WEBHOOK_API_KEY}
+      WITHOUT_DEMO: "all"
+      PROXY_MODE: "true"
+      WORKERS: ${ODOO_WORKERS:-4}
+      MAX_CRON_THREADS: ${ODOO_MAX_CRON_THREADS:-2}
+      PYTHONDONTWRITEBYTECODE: 1
+    ports:
+      - "127.0.0.1:8069:8069"
+      - "127.0.0.1:8072:8072"
+    volumes:
+      - odoo-debug-web-data:/var/lib/odoo:z
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - strohm-network-debug
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8069/web/health" ]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    command:
+      - odoo
+      - --limit-time-real-cron=7200
+      - --limit-time-real=600
+      - --workers=${ODOO_WORKERS:-4}
+      - --max-cron-threads=${ODOO_MAX_CRON_THREADS:-2}
+      - --proxy-mode
+
+volumes:
+  debug-db-data:
+    driver: local
+  odoo-debug-web-data:
+    driver: local
+
+networks:
+  strohm-network-debug:
+    driver: bridge
+    driver_opts:
+      encrypted: "true"
+
