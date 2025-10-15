@@ -34,22 +34,6 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .company-logo {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 40px;
-            background: #f8f9fa;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: bold;
-            color: #495057;
-            letter-spacing: 2px;
-            border: 2px solid #e9ecef;
-        }
-
         .welcome-title {
             font-size: 32px;
             font-weight: 300;
@@ -69,12 +53,15 @@
             display: inline-flex;
             align-items: center;
             gap: 12px;
-            background: #FA4E1D;
-            color: white;
+            background: #FB5454;
+            line-height: 1.1;
+            opacity: 1;
+            font-family: "Untitled Sans", Arial, Helvetica, sans-serif;
+            color: rgb(255, 255, 255);
             text-decoration: none;
             padding: 16px 32px;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 1.4rem;
             font-weight: 500;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
@@ -93,8 +80,8 @@
         }
 
         .idp-icon {
-            width: 32px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             background: white;
             border-radius: 6px;
             display: flex;
@@ -133,13 +120,6 @@
                 font-size: 12px;
             }
 
-            .company-logo {
-                width: 100px;
-                height: 100px;
-                margin-bottom: 30px;
-                font-size: 20px;
-            }
-
             .welcome-title {
                 font-size: 28px;
                 margin-bottom: 12px;
@@ -165,13 +145,6 @@
 
             .welcome-container {
                 padding: 32px 20px;
-            }
-
-            .company-logo {
-                width: 80px;
-                height: 80px;
-                font-size: 18px;
-                margin-bottom: 24px;
             }
 
             .welcome-title {
@@ -203,11 +176,6 @@
 </head>
 <body>
 <div class="welcome-container">
-    <div class="company-logo">
-        <!--        <img src="assets/img/logo.png" alt="Company Logo" >-->
-        STROHM
-    </div>
-
     <h1 class="welcome-title">Willkommen</h1>
     <p class="welcome-subtitle">
         Melden Sie sich mit Ihrem Hochschule München Account an, um fortzufahren.
@@ -216,7 +184,7 @@
     <a class="login-button" href="/login">
         Anmeldung mit
         <div class="idp-icon">
-            <img alt="HM Logo" height="24" src="assets/img/HMacronym.svg" width="26">
+            <img alt="HM Logo" height="32" src="assets/img/HMacronym.svg" width="34">
         </div>
     </a>
     <div class="footer">
