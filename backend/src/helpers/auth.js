@@ -27,11 +27,15 @@ function generateOdooHash(message, secret) {
 
 /**
  * Generate a cryptographically secure random salt
- * @param {number} length - Length of the salt in bytes (default: 16)
+ * @param {number} bytes - Length of the salt in bytes (default: 16). Not the length of the resulting string!
  * @returns {string} - salt string
  */
-function generateSalt(length = 16) {
-    return crypto.randomBytes(length).toString('base64url');
+function generateSalt(bytes = 16) {
+    if (typeof bytes !== 'number' || !Number.isInteger(bytes) || bytes <= 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'Salt length must be a positive integer');
+    }
+
+    return crypto.randomBytes(bytes).toString('base64url');
 }
 
 /**
