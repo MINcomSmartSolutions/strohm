@@ -135,34 +135,23 @@ const odooPlainAxios = createOdooAxios(false);
  * @throws {SystemError} If required environment variables for authentication are not set.
  */
 const steveAxios = (() => {
+    const username = process.env.STEVE_AUTH_USERNAME;
+    const password = process.env.STEVE_API_PASSWORD;
+    if (!username || !password) {
+        throw new SystemError(ErrorCodes.VALIDATION.MISSING_REQUIRED_FIELD, 'SteVe authentication environment variables are not set. Please check your environment configuration.');
+    }
+
     const config = {
         baseURL: STEVE_CONFIG.URL,
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         },
+        auth: {
+            username: username,
+            password: password,
+        }
     };
-
-    if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-        const header = process.env.STEVE_API_KEY_HEADER;
-        const value = process.env.STEVE_API_KEY;
-        if (!header || !value) {
-            throw new SystemError(ErrorCodes.VALIDATION.MISSING_REQUIRED_FIELD, 'SteVe API key or header environment variables are not set. Please check your environment configuration.');
-        }
-
-        config.headers[process.env.STEVE_API_KEY_HEADER] = process.env.STEVE_API_KEY;
-    } else {
-        const username = process.env.STEVE_AUTH_USERNAME;
-        const password = process.env.STEVE_API_PASSWORD;
-        if (!username || !password) {
-            throw new SystemError(ErrorCodes.VALIDATION.MISSING_REQUIRED_FIELD, 'SteVe authentication environment variables are not set. Please check your environment configuration.');
-        }
-
-        config.auth = {
-            username: process.env.STEVE_AUTH_USERNAME,
-            password: process.env.STEVE_API_PASSWORD,
-        };
-    }
 
     return axios.create(config);
 })();

@@ -19,7 +19,7 @@ const {db} = require('#utils/queries');
 const {STEVE_CONFIG} = require('#config');
 const {fullyQualifiedUserSchema} = require('#utils/joi');
 
-
+//TODO: Check everything even the response returned 200 or 201
 /**
  * Creates a new user in SteVe with the given RFID.
  * - Checks if the user already exists.
@@ -116,7 +116,7 @@ const getSteveUser = async (user_rfid) => {
 
     validateSteveUser(response.data[0], user_rfid);
 
-    return response.data;
+    return response.data[0];
 };
 
 
@@ -167,6 +167,12 @@ const unblockSteveUser = async (user) => {
     if (!user || !user.rfid || user.rfid.trim() === '') {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
+    // Check if its already unblocked
+    const existing_user = await getSteveUser(user.rfid);
+    if (existing_user && existing_user.maxActiveTransactionCount === 1 && existing_user.blocked === false) {
+        logger.info(`User with RFID ${user.rfid} is already unblocked in SteVe`);
+        return;
+    }
 
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
@@ -189,9 +195,46 @@ const unblockSteveUser = async (user) => {
 };
 
 
+/**
+ * Deletes a user from SteVe by their steve_id.
+ * Validates input, deletes the user, and logs the action.
+ *
+ * @async
+ * @param {Object} user - The user object (must include rfid and steve_id).
+ * @throws {ValidationError|Error} If input is invalid or deletion fails.
+ */
+const deleteSteveUser = async (user) => {
+    const {error} = fullyQualifiedUserSchema.validate(user);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, error.message);
+    }
+
+    logger.info(`Deleting user from SteVe with RFID: ${user.rfid} and steve_id: ${user.steve_id}`);
+
+    const response = await steveAxios.delete(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`);
+
+    if (!response) {
+        throw new SystemError(ErrorCodes.STEVE.NO_RESPONSE, 'No response from SteVe while deleting user');
+    }
+    if (response.status !== 200 && response.status !== 204) {
+        throw new SystemError(ErrorCodes.STEVE.USER_DELETE_FAILED, `Failed to delete user from SteVe: ${response.statusText}`);
+    }
+
+    // Verify the user is deleted
+    const checkQuery = await getSteveUser(user.rfid);
+    if (checkQuery) {
+        throw new SystemError(ErrorCodes.STEVE.USER_DELETE_FAILED, `User with RFID ${user.rfid} still exists after deletion attempt`);
+    }
+
+    logger.debug('User deleted from SteVe with RFID: ' + user.rfid);
+    await db.recordActivityLog(user.user_id, 'DELETE USER', 'SteVe', user.rfid);
+};
+
+
 module.exports = {
     createSteveUser,
     getSteveUser,
     blockSteveUser,
     unblockSteveUser,
+    deleteSteveUser,
 };
