@@ -209,7 +209,7 @@ describe('Steve User Service', () => {
             expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'CREATE USER', 'SteVe', validUser.rfid);
             expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'BLOCK USER', 'SteVe', validUser.rfid);
 
-            expect(result).toEqual([mockCreateResponse.data]);
+            expect(result).toEqual(mockCreateResponse.data);
         });
 
         it('should create user successfully with unblocked status', async () => {
@@ -258,12 +258,12 @@ describe('Steve User Service', () => {
             expect(db.recordActivityLog).toHaveBeenCalledTimes(1);
             expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'CREATE USER', 'SteVe', validUser.rfid);
 
-            expect(result).toEqual([{
+            expect(result).toEqual({
                 ocppTagPk: 999,
                 idTag: 'test_rfid',
                 maxActiveTransactionCount: 1,
                 blocked: false,
-            }]);
+            });
         });
 
         it('should throw error when creation fails', async () => {
@@ -381,7 +381,7 @@ describe('Steve User Service', () => {
                 },
             );
             expect(validateSteveUser).toHaveBeenCalledWith(mockUser, 'test_rfid');
-            expect(result).toEqual([mockUser]);
+            expect(result).toEqual(mockUser);
         });
     });
 
