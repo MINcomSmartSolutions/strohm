@@ -63,7 +63,9 @@ const getActiveConsentRevision = async () => {
                    privacy_policy_url,
                    terms_url,
                    created_at,
-                   expires_at
+                   expires_at,
+                   effective_from,
+                   updated_at
             FROM consent_revisions
             WHERE is_active = true
               AND (expires_at IS NULL OR expires_at > NOW())
@@ -101,14 +103,6 @@ const getActiveConsentRevision = async () => {
  *
  * **Note**: This function checks for ANY valid consent, not necessarily the latest.
  * For ensuring users have the most recent consent, use `hasLatestConsent()` instead.
- *
- * @example
- * const isValid = await hasValidConsent(123);
- * if (isValid) {
- *   console.log('User has valid consent');
- * } else {
- *   console.log('User needs to provide consent');
- * }
  *
  * @see {@link hasLatestConsent} For checking consent to the most recent revision
  */
@@ -415,7 +409,7 @@ const createConsentRevision = async (version, title, content, privacyPolicyUrl =
         const result = await client.query(`
             INSERT INTO consent_revisions (version, title, content, privacy_policy_url, terms_url, expires_at, optional)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active, optional
+            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active, optional, effective_from, updated_at
         `, [version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optional]);
 
         await client.query('COMMIT');

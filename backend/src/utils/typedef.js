@@ -96,4 +96,6 @@
  * @property {string} consent_method - Method by which consent was obtained (e.g., "web", "mobile")
  * @property {boolean} is_withdrawn - Indicates if the user has withdrawn consent
  * @property {Date} withdrawn_at - Timestamp when consent was withdrawn (null if not withdrawn)
+ * @property {Date} effective_from - Timestamp when the consent became effective
+ * @property {Date} updated_at - Timestamp when the consent record was last updated
  */

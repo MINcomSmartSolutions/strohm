@@ -262,7 +262,9 @@ CREATE TABLE public.consent_revisions (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
     expires_at timestamp with time zone,
-    optional boolean DEFAULT false NOT NULL
+    optional boolean DEFAULT false NOT NULL,
+    effective_from timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
 );
 
 
