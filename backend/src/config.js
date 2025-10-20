@@ -5,9 +5,7 @@
  * @description Configuration settings for SteVe and Odoo integrations
  *
  * @property {object} STEVE_CONFIG - Configuration for SteVe server and API endpoints
- * @property {string} STEVE_CONFIG.HOST - SteVe server host
- * @property {string} STEVE_CONFIG.PORT - SteVe server port
- * @property {string} STEVE_CONFIG.URL - External STEVE_BASE_URL env if not, internal url created from .HOST and .PORT accesing through docker network
+ * @property {string} STEVE_CONFIG.URL - External STEVE_BASE_URL env
  * @property {string} STEVE_CONFIG.OCPP_TAGS_URI - OCPP tags API endpoint
  * @property {string} STEVE_CONFIG.TRANSACTIONS_URI - Transactions API endpoint
  *
@@ -24,11 +22,11 @@
  * @property {string} ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI - Payment method check endpoint
  */
 const STEVE_CONFIG = {
-    HOST: process.env.STEVE_HOST,
-    PORT: process.env.STEVE_PORT,
-    URL: process.env.STEVE_BASE_URL || `http://${process.env.STEVE_HOST}:${process.env.STEVE_PORT}/steve`,
+    URL: process.env.STEVE_BASE_URL,
     OCPP_TAGS_URI: '/api/v1/ocppTags',
     TRANSACTIONS_URI: '/api/v1/transactions',
+    HTTP_AUTH_USERNAME: process.env.STEVE_AUTH_USERNAME,
+    HTTP_AUTH_PASSWORD: process.env.STEVE_API_PASSWORD,
     // Dynamic
     IS_HEALTHY: false,
 };
@@ -52,6 +50,9 @@ const GLOBAL_CONFIG = {
         IS_PRODUCTION: nodeEnv === 'production' || nodeEnv === 'prod',
         IS_DEVELOPMENT: nodeEnv === 'development' || nodeEnv === 'dev' && !this.IS_PRODUCTION,
         IS_TEST: nodeEnv === 'test',
+    },
+    OIDC: {
+        DISCOVERY_CACHE_TTL: 24 * 60 * 60 * 1000, // 24 hours - configurable TTL for OIDC discovery cache
     }
 }
 
