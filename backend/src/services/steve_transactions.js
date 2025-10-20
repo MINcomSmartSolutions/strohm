@@ -117,6 +117,7 @@ async function fetchTxnsSince(since) {
  * Stop reasons that indicate a transaction is temporarily stopped/paused
  * and should not be billed yet (may resume later).
  * According to OCPP1.6 spec
+ * For now we do not handle any temporary stop reasons differently. Bill the transaction if it has stopTimestamp.
  */
 const TEMPORARY_STOP_REASONS = new Set([
     'EmergencyStop',    // Emergency stop - may resume after issue resolved
@@ -130,6 +131,7 @@ const TEMPORARY_STOP_REASONS = new Set([
  * Stop reasons that indicate a permanent transaction end
  * and should be processed for billing.
  * According to OCPP1.6 spec
+ * For now we do not handle any temporary stop reasons differently. Bill the transaction if it has stopTimestamp.
  */
 const PERMANENT_STOP_REASONS = new Set([
     'DeAuthorized',     // User was deauthorized - transaction complete
@@ -156,24 +158,23 @@ function shouldProcessTransaction(txn) {
         return false;
     }
 
-    if (stop_timestamp && TEMPORARY_STOP_REASONS.has(stop_reason)) {
-        logger.warn('Discrepancy in the txn data: stop_timestamp is set but stop_reason indicates temporary stop. Transaction ID: ' + txn.id);
-    }
+    // if (stop_timestamp && TEMPORARY_STOP_REASONS.has(stop_reason)) {
+    //     logger.warn('Discrepancy in the txn data: stop_timestamp is set but stop_reason indicates temporary stop. Transaction ID: ' + txn.id);
+    // }
+    //
+    // // If it's a known temporary stop reason, don't process yet
+    // if (TEMPORARY_STOP_REASONS.has(stop_reason)) {
+    //     logger.info(`Skipping transaction ${txn.id} with temporary stop reason: ${stop_reason}`);
+    //     return false;
+    // }
+    //
+    // // If it's a known permanent stop reason, process it
+    // if (PERMANENT_STOP_REASONS.has(stop_reason)) {
+    //     return true;
+    // }
 
-    // If it's a known temporary stop reason, don't process yet
-    if (TEMPORARY_STOP_REASONS.has(stop_reason)) {
-        logger.info(`Skipping transaction ${txn.id} with temporary stop reason: ${stop_reason}`);
-        return false;
-    }
 
-    // If it's a known permanent stop reason, process it
-    if (PERMANENT_STOP_REASONS.has(stop_reason)) {
-        return true;
-    }
-
-
-    // For unknown stop reasons, log a warning and process conservatively
-    logger.warn(`Unknown stop reason '${stop_reason}' for transaction ${txn.id}, processing for billing`);
+    // logger.warn(`Unknown stop reason '${stop_reason}' for transaction ${txn.id}, processing for billing`);
     return true;
 }
 
@@ -232,10 +233,16 @@ async function processTxns(txns) {
 
     // Determine new high‑water mark: max stopTimestamp of ALL unique transactions (not just billable ones)
     // This ensures we don't re-fetch temporarily stopped transactions on the next run
-    maxStop = unique.reduce((max, txn) => {
-        const stop = DateTime.fromISO(txn.stopTimestamp, {zone: 'utc'});
-        return stop > max ? stop : max;
-    }, DateTime.fromMillis(0));
+    const transactionsWithStop = unique.filter(txn => txn.stopTimestamp);
+    if (transactionsWithStop.length > 0) {
+        maxStop = transactionsWithStop.reduce((max, txn) => {
+            const stop = DateTime.fromISO(txn.stopTimestamp, {zone: 'utc'});
+            return stop > max ? stop : max;
+        }, DateTime.fromMillis(0));
+    } else {
+        // No stopped transactions, keep the previous watermark or use current time
+        maxStop = DateTime.now();
+    }
 
     return {maxStop, processedCount: unique.length, billedCount: billableTransactions.length};
 }
