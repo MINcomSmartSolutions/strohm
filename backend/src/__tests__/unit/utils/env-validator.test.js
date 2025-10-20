@@ -95,7 +95,7 @@ describe('Environment Variable Validation', () => {
     });
 
     test('should accept valid NODE_ENV values', () => {
-        const validNodeEnvs = ['dev', 'development', 'production', 'prod', 'test'];
+        const validNodeEnvs = ['dev', 'production', 'test'];
 
         validNodeEnvs.forEach(env => {
             process.env = {...validEnv, NODE_ENV: env};

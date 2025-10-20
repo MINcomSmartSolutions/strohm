@@ -1,5 +1,4 @@
 'use strict';
-
 /**
  * @file Environment variable validation
  * @module utils/env-validator
@@ -15,7 +14,7 @@ const Joi = require('joi');
 const envSchema = Joi.object({
     // General
     NODE_ENV: Joi.string()
-        .valid('dev', 'development', 'production', 'prod', 'test')
+        .valid('dev', 'production', 'test')
         .default('dev'),
     SERVER_PORT: Joi.number()
         .port()
