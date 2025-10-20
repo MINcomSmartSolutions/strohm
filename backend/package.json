@@ -1,13 +1,13 @@
 {
   "name": "strohm-backend",
-  "version": "0.6.1",
+  "version": "0.6.4",
   "main": "server.js",
   "scripts": {
     "clean": "rm -rf node_modules && rm -rf package-lock.json && npm cache clean --force",
     "start": "node ./server.js",
     "debug": "node --watch ./server.js",
-    "test": "NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/",
-    "test coverage": "NODE_ENV=test npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --coverage",
+    "test": "NODE_ENV=test npx jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/",
+    "test coverage": "NODE_ENV=test npx jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --coverage",
     "docs": "npx jsdoc2md -c jsdoc.config.json -p package.json  src/**/*.js > ../docs/docs.md"
   },
   "imports": {
@@ -31,7 +31,7 @@
     "axios": "1.12.2",
     "cors": "^2.8.5",
     "cron": "^4.3.3",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-openid-connect": "^2.18.0",
     "express-rate-limit": "^8.1.0",
@@ -46,23 +46,23 @@
     "scimmy": "^1.3.5",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "winston": "^3.17.0",
+    "winston": "^3.18.3",
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "@babel/cli": "^7.27.2",
-    "@jest/globals": "^30.1.2",
+    "@babel/cli": "^7.28.3",
+    "@jest/globals": "^30.2.0",
     "@jest/types": "30.0.0",
     "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.5.0",
+    "@types/node": "^24.8.1",
     "@types/pg": "^8.15.5",
     "@types/superagent": "^8.1.9",
     "@types/supertest": "^6.0.3",
     "jest": "^30.0.0",
     "jest-extended": "^6.0.0",
     "jsdoc": "^4.0.4",
-    "jsdoc-to-markdown": "^9.1.2",
+    "jsdoc-to-markdown": "^9.1.3",
     "superagent": "^10.2.1",
     "supertest": "^7.1.1"
   }
