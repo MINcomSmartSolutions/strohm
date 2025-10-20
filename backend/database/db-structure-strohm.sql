@@ -131,7 +131,7 @@ ALTER SEQUENCE public.bills_id_seq OWNED BY public.bills.id;
 
 CREATE TABLE public.charging_transactions (
     id integer NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
     start_timestamp timestamp with time zone,
     stop_timestamp timestamp with time zone,
     stop_reason character varying,
@@ -144,8 +144,7 @@ CREATE TABLE public.charging_transactions (
     stop_event_actor character varying,
     invoice_ref integer,
     txn_steve_id integer NOT NULL,
-    user_id integer,
-    CONSTRAINT always_positive CHECK ((delivered_energy_wh >= 0.0))
+    user_id integer
 );
 
 
@@ -773,7 +772,7 @@ ALTER TABLE ONLY public.odoo_apikeys
 --
 
 ALTER TABLE ONLY public.user_consents
-    ADD CONSTRAINT user_consents_consent_revisions_id_fk FOREIGN KEY (consent_revision_id) REFERENCES public.consent_revisions(id);
+    ADD CONSTRAINT user_consents_consent_revisions_id_fk FOREIGN KEY (consent_revision_id) REFERENCES public.consent_revisions(id) ON DELETE CASCADE;
 
 
 --
@@ -781,7 +780,7 @@ ALTER TABLE ONLY public.user_consents
 --
 
 ALTER TABLE ONLY public.user_consents
-    ADD CONSTRAINT user_consents_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE SET NULL;
+    ADD CONSTRAINT user_consents_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE;
 
 
 --
