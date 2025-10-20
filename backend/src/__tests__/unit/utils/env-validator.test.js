@@ -43,8 +43,7 @@ describe('Environment Variable Validation', () => {
         STROHM_DB_PORT: '5432',
 
         // SteVe
-        STEVE_HOST: 'steve',
-        STEVE_PORT: '8180',
+        STEVE_BASE_URL: 'http://steve.example.com',
         STEVE_AUTH_USERNAME: 'admin',
         STEVE_API_PASSWORD: 'api-password',
         STEVE_FETCH_INTERVAL: '120',
@@ -120,43 +119,10 @@ describe('Environment Variable Validation', () => {
     });
 
     describe('STEVE Configuration Validation', () => {
-        test('should pass with STEVE_HOST and STEVE_PORT', () => {
-            process.env = {...validEnv};
-            delete process.env.STEVE_BASE_URL;
-            expect(() => validateEnv()).not.toThrow();
-        });
-
-        test('should pass with STEVE_BASE_URL instead of STEVE_HOST and STEVE_PORT', () => {
-            process.env = {...validEnv};
-            delete process.env.STEVE_HOST;
-            delete process.env.STEVE_PORT;
-            process.env.STEVE_BASE_URL = 'http://steve.example.com:8180/steve';
-            expect(() => validateEnv()).not.toThrow();
-        });
-
-        test('should pass with both STEVE_BASE_URL and STEVE_HOST/PORT (STEVE_BASE_URL takes precedence)', () => {
-            process.env = {
-                ...validEnv,
-                STEVE_BASE_URL: 'http://steve.example.com:8180/steve'
-            };
-            expect(() => validateEnv()).not.toThrow();
-        });
-
-        test('should use default values for STEVE_HOST and STEVE_PORT when not provided', () => {
-            process.env = {...validEnv};
-            delete process.env.STEVE_HOST;
-            delete process.env.STEVE_PORT;
-            delete process.env.STEVE_BASE_URL;
-
-            const result = validateEnv();
-            expect(result.STEVE_HOST).toBe('steve');
-            expect(result.STEVE_PORT).toBe(8180);
-        });
 
         test('should validate STEVE_BASE_URL is a valid URI', () => {
             process.env = {...validEnv};
             delete process.env.STEVE_HOST;
-            delete process.env.STEVE_PORT;
             process.env.STEVE_BASE_URL = 'not-a-valid-uri';
             expect(() => validateEnv()).toThrow('Environment variable validation failed');
         });

@@ -56,8 +56,7 @@ If no default is provided below, the variable is required to be set.
 in production and dev/test the environments slightly differ. In production we send it by preffered header and api key in
 dev/test we use basic auth.
 
-- STEVE_HOST: (default: "steve")
-- STEVE_PORT: (default: 8180)
+- STEVE_BASE_URL
 - STEVE_AUTH_USERNAME: (default: "admin")
 - STEVE_API_PASSWORD: (default: "1234api")
 - STEVE_FETCH_INTERVAL: (default: 120) Interval to fetch new sessions from SteVe in seconds.
