@@ -17,7 +17,13 @@ const {validateSteveUser} = require('#utils/steve');
 const logger = require('./logger');
 const {db} = require('#utils/queries');
 const {STEVE_CONFIG} = require('#config');
-const {fullyQualifiedUserSchema} = require('#utils/joi');
+
+const validateUserObjectForSteve = (user) => {
+    if (!user || !user.rfid || user.rfid.trim() === '') {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
+    }
+}
+
 
 //TODO: Check everything even the response returned 200 or 201
 /**
@@ -34,9 +40,7 @@ const {fullyQualifiedUserSchema} = require('#utils/joi');
  * @throws {ValidationError|Error} If validation fails or creation fails.
  */
 const createSteveUser = async (user, blocked = false) => {
-    if (!user || !user.rfid || user.rfid.trim() === '') {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
-    }
+    validateUserObjectForSteve(user);
 
     logger.info(`Creating user in Steve with RFID: ${user.rfid}`);
 
@@ -129,10 +133,7 @@ const getSteveUser = async (user_rfid) => {
  * @throws {ValidationError|Error} If input is invalid or block fails.
  */
 const blockSteveUser = async (user) => {
-    const {error} = fullyQualifiedUserSchema.validate(user);
-    if (error) {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, error.message);
-    }
+    validateUserObjectForSteve(user);
 
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
@@ -164,9 +165,8 @@ const blockSteveUser = async (user) => {
  * @throws {ValidationError|Error} If input is invalid or unblock fails.
  */
 const unblockSteveUser = async (user) => {
-    if (!user || !user.rfid || user.rfid.trim() === '') {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
-    }
+    validateUserObjectForSteve(user);
+
     // Check if its already unblocked
     const existing_user = await getSteveUser(user.rfid);
     if (existing_user && existing_user.maxActiveTransactionCount === 1 && existing_user.blocked === false) {
@@ -204,10 +204,7 @@ const unblockSteveUser = async (user) => {
  * @throws {ValidationError|Error} If input is invalid or deletion fails.
  */
 const deleteSteveUser = async (user) => {
-    const {error} = fullyQualifiedUserSchema.validate(user);
-    if (error) {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, error.message);
-    }
+    validateUserObjectForSteve(user);
 
     logger.info(`Deleting user from SteVe with RFID: ${user.rfid} and steve_id: ${user.steve_id}`);
 
