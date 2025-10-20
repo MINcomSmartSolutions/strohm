@@ -135,11 +135,8 @@ const odooPlainAxios = createOdooAxios(false);
  * @throws {SystemError} If required environment variables for authentication are not set.
  */
 const steveAxios = (() => {
-    const username = process.env.STEVE_AUTH_USERNAME;
-    const password = process.env.STEVE_API_PASSWORD;
-    if (!username || !password) {
-        throw new SystemError(ErrorCodes.VALIDATION.MISSING_REQUIRED_FIELD, 'SteVe authentication environment variables are not set. Please check your environment configuration.');
-    }
+    const username = STEVE_CONFIG.HTTP_AUTH_USERNAME;
+    const password = STEVE_CONFIG.HTTP_AUTH_PASSWORD;
 
     const config = {
         baseURL: STEVE_CONFIG.URL,

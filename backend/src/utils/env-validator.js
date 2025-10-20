@@ -96,13 +96,33 @@ const envSchema = Joi.object({
 
     // SteVe Configuration
     STEVE_HOST: Joi.string()
+        .when('STEVE_BASE_URL', {
+            is: Joi.exist(),
+            then: Joi.optional(),
+            otherwise: Joi.required().messages({
+                'any.required': 'STEVE_HOST is required when STEVE_BASE_URL is not provided'
+            })
+        })
         .default('steve'),
     STEVE_PORT: Joi.number()
         .port()
+        .when('STEVE_BASE_URL', {
+            is: Joi.exist(),
+            then: Joi.optional(),
+            otherwise: Joi.required().messages({
+                'any.required': 'STEVE_PORT is required when STEVE_BASE_URL is not provided'
+            })
+        })
         .default(8180),
     STEVE_BASE_URL: Joi.string()
         .uri()
-        .optional(),
+        .when('STEVE_HOST', {
+            is: Joi.exist(),
+            then: Joi.optional(),
+            otherwise: Joi.required().messages({
+                'any.required': 'STEVE_BASE_URL is required when STEVE_HOST is not provided'
+            })
+        }),
     STEVE_AUTH_USERNAME: Joi.string()
         .default('admin'),
     STEVE_API_PASSWORD: Joi.string()

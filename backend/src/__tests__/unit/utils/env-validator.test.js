@@ -118,4 +118,57 @@ describe('Environment Variable Validation', () => {
         process.env = {...validEnv, SERVER_PORT: '99999'};
         expect(() => validateEnv()).toThrow('Environment variable validation failed');
     });
+
+    describe('STEVE Configuration Validation', () => {
+        test('should pass with STEVE_HOST and STEVE_PORT', () => {
+            process.env = {...validEnv};
+            delete process.env.STEVE_BASE_URL;
+            expect(() => validateEnv()).not.toThrow();
+        });
+
+        test('should pass with STEVE_BASE_URL instead of STEVE_HOST and STEVE_PORT', () => {
+            process.env = {...validEnv};
+            delete process.env.STEVE_HOST;
+            delete process.env.STEVE_PORT;
+            process.env.STEVE_BASE_URL = 'http://steve.example.com:8180/steve';
+            expect(() => validateEnv()).not.toThrow();
+        });
+
+        test('should pass with both STEVE_BASE_URL and STEVE_HOST/PORT (STEVE_BASE_URL takes precedence)', () => {
+            process.env = {
+                ...validEnv,
+                STEVE_BASE_URL: 'http://steve.example.com:8180/steve'
+            };
+            expect(() => validateEnv()).not.toThrow();
+        });
+
+        test('should use default values for STEVE_HOST and STEVE_PORT when not provided', () => {
+            process.env = {...validEnv};
+            delete process.env.STEVE_HOST;
+            delete process.env.STEVE_PORT;
+            delete process.env.STEVE_BASE_URL;
+
+            const result = validateEnv();
+            expect(result.STEVE_HOST).toBe('steve');
+            expect(result.STEVE_PORT).toBe(8180);
+        });
+
+        test('should validate STEVE_BASE_URL is a valid URI', () => {
+            process.env = {...validEnv};
+            delete process.env.STEVE_HOST;
+            delete process.env.STEVE_PORT;
+            process.env.STEVE_BASE_URL = 'not-a-valid-uri';
+            expect(() => validateEnv()).toThrow('Environment variable validation failed');
+        });
+
+        test('should use default STEVE_AUTH_USERNAME and STEVE_API_PASSWORD', () => {
+            process.env = {...validEnv};
+            delete process.env.STEVE_AUTH_USERNAME;
+            delete process.env.STEVE_API_PASSWORD;
+
+            const result = validateEnv();
+            expect(result.STEVE_AUTH_USERNAME).toBe('admin');
+            expect(result.STEVE_API_PASSWORD).toBe('1234api');
+        });
+    });
 });
