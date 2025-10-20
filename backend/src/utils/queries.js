@@ -939,6 +939,88 @@ async function updateUser(userId, updates) {
     }
 }
 
+/**
+ * Activates a previously deactivated user.
+ *
+ * @async
+ * @param {Object} user - The user object (must include user_id).
+ * @throws {ValidationError} If required parameters are missing.
+ * @throws {DatabaseError} If activation fails.
+ */
+async function activateUser(user) {
+    if (!user || !user.user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const activate_user_query = `
+        UPDATE users
+        SET deactivated_at = NULL
+        WHERE user_id = $1::integer
+          AND deactivated_at IS NOT NULL
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(activate_user_query, [user.user_id]);
+        if (result.rowCount === 0) {
+            throw new Error('Could not activate user - user may already be active or does not exist');
+        }
+        await client.query('COMMIT');
+        await recordActivityLog(user.user_id, 'ACTIVATE USER', 'DB', user.rfid || 'N/A');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'activateUser');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Deletes a user from the database (hard delete).
+ * WARNING: This permanently removes the user and all associated records.
+ *
+ * @async
+ * @param {Object} user - The user object (must include user_id).
+ * @throws {ValidationError} If required parameters are missing.
+ * @throws {DatabaseError} If deletion fails.
+ */
+async function deleteUser(user) {
+    if (!user || !user.user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const delete_user_query = `
+        DELETE
+        FROM users
+        WHERE user_id = $1::integer
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        // Log before deletion
+        await recordActivityLog(user.user_id, 'DELETE USER', 'DB', user.rfid || 'N/A');
+
+        const result = await client.query(delete_user_query, [user.user_id]);
+        if (result.rowCount === 0) {
+            throw new Error('Could not delete user - user does not exist');
+        }
+        await client.query('COMMIT');
+        logger.info(`User ${user.user_id} deleted from database`);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'deleteUser');
+    } finally {
+        client.release();
+    }
+}
 
 module.exports = {
     db: {
@@ -960,5 +1042,7 @@ module.exports = {
         revokeUserOdooCredentials,
         getUsersCount,
         updateUser,
+        activateUser,
+        deleteUser,
     },
 };
