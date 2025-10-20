@@ -2,7 +2,6 @@ const {
     generateOdooHash,
     generateSalt,
     validateOIDCProperties,
-    createRequestId,
 } = require('#helpers/auth');
 const crypto = require('crypto');
 
@@ -116,23 +115,6 @@ describe('Auth Helper Functions', () => {
             };
             const result = await validateOIDCProperties(req);
             expect(result).toBe(true);
-        });
-    });
-
-    describe('Create Request Id', () => {
-        it('generates an id with timestamp and random suffix', () => {
-            const id = createRequestId();
-            expect(typeof id).toBe('string');
-            const parts = id.split('-');
-            expect(parts.length).toBe(2);
-            expect(/^[0-9]+$/.test(parts[0])).toBe(true); // timestamp
-            expect(/^[a-z0-9]{7}$/.test(parts[1])).toBe(true); // random base36 slice(2,9) -> 7 chars
-        });
-
-        it('generates unique ids on subsequent calls', () => {
-            const a = createRequestId();
-            const b = createRequestId();
-            expect(a).not.toBe(b);
         });
     });
 

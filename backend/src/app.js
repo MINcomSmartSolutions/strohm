@@ -28,7 +28,6 @@ const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
 const {requireConsent} = require('./middlewares/consent');
 const {GLOBAL_CONFIG} = require("#config");
-const {createRequestId} = require("#helpers/auth");
 const {AuthError, ErrorCodes, SystemError} = require("#utils/errors");
 
 Settings.defaultZoneName = 'utc';
@@ -100,8 +99,6 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/', async (req, res) => {
-    const requestId = req.requestId || createRequestId();
-    req.requestId = requestId;
 
     try {
         if (req.oidc.isAuthenticated()) {
@@ -113,34 +110,34 @@ app.get('/', async (req, res) => {
 
                 if (!currentUser) {
                     // User should've been already created but somehow is missing
-                    logger.error(`[${requestId}] Seems user consent --> creation did not worked properly. User with OIDC ID ${oidcUser.sub} not found in DB`);
+                    logger.error(` Seems user consent --> creation did not worked properly. User with OIDC ID ${oidcUser.sub} not found in DB`);
                     throw new AuthError(ErrorCodes.USER.NOT_FOUND);
                 }
                 if (currentUser.user_id !== sessionUser.user_id) {
-                    logger.warn(`[${requestId}] Session user ${sessionUser.user_id} mismatch with database user ${currentUser.user_id}`);
+                    logger.warn(` Session user ${sessionUser.user_id} mismatch with database user ${currentUser.user_id}`);
                     throw new AuthError(ErrorCodes.AUTH.USER_MISMATCH);
                 }
                 if (currentUser.deactivated_at !== null) {
-                    logger.warn(`[${requestId}] User ${currentUser.user_id} is deactivated`);
+                    logger.warn(` User ${currentUser.user_id} is deactivated`);
                     throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
                 }
 
                 try {
-                    logger.debug(`[${requestId}] Getting Odoo portal login for user ${sessionUser.user_id}`);
+                    logger.debug(` Getting Odoo portal login for user ${sessionUser.user_id}`);
                     const redirect_url = await getOdooPortalLogin(sessionUser);
-                    logger.info(`[${requestId}] Redirecting user ${sessionUser.user_id} to Odoo portal`);
+                    logger.info(` Redirecting user ${sessionUser.user_id} to Odoo portal`);
                     return res.redirect(redirect_url);
                 } catch (error) {
-                    logger.error(`[${requestId}] Failed to get Odoo portal login URL:`, error);
+                    logger.error(` Failed to get Odoo portal login URL:`, error);
                     // Caution: Redirecting to "/login, /, /welcome routes creates infinite redirect loop
                     throw new SystemError(ErrorCodes.SYSTEM.UNKNOWN_ERROR, null, error);
                 }
             }
         }
-        logger.debug(`[${requestId}] User not authenticated or no session, redirecting to welcome`);
+        logger.debug(` User not authenticated or no session, redirecting to welcome`);
         return res.redirect('/welcome');
     } catch (error) {
-        logger.error(`[${requestId}] Error in / route handler:`, error);
+        logger.error(` Error in / route handler:`, error);
         appErrorHandler(error, res);
     }
 });
@@ -165,6 +162,22 @@ app.use(odoo_controller);
 
 app.use(scim_controller);
 
+// Dev Admin Routes (only in development/test environments)
+if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+    const dev_admin_controller = require('./controllers/dev_admin');
+
+    logger.info('Dev Admin Panel enabled - available at /dev-admin.html');
+
+    // API routes
+    app.get('/api/dev/users', dev_admin_controller.getAllUsers);
+    app.post('/api/dev/users/:user_id/steve/block', dev_admin_controller.blockUserInSteve);
+    app.post('/api/dev/users/:user_id/steve/unblock', dev_admin_controller.unblockUserInSteve);
+    app.delete('/api/dev/users/:user_id/steve', dev_admin_controller.deleteUserFromSteve);
+    app.post('/api/dev/users/:user_id/db/deactivate', dev_admin_controller.deactivateUserInDB);
+    app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
+    app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);
+    app.post('/api/dev/users/:user_id/odoo/revoke', dev_admin_controller.revokeOdooCredentials);
+}
 
 startCronWithHealthCheck();
 
