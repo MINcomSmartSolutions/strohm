@@ -21,6 +21,15 @@ jest.mock('#utils/queries');
 
 describe('Consent Service', () => {
     let mockClient;
+    const user = {
+        user_id: 111,
+        oauth_id: 'auth0|1234567890',
+        email: 'test@example.com',
+        created_at: new Date(),
+        deactivated_at: null,
+        steve_id: 1,
+        rfid: 'RFID123'
+    }
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -33,6 +42,7 @@ describe('Consent Service', () => {
         pool.connect.mockResolvedValue(mockClient);
         logger.info = jest.fn();
         logger.error = jest.fn();
+
     });
 
     describe('getActiveConsentRevision', () => {
@@ -121,7 +131,7 @@ describe('Consent Service', () => {
                 .mockResolvedValueOnce({rows: [{id: 1}]}) // Latest revision query
                 .mockResolvedValueOnce({rows: [{id: 1}]}); // User consent query
 
-            const result = await hasLatestConsent(userId);
+            const result = await hasLatestConsent(user);
 
             expect(mockClient.query).toHaveBeenCalledTimes(2);
             expect(result).toBe(true);
@@ -131,7 +141,7 @@ describe('Consent Service', () => {
         it('should return false when no active consent revision exists', async () => {
             mockClient.query.mockResolvedValueOnce({rows: []}); // No latest revision
 
-            const result = await hasLatestConsent(userId);
+            const result = await hasLatestConsent(user);
 
             expect(result).toBe(false);
             expect(mockClient.release).toHaveBeenCalled();
@@ -142,7 +152,7 @@ describe('Consent Service', () => {
                 .mockResolvedValueOnce({rows: [{id: 1}]}) // Latest revision exists
                 .mockResolvedValueOnce({rows: []}); // User has not consented
 
-            const result = await hasLatestConsent(userId);
+            const result = await hasLatestConsent(user);
 
             expect(result).toBe(false);
             expect(mockClient.release).toHaveBeenCalled();
@@ -152,7 +162,7 @@ describe('Consent Service', () => {
             const error = new Error('Query failed');
             mockClient.query.mockRejectedValue(error);
 
-            await hasLatestConsent(userId);
+            await hasLatestConsent(user);
 
             expect(db.handleQueryError).toHaveBeenCalledWith(error, 'hasLatestConsent');
             expect(mockClient.release).toHaveBeenCalled();

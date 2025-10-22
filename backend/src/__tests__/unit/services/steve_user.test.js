@@ -386,8 +386,8 @@ describe('Steve User Service', () => {
     });
 
     describe('blockSteveUser', () => {
-        it('should throw error if user is invalid', async () => {
-            const badUser = {user_id: 'not-a-number', rfid: 'test_rfid', steve_id: 999};
+        it('should throw error if rfid is invalid', async () => {
+            const badUser = {user_id: 'not-a-number', rfid: '', steve_id: 999};
 
             await expect(blockSteveUser(badUser)).rejects.toThrow(ValidationError);
             await blockSteveUser(badUser).catch(err => {
@@ -458,7 +458,7 @@ describe('Steve User Service', () => {
     });
 
     describe('unblockSteveUser', () => {
-        it('should throw error if user is invalid', async () => {
+        it('should throw error if rfid is invalid', async () => {
             const badUser = {user_id: 123, rfid: '', steve_id: 999}; // Empty RFID
             await expect(unblockSteveUser(badUser)).rejects.toThrow(ValidationError);
             await unblockSteveUser(badUser).catch(err => {

@@ -143,8 +143,7 @@ describe('Error Utilities', () => {
             const status = error.getStatusCode();
             const resp = error.toResponse();
             const messageWithStatus = `${status} - ${resp.msg}`;
-
-            expect(res.redirect).toHaveBeenCalledWith('/logout?message=' + encodeURIComponent(messageWithStatus) + '&type=error');
+            expect(res.redirect).toHaveBeenCalledWith('/logout?message=' + encodeURIComponent(messageWithStatus) + '&type=error&persistent=true');
         });
 
         it('should handle unknown errors with SystemError', () => {
