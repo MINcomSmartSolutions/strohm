@@ -8,20 +8,21 @@
 const express = require('express');
 const auth_controller = express();
 
-const logger = require('#services/logger');
-
+const {clearSession} = require("#utils/session");
 
 auth_controller.get('/logout', async (req, res) => {
     const reason = req.query.reason || null;
     const type = req.query.type || null;
     const message = req.query.message || null;
+    await clearSession(req);
 
     let notificationData = null;
     if (message && type) {
         notificationData = {
             message: decodeURIComponent(message),
             type: type,
-            title: req.query.title ? decodeURIComponent(req.query.title) : null
+            title: req.query.title ? decodeURIComponent(req.query.title) : null,
+            persistent: req.query.persistent === 'true',
         }
     }
 
@@ -99,26 +100,16 @@ auth_controller.get('/logout', async (req, res) => {
         if (notificationData.title) {
             params.append('title', encodeURIComponent(notificationData.title));
         }
+        if (notificationData.persistent) {
+            params.append('persistent', 'true');
+        }
 
         const returnTo = `/welcome?${params.toString()}`;
-
-        req.session.destroy((err) => {
-            if (err) {
-                logger.error('Error destroying session:', err);
-            }
-        });
 
         return await res.oidc.logout({returnTo: returnTo});
     }
 
-    // Normal logout without notification
-    req.session.destroy((err) => {
-        if (err) {
-            logger.error('Error destroying session:', err);
-        }
-    });
-
-    await res.oidc.logout({returnTo: '/welcome'});
+    await res.oidc.logout();
 });
 
 // OIDC routes are already handled by the express-openid-connect middleware in the app.js file.

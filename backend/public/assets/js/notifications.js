@@ -51,20 +51,23 @@ class NotificationManager {
         const message = params.get('message');
         const type = params.get('type') || 'info';
         const title = params.get('title');
+        const persistent = params.get('persistent') === 'true';
 
         if (message) {
             // Decode and validate before showing
             const decodedMessage = decodeURIComponent(message);
             const validType = this.validateType(type);
             const decodedTitle = title ? decodeURIComponent(title) : null;
+            const duration = persistent ? 0 : 5000;
 
-            this.show(decodedMessage, validType, decodedTitle);
+            this.show(decodedMessage, validType, decodedTitle, duration);
 
             // Clean URL without page reload
             const url = new URL(window.location);
             url.searchParams.delete('message');
             url.searchParams.delete('type');
             url.searchParams.delete('title');
+            url.searchParams.delete('persistent');
             window.history.replaceState({}, '', url);
         }
     }
@@ -139,7 +142,7 @@ class NotificationManager {
         return this.show(message, 'success', title, duration);
     }
 
-    error(message, title = null, duration = 7000) {
+    error(message, title = null, duration = 10000) {
         return this.show(message, 'error', title, duration);
     }
 
@@ -147,7 +150,7 @@ class NotificationManager {
         return this.show(message, 'warning', title, duration);
     }
 
-    info(message, title = null, duration = 5000) {
+    info(message, title = null, duration = 7000) {
         return this.show(message, 'info', title, duration);
     }
 
