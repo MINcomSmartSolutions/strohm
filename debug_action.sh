@@ -89,8 +89,7 @@ required_vars=(
     "ODOO_DB_USER"
     "ODOO_DB_PASSWORD"
     "STEVE_BASE_URL"
-    "STEVE_API_KEY_HEADER"
-    "STEVE_API_KEY"
+    "STEVE_API_PASSWORD"
 )
 
 for var in "${required_vars[@]}"; do
