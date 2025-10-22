@@ -41,6 +41,7 @@ const {userOperations} = require('#services/user_operations');
 const {validateOIDCProperties} = require('#helpers/auth');
 const {db} = require('#utils/queries');
 const {initializeConsent} = require("#utils/init-consent");
+const {ensureAuthenticated} = require("#middlewares/ensureAuthenticated");
 
 
 /**
@@ -83,40 +84,19 @@ const {initializeConsent} = require("#utils/init-consent");
  * @see {@link module:services/consent.getActiveConsentRevision} For consent retrieval
  * @see {@link module:services/consent.hasLatestConsent} For consent validation
  */
-consent_controller.get('/consent', async (req, res) => {
+consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
     const sessionId = req.sessionId || req.sessionID || 'no-session';
     req.sessionId = sessionId;
     const log = logger.withSession(sessionId);
 
     try {
-        const sessionUser = req.session ? req.session.user : null;
-
-        // In this point either we need to have a valid user session or OIDC properties
-        // If neither is present, redirect to logout to clear any invalid state
-        if (!sessionUser && !(req.oidc && req.oidc.isAuthenticated())) {
-            log.warn('No user session or OIDC authentication found');
-            return res.redirect('/logout?reason=invalid_session');
-        }
-
-        if (!await validateOIDCProperties(req)) {
-            log.error('OIDC validation failed in consent GET');
-            throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
-        }
-
-        // Get user info from OIDC session (now validated)
-        const oidcUser = req.oidc.user;
-
-        let user = await db.getUserUnique({oauth_id: oidcUser.sub});
-
-        // Check if user already has latest consent. Here would not be reached because the middleware already checks it,
-        // but in case someone disables the middleware for /consent route, this double-check ensures safety.
-        if (user) {
-            if (sessionUser) {
-                const hasConsent = await hasLatestConsent(sessionUser.user_id);
-                if (hasConsent) {
-                    log.debug(`User ${sessionUser.user_id} has already latest consent`);
-                    return res.redirect('/');
-                }
+        // Check if user already has latest consent
+        // This is a safety check - normally they wouldn't reach here if they have consent
+        if (req.user) {
+            const hasConsent = await hasLatestConsent(req.user);
+            if (hasConsent) {
+                log.debug(`User ${req.user.user_id} already has latest consent`);
+                return res.redirect('/');
             }
         }
 
@@ -129,7 +109,7 @@ consent_controller.get('/consent', async (req, res) => {
                 return res.redirect('/logout?reason=consent_system_error')
             }
         }
-        log.debug('Rendering consent page for user:', sessionUser ? sessionUser.user_id : ['not logged in']);
+        log.debug('Rendering consent page for user:', req.user ? req.user.user_id : ['new user']);
 
         // Read the HTML template file
         const templatePath = path.join(__dirname, '../../public/consent/consent.html');
@@ -229,17 +209,12 @@ consent_controller.get('/consent', async (req, res) => {
  * @see {@link module:services/consent.getActiveConsentRevision} For consent retrieval
  * @see {@link module:services/consent.recordConsent} For audit trail recording
  */
-consent_controller.post('/consent', async (req, res) => {
+consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
     const sessionId = req.sessionId || req.sessionID || 'no-session';
     req.sessionId = sessionId;
     const log = logger.withSession(sessionId);
 
     try {
-        if (!await validateOIDCProperties(req)) {
-            log.error('OIDC validation failed in consent POST');
-            throw new AuthError(ErrorCodes.AUTH.USER_INVALID);
-        }
-
         const {consent_given, consent_version} = req.body;
 
         if (!consent_given) {
@@ -247,7 +222,7 @@ consent_controller.post('/consent', async (req, res) => {
             return res.redirect('/logout?reason=consent_declined');
         }
 
-        // Get user info from OIDC session (now validated)
+        // Get user info from OIDC session (already validated by ensureAuthenticated)
         const oidcUser = req.oidc.user;
 
         log.info(`Creating user and external system accounts for oauth_id: ${oidcUser.sub}`);
@@ -256,10 +231,8 @@ consent_controller.post('/consent', async (req, res) => {
         // This also creates Odoo and Steve users if they don't exist
         const user = await userOperations(oidcUser);
 
-        // Do we have to check for existing consent here again, because the request couldn't have reached here if thay had the latest consent
-        // unless the middleware was disabled for this route. But just in case, we double-check.
-        // This also prevents multiple consent records for the same user if they submit the form multiple times.
-        const hasConsent = await hasLatestConsent(user.user_id);
+        // Double-check if user already has latest consent
+        const hasConsent = await hasLatestConsent(user);
         if (hasConsent) {
             log.info(`User ${user.user_id} already has latest consent, redirecting to home page`);
             return res.redirect('/');
@@ -284,14 +257,12 @@ consent_controller.post('/consent', async (req, res) => {
         const userAgent = req.get('User-Agent');
 
         log.info(`Recording consent for user ${user.user_id}`);
-        const consentRecord = await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
+        await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
 
-        // Store user in session with consent info
-        req.session.user = {
-            ...user,
-            consent_version: activeConsent.version,
-            consent_granted_at: consentRecord.consented_at
-        };
+        // Update req.user and session to reflect the newly created user
+        // (userOperations might have just created this user)
+        req.user = user;
+        req.session.user = user;
 
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
@@ -358,13 +329,14 @@ consent_controller.post('/consent', async (req, res) => {
  *
  * @see {@link module:services/consent.withdrawConsent} For GDPR-compliant withdrawal
  */
-consent_controller.post('/consent/withdraw', async (req, res) => {
+consent_controller.post('/consent/withdraw', ensureAuthenticated, async (req, res) => {
     try {
-        if (!req.oidc.isAuthenticated() || !req.session.user) {
-            return res.status(401);
+        // ensureAuthenticated middleware ensures req.user exists
+        if (!req.user) {
+            return res.status(401).json({error: 'User not authenticated'});
         }
 
-        const success = await withdrawConsent(req.session.user.user_id);
+        const success = await withdrawConsent(req.user.user_id);
 
         if (success) {
             // Clear session and redirect to logout with notification

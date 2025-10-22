@@ -29,6 +29,7 @@
 const pool = require('./db_conn');
 const logger = require('./logger');
 const {db} = require('#utils/queries');
+const {SystemError, ErrorCodes} = require("#utils/errors");
 
 
 /**
@@ -137,7 +138,7 @@ const hasValidConsent = async (userId) => {
  *
  * @async
  * @function hasLatestConsent
- * @param {number} userId - Unique identifier for the user
+ * @param {User} user - User object containing at least the user_id property
  * @returns {Promise<boolean>} True if user has consented to the latest revision, false otherwise
  *
  * @throws {Error} Database connection or query errors (handled via db.handleQueryError)
@@ -156,7 +157,11 @@ const hasValidConsent = async (userId) => {
  *
  * @see {@link hasValidConsent} For checking any valid consent (not necessarily latest)
  */
-const hasLatestConsent = async (userId) => {
+const hasLatestConsent = async (user) => {
+    if (!user || !user.user_id) {
+        throw new SystemError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'Invalid user object provided to hasLatestConsent');
+    }
+
     const client = await pool.connect();
     try {
         // Get the latest active consent revision
@@ -185,7 +190,7 @@ const hasLatestConsent = async (userId) => {
               AND consent_revision_id = $2::integer
               AND is_withdrawn = false
             LIMIT 1
-        `, [userId, latestRevisionId]);
+        `, [user.user_id, latestRevisionId]);
 
         return userConsent.rows.length > 0;
     } catch (error) {

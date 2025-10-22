@@ -3,8 +3,10 @@
  * @file Helper functions for authentication and security.
  */
 const crypto = require('crypto');
-const {ValidationError, ErrorCodes} = require('#utils/errors');
+const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const logger = require('#services/logger');
+const {GLOBAL_CONFIG} = require("#config");
+const {get} = require("axios");
 
 
 /**
@@ -55,11 +57,6 @@ async function validateOIDCProperties(req) {
     try {
         const oidcSet = req.oidc;
 
-        // First check and most important: Is the user trusted by the OIDC library?
-        if (!oidcSet.isAuthenticated()) {
-            return false;
-        }
-
         let accessToken = oidcSet.accessToken; // OIDC token object, not just the string
         // Check if the acces token is expired, and if it is refresh it
         if (accessToken.isExpired()) {
@@ -83,13 +80,66 @@ async function validateOIDCProperties(req) {
     }
 }
 
-function createRequestId() {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+/**
+ * Cache for OIDC discovery configuration
+ * Security: TTL of 24 hours prevents using stale/compromised endpoints indefinitely
+ * while avoiding frequent network calls
+ * OIDC discovery cache is overkill for most use cases but adds resilience.
+ */
+let oidcDiscoveryCache = {
+    data: null,
+    fetchedAt: null,
+    ttl: GLOBAL_CONFIG.OIDC.DISCOVERY_CACHE_TTL,
+};
+
+/**
+ * Fetches and caches the OIDC discovery configuration
+ * @returns {Promise<Object>} OIDC discovery document
+ * @throws {SystemError} If fetch fails
+ */
+async function getOidcDiscovery() {
+    const now = Date.now();
+
+    // Return cached data if valid
+    if (oidcDiscoveryCache.data && oidcDiscoveryCache.fetchedAt) {
+        const age = now - oidcDiscoveryCache.fetchedAt;
+        if (age < oidcDiscoveryCache.ttl) {
+            return oidcDiscoveryCache.data;
+        }
+    }
+
+    // Fetch fresh configuration
+    try {
+        const response = await get(
+            process.env.SERVER_OIDC_ISSUER_BASE_URL + '/.well-known/openid-configuration',
+            {
+                timeout: 5000, // 5 second timeout for security
+                validateStatus: (status) => status === 200,
+            }
+        );
+
+        // Update cache
+        oidcDiscoveryCache.data = response.data;
+        oidcDiscoveryCache.fetchedAt = now;
+
+        return response.data;
+    } catch (error) {
+        // If we have stale cache and fetch fails, use stale cache as fallback
+        if (oidcDiscoveryCache.data) {
+            console.warn('OIDC discovery fetch failed, using stale cache as fallback');
+            return oidcDiscoveryCache.data;
+        }
+        throw new SystemError(
+            ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE,
+            'Failed to fetch OIDC specifications',
+            error
+        );
+    }
 }
 
 module.exports = {
     generateOdooHash,
     generateSalt,
     validateOIDCProperties,
-    createRequestId,
+    getOidcDiscovery,
 };
