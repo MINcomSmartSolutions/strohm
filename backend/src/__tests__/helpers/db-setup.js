@@ -8,6 +8,11 @@ const {execSync} = require('child_process');
  * Initialize a clean test database for integration tests
  */
 const setupTestDatabase = async () => {
+
+    if (!process.env.STROHM_DB_USER || !process.env.STROHM_DB_HOST || !process.env.STROHM_DB_NAME || !process.env.STROHM_DB_PASSWORD || !process.env.STROHM_DB_PORT) {
+        throw new Error('Database environment variables are not set. Please check your test.env file.');
+    }
+
     try {
         // Make sure the initialization script is executable
         execSync('chmod +x ./src/__tests__/helpers/db-init.sh', {
@@ -67,16 +72,15 @@ const clearTestData = async (pool) => {
 /**
  * Insert test data for a standard test user
  * @param {Pool} pool - Database connection pool
- * @param {Object} customData - Optional custom user data to override defaults
  * @returns {Object} - Created test user
  */
-const insertTestUser = async (pool, customData = {}) => {
+const insertTestUser = async (pool) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // Default test user values
-        const defaultUser = {
+        // Insert a test user with predefined values
+        const fullQualifiedUser = {
+            user_id: 123,
             name: 'Test User',
             email: 'test@example.com',
             odoo_user_id: 789,
@@ -86,21 +90,19 @@ const insertTestUser = async (pool, customData = {}) => {
             steve_id: 999,
         };
 
-        // Merge custom data with defaults
-        const userData = {...defaultUser, ...customData};
-
         const userResult = await client.query(`
-            INSERT INTO users (name, email, odoo_user_id, odoo_partner_id, oauth_id, rfid, steve_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO users (user_id, name, email, odoo_user_id, odoo_partner_id, oauth_id, rfid, steve_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         `, [
-            userData.name,
-            userData.email,
-            userData.odoo_user_id,
-            userData.odoo_partner_id,
-            userData.oauth_id,
-            userData.rfid,
-            userData.steve_id,
+            fullQualifiedUser.user_id,
+            fullQualifiedUser.name,
+            fullQualifiedUser.email,
+            fullQualifiedUser.odoo_user_id,
+            fullQualifiedUser.odoo_partner_id,
+            fullQualifiedUser.oauth_id,
+            fullQualifiedUser.rfid,
+            fullQualifiedUser.steve_id,
         ]);
         const user = userResult.rows[0];
 
@@ -236,18 +238,11 @@ const closePool = async (pool) => {
  */
 const teardownTestEnvironment = async () => {
     try {
-        // Force stop and remove container (ignore errors if container doesn't exist)
-        execSync('docker stop db-test 2>/dev/null || true', {
-            stdio: 'pipe',
-            shell: '/bin/bash',
-        });
-        execSync('docker rm -f db-test 2>/dev/null || true', {
-            stdio: 'pipe',
-            shell: '/bin/bash',
+        execSync('docker stop db-test', {
+            stdio: 'inherit',
         });
     } catch (error) {
-        // Silently ignore errors - container might not exist
-        // This is expected behavior during cleanup
+        console.error('Error tearing down test environment:', error);
     }
 };
 
