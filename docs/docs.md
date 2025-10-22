@@ -26,6 +26,11 @@ service that bypass the centralized queries.js mechanism:</p>
 <li><code>hasLatestConsent()</code> - Optimized consent validation queries</li>
 </ul>
 </dd>
+<dt><a href="#module_controllers/dev_admin">controllers/dev_admin</a></dt>
+<dd><p>Dev Admin Controller</p>
+<p>Provides admin endpoints for managing users across SteVe, Odoo, and Database
+WARNING: These endpoints should only be available in development/test environments</p>
+</dd>
 <dt><a href="#module_controllers/odoo">controllers/odoo</a></dt>
 <dd><p>Controller for handling Odoo internal user sync webhooks.</p>
 </dd>
@@ -35,15 +40,23 @@ service that bypass the centralized queries.js mechanism:</p>
 <dt><a href="#module_middlewares/consent">middlewares/consent</a></dt>
 <dd><p>Middleware for checking user consent status and enforcing consent requirements.</p>
 <p>This middleware ensures that authenticated users have provided valid consent
-before accessing protected routes. It handles consent validation, user session
-management, and automatic redirection to consent pages when needed.</p>
-<p>The middleware integrates with OIDC authentication and maintains an audit
-trail of consent decisions while providing flexible route exclusions.</p>
+before accessing protected routes. It performs ONLY consent validation and
+relies on the ensureAuthenticated middleware running first.</p>
+<p><strong>SINGLE RESPONSIBILITY</strong>: This middleware ONLY checks consent status.
+Authentication must be handled by ensureAuthenticated middleware before this runs.</p>
 <p><strong>ARCHITECTURAL INTEGRATION</strong>: This middleware leverages the consent service
 which uses direct database connections instead of the standard <code>db.[query]</code>
 pattern used elsewhere in the application. This design choice provides
 enhanced audit capabilities and specialized transaction handling for
 GDPR compliance requirements.</p>
+</dd>
+<dt><a href="#module_middlewares/ensureAuthenticated">middlewares/ensureAuthenticated</a></dt>
+<dd><p>Middleware for ensuring user authentication via OIDC and loading user data.</p>
+<p>This middleware validates OIDC authentication and ensures that the user exists
+in the application database. It acts as the authentication layer that must pass
+before any authorization checks (like consent) are performed.</p>
+<p><strong>SINGLE RESPONSIBILITY</strong>: This middleware ONLY handles authentication.
+It does NOT check consent or other authorization concerns.</p>
 </dd>
 <dt><a href="#module_services/consent">services/consent</a></dt>
 <dd><p>Service for handling user consent operations and consent revision management.</p>
@@ -74,6 +87,7 @@ database queries for specialized consent management requirements.</p>
 <li>Schedules a job to run every 20 second.</li>
 <li>Calls runIncremental to fetch new transactions.</li>
 <li>Logs the result after each execution.</li>
+<li>Monitors SteVe health and automatically stops/starts cron job based on availability.</li>
 </ul>
 </dd>
 <dt><a href="#module_services/logger">services/logger</a> : <code>winston</code></dt>
@@ -117,6 +131,13 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 <dt><a href="#module_services/user_operations">services/user_operations</a></dt>
 <dd><p>Service for checking overall user integrity and creating users with proper links to external systems.</p>
 </dd>
+<dt><a href="#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_">utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.</a></dt>
+<dd><p>Environment variable validation</p>
+</dd>
 <dt><a href="#module_utils/oidc_config">utils/oidc_config</a></dt>
 <dd><p>OIDC configuration for authentication middleware.</p>
 <ul>
@@ -150,6 +171,17 @@ Handles CRUD operations for users via SCIM protocol</p>
 </dd>
 </dl>
 
+## Members
+
+<dl>
+<dt><a href="#oidcDiscoveryCache">oidcDiscoveryCache</a></dt>
+<dd><p>Cache for OIDC discovery configuration
+Security: TTL of 24 hours prevents using stale/compromised endpoints indefinitely
+while avoiding frequent network calls
+OIDC discovery cache is overkill for most use cases but adds resilience.</p>
+</dd>
+</dl>
+
 ## Objects
 
 <dl>
@@ -180,12 +212,15 @@ Errors are grouped by category and include codes, HTTP status codes, and message
 <dt><a href="#generateOdooHash">generateOdooHash(message, secret)</a> ⇒ <code>string</code></dt>
 <dd><p>Generate HMAC signature matching Odoo implementation</p>
 </dd>
-<dt><a href="#generateSalt">generateSalt(length)</a> ⇒ <code>string</code></dt>
+<dt><a href="#generateSalt">generateSalt(bytes)</a> ⇒ <code>string</code></dt>
 <dd><p>Generate a cryptographically secure random salt</p>
 </dd>
 <dt><a href="#validateOIDCProperties">validateOIDCProperties(req)</a> ⇒ <code>boolean</code></dt>
 <dd><p>Validates that the OIDC authentication properties like access token and user info are present.
 Most of the checks are done by the OIDC library, but we add some little extra checks.</p>
+</dd>
+<dt><a href="#getOidcDiscovery">getOidcDiscovery()</a> ⇒ <code>Promise.&lt;Object&gt;</code></dt>
+<dd><p>Fetches and caches the OIDC discovery configuration</p>
 </dd>
 <dt><a href="#identifyUser">identifyUser(identifier, options)</a> ⇒ <code>Promise.&lt;Object&gt;</code></dt>
 <dd><p>Gets a user by either user_id or oauth_id</p>
@@ -238,6 +273,73 @@ service that bypass the centralized queries.js mechanism:
 - [services/consent](#module_services/consent) For underlying consent operations
 - [middlewares/consent](#module_middlewares/consent) For consent enforcement middleware
 
+<a name="module_controllers/dev_admin"></a>
+
+## controllers/dev\_admin
+Dev Admin Controller
+
+Provides admin endpoints for managing users across SteVe, Odoo, and Database
+WARNING: These endpoints should only be available in development/test environments
+
+
+* [controllers/dev_admin](#module_controllers/dev_admin)
+    * [~getAllUsers()](#module_controllers/dev_admin..getAllUsers)
+    * [~blockUserInSteve()](#module_controllers/dev_admin..blockUserInSteve)
+    * [~unblockUserInSteve()](#module_controllers/dev_admin..unblockUserInSteve)
+    * [~deleteUserFromSteve()](#module_controllers/dev_admin..deleteUserFromSteve)
+    * [~deactivateUserInDB()](#module_controllers/dev_admin..deactivateUserInDB)
+    * [~activateUserInDB()](#module_controllers/dev_admin..activateUserInDB)
+    * [~deleteUserFromDB()](#module_controllers/dev_admin..deleteUserFromDB)
+    * [~revokeOdooCredentials()](#module_controllers/dev_admin..revokeOdooCredentials)
+
+<a name="module_controllers/dev_admin..getAllUsers"></a>
+
+### controllers/dev_admin~getAllUsers()
+Get all users with their status across all systems
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..blockUserInSteve"></a>
+
+### controllers/dev_admin~blockUserInSteve()
+Block user in SteVe
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..unblockUserInSteve"></a>
+
+### controllers/dev_admin~unblockUserInSteve()
+Unblock user in SteVe
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..deleteUserFromSteve"></a>
+
+### controllers/dev_admin~deleteUserFromSteve()
+Delete user from SteVe
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..deactivateUserInDB"></a>
+
+### controllers/dev_admin~deactivateUserInDB()
+Deactivate user in database
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..activateUserInDB"></a>
+
+### controllers/dev_admin~activateUserInDB()
+Activate user in database
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..deleteUserFromDB"></a>
+
+### controllers/dev_admin~deleteUserFromDB()
+Delete user from database (PERMANENT - USE WITH CAUTION)
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/dev_admin..revokeOdooCredentials"></a>
+
+### controllers/dev_admin~revokeOdooCredentials()
+Revoke Odoo credentials for user
+
+**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
 <a name="module_controllers/odoo"></a>
 
 ## controllers/odoo
@@ -307,11 +409,11 @@ Redirects to a URL with notification parameters
 Middleware for checking user consent status and enforcing consent requirements.
 
 This middleware ensures that authenticated users have provided valid consent
-before accessing protected routes. It handles consent validation, user session
-management, and automatic redirection to consent pages when needed.
+before accessing protected routes. It performs ONLY consent validation and
+relies on the ensureAuthenticated middleware running first.
 
-The middleware integrates with OIDC authentication and maintains an audit
-trail of consent decisions while providing flexible route exclusions.
+**SINGLE RESPONSIBILITY**: This middleware ONLY checks consent status.
+Authentication must be handled by ensureAuthenticated middleware before this runs.
 
 **ARCHITECTURAL INTEGRATION**: This middleware leverages the consent service
 which uses direct database connections instead of the standard `db.[query]`
@@ -321,48 +423,64 @@ GDPR compliance requirements.
 
 **See**
 
+- [middlewares/ensureAuthenticated](#module_middlewares/ensureAuthenticated) Must run before this middleware
 - [services/consent](#module_services/consent) For underlying consent operations
 - [controllers/consent](#module_controllers/consent) For consent page handling
 
 <a name="module_middlewares/consent..requireConsent"></a>
 
 ### middlewares/consent~requireConsent(req, res, next) ⇒ <code>void</code>
-Middleware Flow:
-1. **Route Filtering**: Checks if current route should skip consent validation
-   - Skipped routes: /consent, /logout, /health, /welcome, /login, /callback, /scim, /assets, /favicon
-2. **OIDC Validation**: Validates OIDC authentication properties via `validateOIDCProperties()`
-   - Redirects to /logout if validation fails
-3. **User Resolution**: Queries database directly using `db.getUserUnique()` (standard pattern)
-   - Updates session with user data if user exists via `userOperations()`
-4. **Session Management**: Ensures authenticated users have proper session state
-5. **Consent Validation**: Uses `hasLatestConsent()` to check current consent status
-   - Redirects to /consent page if consent is missing or outdated
-6. **Access Control**: Allows or denies access based on consent status
+Consent Validation Flow:
+1. Check if user exists (req.user is populated)
+2. If user exists:
+   - Check if they have latest consent via `hasLatestConsent()`
+   - If no consent, redirect to /consent
+   - If has consent, call next()
+3. If user doesn't exist (new user):
+   - Redirect to /consent (they need to give consent first)
 
 **Kind**: inner method of [<code>middlewares/consent</code>](#module_middlewares/consent)  
-**Returns**: <code>void</code> - Calls next() to continue middleware chain or redirects user  
-**Throws**:
-
-- <code>Error</code> Logs errors but does not throw to prevent application blocking
-
+**Returns**: <code>void</code> - Calls next() to continue middleware chain or redirects to /consent  
 **Security**: Security Considerations:
-- Always validates OIDC properties before proceeding
-- Gracefully handles errors to prevent application blocking
-- Maintains session integrity during user operations
 - Enforces consent requirements for data protection compliance
 - Provides audit trail through comprehensive logging
-- Integrates with consent service's specialized audit capabilities  
-**Performance**: Performance Notes:
-- Efficient route filtering prevents unnecessary database calls
-- Caches user data in session to reduce database queries
-- Fails gracefully without blocking application flow
-- Minimal overhead for skipped routes
-- Leverages consent service's optimized consent checking queries  
+- On error, redirects to logout to prevent unauthorized access  
 **See**
 
-- [module:services/consent.getActiveConsentRevision](module:services/consent.getActiveConsentRevision) For active consent retrieval
+- [middlewares/ensureAuthenticated](#module_middlewares/ensureAuthenticated) Must run before this middleware
 - [module:services/consent.hasLatestConsent](module:services/consent.hasLatestConsent) For consent validation logic
 
+<a name="module_middlewares/ensureAuthenticated"></a>
+
+## middlewares/ensureAuthenticated
+Middleware for ensuring user authentication via OIDC and loading user data.
+
+This middleware validates OIDC authentication and ensures that the user exists
+in the application database. It acts as the authentication layer that must pass
+before any authorization checks (like consent) are performed.
+
+**SINGLE RESPONSIBILITY**: This middleware ONLY handles authentication.
+It does NOT check consent or other authorization concerns.
+
+<a name="module_middlewares/ensureAuthenticated..ensureAuthenticated"></a>
+
+### middlewares/ensureAuthenticated~ensureAuthenticated(req, res, next) ⇒ <code>void</code>
+Authentication Flow:
+1. Validate OIDC properties (token validity, expiration, etc.)
+2. Query database for user by oauth_id
+3. If user exists:
+   - Load user into req.user
+   - Synchronize session if needed
+   - Call next()
+4. If user doesn't exist:
+   - This means they haven't given consent yet
+   - They'll be handled by consent middleware later
+   - Still call next() to allow access to /consent route
+5. If OIDC validation fails:
+   - Clear session and redirect to welcome page
+
+**Kind**: inner method of [<code>middlewares/ensureAuthenticated</code>](#module_middlewares/ensureAuthenticated)  
+**Returns**: <code>void</code> - Calls next() on success or redirects on failure  
 <a name="module_services/consent"></a>
 
 ## services/consent
@@ -392,7 +510,7 @@ This approach provides:
 * [services/consent](#module_services/consent)
     * [~getActiveConsentRevision()](#module_services/consent..getActiveConsentRevision) ⇒ <code>Promise.&lt;(db\_consent\_revision\|null)&gt;</code>
     * [~hasValidConsent(userId)](#module_services/consent..hasValidConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
-    * [~hasLatestConsent(userId)](#module_services/consent..hasLatestConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
+    * [~hasLatestConsent(user)](#module_services/consent..hasLatestConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod])](#module_services/consent..recordConsent) ⇒ <code>Promise.&lt;db\_user\_consent&gt;</code>
     * [~withdrawConsent(userId)](#module_services/consent..withdrawConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~getUserConsentHistory(userId)](#module_services/consent..getUserConsentHistory) ⇒ <code>Promise.&lt;Array.&lt;db\_user\_consent&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
@@ -432,18 +550,9 @@ For ensuring users have the most recent consent, use `hasLatestConsent()` instea
 - <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
 
 **See**: [hasLatestConsent](hasLatestConsent) For checking consent to the most recent revision  
-**Example**  
-```js
-const isValid = await hasValidConsent(123);
-if (isValid) {
-  console.log('User has valid consent');
-} else {
-  console.log('User needs to provide consent');
-}
-```
 <a name="module_services/consent..hasLatestConsent"></a>
 
-### services/consent~hasLatestConsent(userId) ⇒ <code>Promise.&lt;boolean&gt;</code>
+### services/consent~hasLatestConsent(user) ⇒ <code>Promise.&lt;boolean&gt;</code>
 Validation Process:
 1. **Latest Revision Lookup**: Finds the most recent active, non-optional consent revision
 2. **Consent Verification**: Checks if user has specifically consented to this revision
@@ -552,7 +661,32 @@ Cron job service for periodic transaction fetching.
 - Schedules a job to run every 20 second.
 - Calls runIncremental to fetch new transactions.
 - Logs the result after each execution.
+- Monitors SteVe health and automatically stops/starts cron job based on availability.
 
+
+* [services/cron](#module_services/cron)
+    * [~startCronWithHealthCheck()](#module_services/cron..startCronWithHealthCheck)
+    * [~stopCronWithHealthCheck()](#module_services/cron..stopCronWithHealthCheck)
+    * [~getCronStatus()](#module_services/cron..getCronStatus) ⇒ <code>Object</code>
+
+<a name="module_services/cron..startCronWithHealthCheck"></a>
+
+### services/cron~startCronWithHealthCheck()
+Start the transaction fetch cron job with health monitoring
+
+**Kind**: inner method of [<code>services/cron</code>](#module_services/cron)  
+<a name="module_services/cron..stopCronWithHealthCheck"></a>
+
+### services/cron~stopCronWithHealthCheck()
+Stop the transaction fetch cron job and health monitoring
+
+**Kind**: inner method of [<code>services/cron</code>](#module_services/cron)  
+<a name="module_services/cron..getCronStatus"></a>
+
+### services/cron~getCronStatus() ⇒ <code>Object</code>
+Get cron job status
+
+**Kind**: inner method of [<code>services/cron</code>](#module_services/cron)  
 <a name="module_services/logger"></a>
 
 ## services/logger : <code>winston</code>
@@ -571,6 +705,9 @@ Network service module for external API clients.
     * [~odooAuthedAxios](#module_services/network..odooAuthedAxios) : <code>AxiosInstance</code>
     * [~odooPlainAxios](#module_services/network..odooPlainAxios) : <code>AxiosInstance</code>
     * [~steveAxios](#module_services/network..steveAxios)
+    * [~getSteveHealth()](#module_services/network..getSteveHealth) ⇒ <code>Object</code>
+    * [~updateSteveHealth(isHealthy, error)](#module_services/network..updateSteveHealth)
+    * [~checkSteveHealth()](#module_services/network..checkSteveHealth) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~createOdooAxios([includeAuth])](#module_services/network..createOdooAxios) ⇒ <code>AxiosInstance</code>
 
 <a name="module_services/network..odooAuthedAxios"></a>
@@ -599,6 +736,24 @@ The configuration depends on the environment:
 
 - <code>SystemError</code> If required environment variables for authentication are not set.
 
+<a name="module_services/network..getSteveHealth"></a>
+
+### services/network~getSteveHealth() ⇒ <code>Object</code>
+Get SteVe health status
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
+<a name="module_services/network..updateSteveHealth"></a>
+
+### services/network~updateSteveHealth(isHealthy, error)
+Update SteVe health status
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
+<a name="module_services/network..checkSteveHealth"></a>
+
+### services/network~checkSteveHealth() ⇒ <code>Promise.&lt;boolean&gt;</code>
+Check SteVe connection health
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
 <a name="module_services/network..createOdooAxios"></a>
 
 ### services/network~createOdooAxios([includeAuth]) ⇒ <code>AxiosInstance</code>
@@ -755,6 +910,7 @@ Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/i
 Stop reasons that indicate a transaction is temporarily stopped/paused
 and should not be billed yet (may resume later).
 According to OCPP1.6 spec
+For now we do not handle any temporary stop reasons differently. Bill the transaction if it has stopTimestamp.
 
 **Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..PERMANENT_STOP_REASONS"></a>
@@ -763,6 +919,7 @@ According to OCPP1.6 spec
 Stop reasons that indicate a permanent transaction end
 and should be processed for billing.
 According to OCPP1.6 spec
+For now we do not handle any temporary stop reasons differently. Bill the transaction if it has stopTimestamp.
 
 **Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..fetchTxnsSince"></a>
@@ -829,6 +986,7 @@ All functions validate input and handle errors using custom error types.
     * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(Array.&lt;Object&gt;\|null)&gt;</code>
     * [~blockSteveUser(user)](#module_services/steve_user..blockSteveUser)
     * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser)
+    * [~deleteSteveUser(user)](#module_services/steve_user..deleteSteveUser)
 
 <a name="module_services/steve_user..createSteveUser"></a>
 
@@ -880,6 +1038,17 @@ Validates input, updates the user, checks the unblock status, and logs the actio
 
 - <code>ValidationError</code><code>Error</code> If input is invalid or unblock fails.
 
+<a name="module_services/steve_user..deleteSteveUser"></a>
+
+### services/steve_user~deleteSteveUser(user)
+Deletes a user from SteVe by their steve_id.
+Validates input, deletes the user, and logs the action.
+
+**Kind**: inner method of [<code>services/steve\_user</code>](#module_services/steve_user)  
+**Throws**:
+
+- <code>ValidationError</code><code>Error</code> If input is invalid or deletion fails.
+
 <a name="module_services/user_operations"></a>
 
 ## services/user\_operations
@@ -897,6 +1066,79 @@ Handles user creation and linking with external systems.
 
 **Kind**: inner method of [<code>services/user\_operations</code>](#module_services/user_operations)  
 **Returns**: <code>Promise.&lt;Object&gt;</code> - User object from the database.  
+<a name="utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_"></a>
+
+## utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.
+Environment variable validation
+
+
+* [utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_)
+    * [~envSchema](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_..envSchema)
+    * [~validateEnv()](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_..validateEnv) ⇒ <code>Object</code>
+    * [~validateEnvOrExit()](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_..validateEnvOrExit)
+
+<a name="utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_..envSchema"></a>
+
+### utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.~envSchema
+Schema for environment variable validation
+
+**Kind**: inner constant of [<code>utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.</code>](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_)  
+<a name="utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_..validateEnv"></a>
+
+### utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.~validateEnv() ⇒ <code>Object</code>
+Validates environment variables against the schema
+
+**Kind**: inner method of [<code>utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.</code>](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_)  
+**Returns**: <code>Object</code> - Validated and sanitized environment variables  
+**Throws**:
+
+- <code>Error</code> If validation fails
+
+<a name="utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_..validateEnvOrExit"></a>
+
+### utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.~validateEnvOrExit()
+Validates environment variables and exits process if validation fails
+Call this at the very beginning of your application
+
+**Kind**: inner method of [<code>utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.</code>](#utils/env-validator
+
+Validates all required environment variables at startup to catch configuration issues early.module_)  
 <a name="module_utils/oidc_config"></a>
 
 ## utils/oidc\_config
@@ -926,6 +1168,8 @@ Global database queries
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>Promise.&lt;number&gt;</code> \| <code>null</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
+    * [~activateUser(user)](#module_utils/queries..activateUser)
+    * [~deleteUser(user)](#module_utils/queries..deleteUser)
 
 <a name="module_utils/queries..handleQueryError"></a>
 
@@ -1073,6 +1317,29 @@ Get total count of users matching the given filters
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Returns**: <code>Promise.&lt;number&gt;</code> - Total count of matching users  
+<a name="module_utils/queries..activateUser"></a>
+
+### utils/queries~activateUser(user)
+Activates a previously deactivated user.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Throws**:
+
+- <code>ValidationError</code> If required parameters are missing.
+- <code>DatabaseError</code> If activation fails.
+
+<a name="module_utils/queries..deleteUser"></a>
+
+### utils/queries~deleteUser(user)
+Deletes a user from the database (hard delete).
+WARNING: This permanently removes the user and all associated records.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Throws**:
+
+- <code>ValidationError</code> If required parameters are missing.
+- <code>DatabaseError</code> If deletion fails.
+
 <a name="module_utils/steve"></a>
 
 ## utils/steve
@@ -1216,6 +1483,8 @@ Type definitions
 | consent_method | <code>string</code> | Method by which consent was obtained (e.g., "web", "mobile") |
 | is_withdrawn | <code>boolean</code> | Indicates if the user has withdrawn consent |
 | withdrawn_at | <code>Date</code> | Timestamp when consent was withdrawn (null if not withdrawn) |
+| effective_from | <code>Date</code> | Timestamp when the consent became effective |
+| updated_at | <code>Date</code> | Timestamp when the consent record was last updated |
 
 <a name="module_app"></a>
 
@@ -1279,6 +1548,15 @@ Convert database user to SCIM user format
 Base class for custom application errors
 
 **Kind**: global class  
+<a name="oidcDiscoveryCache"></a>
+
+## oidcDiscoveryCache
+Cache for OIDC discovery configuration
+Security: TTL of 24 hours prevents using stale/compromised endpoints indefinitely
+while avoiding frequent network calls
+OIDC discovery cache is overkill for most use cases but adds resilience.
+
+**Kind**: global variable  
 <a name="config"></a>
 
 ## config : <code>object</code>
@@ -1290,9 +1568,7 @@ Configuration settings for SteVe and Odoo integrations
 | Name | Type | Description |
 | --- | --- | --- |
 | STEVE_CONFIG | <code>object</code> | Configuration for SteVe server and API endpoints |
-| STEVE_CONFIG.HOST | <code>string</code> | SteVe server host |
-| STEVE_CONFIG.PORT | <code>string</code> | SteVe server port |
-| STEVE_CONFIG.URL | <code>string</code> | External STEVE_BASE_URL env if not, internal url created from .HOST and .PORT accesing through docker network |
+| STEVE_CONFIG.URL | <code>string</code> | External STEVE_BASE_URL env |
 | STEVE_CONFIG.OCPP_TAGS_URI | <code>string</code> | OCPP tags API endpoint |
 | STEVE_CONFIG.TRANSACTIONS_URI | <code>string</code> | Transactions API endpoint |
 | ODOO_CONFIG | <code>object</code> | Configuration for Odoo server and API endpoints |
@@ -1337,7 +1613,7 @@ Generate HMAC signature matching Odoo implementation
 **Returns**: <code>string</code> - - Hexadecimal signature  
 <a name="generateSalt"></a>
 
-## generateSalt(length) ⇒ <code>string</code>
+## generateSalt(bytes) ⇒ <code>string</code>
 Generate a cryptographically secure random salt
 
 **Kind**: global function  
@@ -1350,6 +1626,17 @@ Most of the checks are done by the OIDC library, but we add some little extra ch
 
 **Kind**: global function  
 **Returns**: <code>boolean</code> - - True if authentication is valid, false otherwise  
+<a name="getOidcDiscovery"></a>
+
+## getOidcDiscovery() ⇒ <code>Promise.&lt;Object&gt;</code>
+Fetches and caches the OIDC discovery configuration
+
+**Kind**: global function  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - OIDC discovery document  
+**Throws**:
+
+- <code>SystemError</code> If fetch fails
+
 <a name="identifyUser"></a>
 
 ## identifyUser(identifier, options) ⇒ <code>Promise.&lt;Object&gt;</code>
