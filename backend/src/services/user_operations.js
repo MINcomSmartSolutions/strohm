@@ -30,19 +30,12 @@ const userOperations = async (oidc_user) => {
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
 
     if (!user) {
-        // Use random RFID for development
-        let rfid = Math.random().toString(36).substring(2, 10);
-        // const rfid = oidc_user.rfid,
-
-        // FOR DEVELOPMENT ONLY: Assign fixed RFIDs to known test users
-        if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            if (oidc_user.email === "tester@tester2.com") {
-                rfid = "4doiy7pg"
-            } else if (oidc_user.email === "test@mincom.com") {
-                rfid = "ov2x0v02"
-            } else if (oidc_user.email === "pontoon.scour_1g@icloud.com") {
-                rfid = "n7ok4apd"
-            }
+        let rfid = oidc_user.hmMifareSerial;
+        if (!rfid && GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+            logger.error('RFID is missing in OIDC user info for new user creation');
+            throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
+        } else {
+            rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
         const createdUser = await db.createUser(
@@ -66,11 +59,6 @@ const userOperations = async (oidc_user) => {
     // Only fully qualified users are allowed to move further
     //TODO: If this fails show error message to user and end the session (logout)
     validateUser(user); // throws if not valid
-
-    // const has_valid_payment_method = await checkValidPaymentMethod(user);
-    // if (!has_valid_payment_method) {
-    //     logger.warn('User does not have a valid payment method');
-    // }
 
     return user;
 

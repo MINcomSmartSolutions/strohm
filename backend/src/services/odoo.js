@@ -33,6 +33,10 @@ async function createOdooUser(user) {
     if (user.odoo_user_id !== null) {
         throw new ValidationError(ErrorCodes.USER.ODOO_EXISTS);
     }
+    if (!user.name || !user.email) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            'User must have name and email to create Odoo user');
+    }
 
     const data = {
         timestamp: fmt(DateTime.utc()),
@@ -280,7 +284,7 @@ async function createOdooTxnInvoice(db_txn) {
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
             'price_unit': txn_started_with_electricity_price / 100,
-            'quantity': db_txn.delivered_energy_wh / 1000,
+            'quantity': db_txn.delivered_energy_wh / 1000, // convert Wh to kWh
         },
     ];
 
