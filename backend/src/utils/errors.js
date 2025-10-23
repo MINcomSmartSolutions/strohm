@@ -21,7 +21,9 @@ const ExceptionCodes = Object.freeze({
         RFID_NOT_FOUND: {
             code: 1020,
             status: 401,
-            message: 'Ihre bisherige RFID-Karte ist nicht mehr mit dem Laden System kompatibel. Sie erhalten in Kürze eine neue Mitarbeiterkarte, mit der Sie den HM-Laden nutzen können. Die Zentrale IT wurde bereits über den erforderlichen Kartentausch informiert.'
+            message: 'Leider ist für Ihren Account noch keine RFID eingetragen. Sie werden bis Ende 2025 einen' +
+                ' neuen RFID-Token (Dongle) erhalten, mit dem eine gültige RFID verknüpft ist. Sobald Sie diesen' +
+                ' bekommen haben, loggen Sie sich bitte erneut in dieses Portal ein, um den Ladezugang zu aktivieren'
         },
     }),
 
