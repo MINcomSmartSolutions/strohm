@@ -38,10 +38,9 @@ const logger = require('#services/logger');
 const fs = require('fs');
 const path = require('path');
 const {userOperations} = require('#services/user_operations');
-const {validateOIDCProperties} = require('#helpers/auth');
-const {db} = require('#utils/queries');
 const {initializeConsent} = require("#utils/init-consent");
 const {ensureAuthenticated} = require("#middlewares/ensureAuthenticated");
+const {saveSession} = require("#utils/session");
 
 
 /**
@@ -263,17 +262,7 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
         // (userOperations might have just created this user)
         req.user = user;
         req.session.user = user;
-
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                if (err) {
-                    log.error('Session save failed:', err);
-                    reject(new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED, null, err));
-                } else {
-                    resolve();
-                }
-            });
-        });
+        await saveSession(req);
 
         log.info(`Consent v${activeConsent.version} recorded and user session created for user ${user.user_id}`);
 

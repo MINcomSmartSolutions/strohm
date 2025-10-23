@@ -16,8 +16,8 @@
 const {validateOIDCProperties} = require('#helpers/auth');
 const {db} = require('#utils/queries');
 const {clearSession} = require('#utils/session');
-const {SystemError, ErrorCodes} = require('#utils/errors');
 const logger = require('#services/logger');
+const {saveSession} = require("#utils/session");
 
 /**
  * Express middleware that validates OIDC authentication and loads user data.
@@ -102,21 +102,7 @@ const ensureAuthenticated = async (req, res, next) => {
                 log.debug(`Synchronizing session for user ${user.user_id}`);
                 req.session.user = user;
 
-                // Await session save to prevent race conditions
-                await new Promise((resolve, reject) => {
-                    req.session.save((err) => {
-                        if (err) {
-                            log.error('Failed to save session:', err);
-                            reject(new SystemError(
-                                ErrorCodes.SYSTEM.SESSION_SAVE_FAILED,
-                                'Failed to save session after authentication',
-                                err
-                            ));
-                        } else {
-                            resolve();
-                        }
-                    });
-                });
+                await saveSession(req);
             }
 
             log.debug(`Authentication successful for user ${user.user_id}`);
