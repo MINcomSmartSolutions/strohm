@@ -9,9 +9,12 @@
  * @exports {Object} oidc_config - Configuration object for OIDC authentication.
  */
 
-const {SystemError, ErrorCodes, AuthError} = require("#utils/errors");
+const {SystemError, ErrorCodes} = require("#utils/errors");
 const axios = require('axios');
 const {getOidcDiscovery} = require("#helpers/auth");
+const logger = require("#services/logger");
+const {userOperations} = require("#services/user_operations");
+const {saveSession} = require("#utils/session");
 
 const isAuth0 = process.env.SERVER_OIDC_ISSUER_BASE_URL.includes('auth0');
 const oidc_config = {
@@ -30,30 +33,27 @@ const oidc_config = {
     routes: {
         logout: false, // Disable default logout route
     },
-    afterCallback: async (req, res, session, decodedState) => {
-        const oidcSpecifications = await getOidcDiscovery();
-        const userInfoEndpoint = oidcSpecifications.userinfo_endpoint;
+    afterCallback: async (req, res, session) => {
+        try {
+            const oidcSpecifications = await getOidcDiscovery();
+            const userInfoEndpoint = oidcSpecifications.userinfo_endpoint;
 
-        const userInfo = await axios.get(userInfoEndpoint, {
-            headers: {
-                Authorization: `${session.token_type} ${session.access_token}`,
-            },
-        }).then(response => response.data)
-            .catch(error => {
-                throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'Failed to fetch userinfo', error);
-            });
+            const userInfo = await axios.get(userInfoEndpoint, {
+                headers: {
+                    Authorization: `${session.token_type} ${session.access_token}`,
+                },
+            }).then(response => response.data)
+                .catch(error => {
+                    throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'Failed to fetch userinfo', error);
+                });
 
-
-        // Store OIDC user info in session but do NOT create user account yet
-        // User account will be created only after consent is given in the consent controller
-        req.session.user = {oidc: userInfo}
-        req.session.save(
-            (err) => {
-                if (err) {
-                    // If fails here we cannot proceed because the session won't have the user info
-                    throw new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED, 'Failed to save session after OIDC callback', err);
-                }
-            });
+            // TODO: Validate userInfo properties here if needed
+            req.session.user = await userOperations(userInfo, false);
+            await saveSession(req);
+        } catch (e) {
+            // Even though it throws here, we return the session to avoid breaking the OIDC flow
+            logger.warn('Warning in afterCallback:', e);
+        }
 
         return {
             ...session,
