@@ -827,6 +827,7 @@ async function revokeUserOdooCredentials(user) {
             logger.warn('No Odoo credentials found to revoke for user', {user_id: user.user_id});
         }
         await client.query('COMMIT');
+        await recordActivityLog(user.user_id, 'REVOKE ODOO CREDENTIALS', 'DB', user.rfid || 'N/A');
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'revokeUserOdooCredentials');
@@ -877,8 +878,29 @@ const getUsersCount = async (filters = {}) => {
     }
 };
 
-// This function is a placeholder for updating user information.
-//TODO: DO we need to store additional user information in the database?
+/**
+ * Updates specific user's information in the database.
+ * Uses a whitelist of allowed columns to prevent unauthorized field updates.
+ * @async
+ * @param {number} userId - The user the update applies to.
+ * @param {Object} updates - Object containing field names and values to update.
+ * @param {string} [updates.rfid] - RFID card identifier.
+ * @param {string} [updates.first_name] - User's first name.
+ * @param {string} [updates.email] - User's email address.
+ * @param {number} [updates.odoo_user_id] - Odoo system user ID.
+ * @param {string} [updates.last_name] - User's last name.
+ * @param {Date} [updates.lastlogin_at] - Last login timestamp.
+ * @param {string} [updates.postal_code] - User's postal code.
+ * @param {string} [updates.address] - User's address.
+ * @param {number} [updates.odoo_partner_id] - Odoo partner ID.
+ * @param {string} [updates.name] - User's full name.
+ * @param {number} [updates.steve_id] - SteVe system user ID.
+ * @param {Date} [updates.deactivated_at] - Deactivation timestamp.
+ * @param {Date} [updates.deleted_at] - Deletion timestamp.
+ * @returns {Promise<object>} The updated user object.
+ * @throws {ValidationError} If userId is invalid, updates is empty, or contains invalid column names.
+ * @throws {DatabaseError} If database operation fails.
+ */
 async function updateUser(userId, updates) {
     const inputsValid = ![userId, updates].some(param => !param || param === '' || (typeof param === 'object' && Object.keys(param).length === 0));
     const userIdIsInteger = Number.isSafeInteger(userId);
@@ -887,12 +909,36 @@ async function updateUser(userId, updates) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
     }
 
+    // Whitelist of allowed columns for updates
+    const allowedColumns = [
+        'rfid',
+        'first_name',
+        'email',
+        'odoo_user_id',
+        'last_name',
+        'lastlogin_at',
+        'postal_code',
+        'address',
+        'odoo_partner_id',
+        'name',
+        'steve_id',
+        'deactivated_at',
+        'deleted_at'
+    ];
+
     const setClause = [];
     const values = [];
     let valueIndex = 1;
 
     // Build dynamic SET clause based on provided updates
     for (const [key, value] of Object.entries(updates)) {
+        if (!allowedColumns.includes(key)) {
+            throw new ValidationError(
+                ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                `Invalid column name: ${key}`
+            );
+        }
+
         if (value !== undefined) {
             setClause.push(`${key} = $${valueIndex}`);
             values.push(value);
@@ -901,7 +947,7 @@ async function updateUser(userId, updates) {
     }
 
     if (setClause.length === 0) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'Updates object contains no valid values');
     }
 
     // Add updated_at timestamp
@@ -918,14 +964,13 @@ async function updateUser(userId, updates) {
         RETURNING *
     `;
 
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const result = await client.query(query, values);
 
         if (result.rows.length === 0) {
-            throw new ValidationError('User not found', ErrorCodes.USER_NOT_FOUND);
+            throw new ValidationError(ErrorCodes.USER.NOT_FOUND, `User with ID ${userId} not found`);
         }
 
         await client.query('COMMIT');
@@ -933,7 +978,7 @@ async function updateUser(userId, updates) {
         return result.rows[0];
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'updateUser', true);
+        handleQueryError(error, 'updateUser');
     } finally {
         client.release();
     }
