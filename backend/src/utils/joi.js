@@ -17,6 +17,14 @@ const userSchema = Joi.object({
 }).unknown(true); // Allow additional fields
 
 
+const oidcUserSchema = Joi.object({
+    sub: Joi.string().required(),
+    name: Joi.string().required(),
+    email: Joi.string().email().required(),
+    hmMifareSerial: Joi.string().allow(null, ''),
+}).unknown(true); // Allow additional fields
+
+
 const fullyQualifiedUserSchema = Joi.object({
     user_id: Joi.number().positive().required(),
     name: Joi.string().required(),
@@ -98,6 +106,7 @@ const validateUser = (user) => {
 
 module.exports = {
     userSchema,
+    oidcUserSchema,
     fullyQualifiedUserSchema,
     steveUserSchema,
     steveTransactionSchema,

@@ -20,6 +20,19 @@
 
 
 /**
+ * @typedef {Object} OIDCUser
+ *
+ * @property {string} sub - The subject (unique identifier) of the user
+ * @property {string} name - The name of the user
+ * @property {string} email - The email of the user
+ * @property {string} [hmMifareSerial] - The HM Mifare Serial (RFID) of the user (optional yet in the beta)
+ * @property {string} [preferred_username] - The preferred username of the user
+ * @property {string} [given_name] - The given name of the user
+ * @property {string} [family_name] - The family name of the user
+ */
+
+
+/**
  * @typedef {Object} steve_txn
  *
  * @property {number} id - PK of the transaction
