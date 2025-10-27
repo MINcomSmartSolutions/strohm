@@ -188,14 +188,8 @@ initialize_fresh_deployment() {
     # Create strohm user first using PGPASSWORD to avoid password in process list
     echo "Creating Strohm user..."
     if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
-		DO \$\$
-		BEGIN
-		    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$STROHM_DB_USER') THEN
-		        CREATE ROLE "$STROHM_DB_USER";
-		        ALTER ROLE "$STROHM_DB_USER" WITH SUPERUSER INHERIT NOCREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD '$STROHM_DB_PASSWORD';
-		    END IF;
-		END
-		\$\$;
+		CREATE ROLE "$STROHM_DB_USER";
+		ALTER ROLE "$STROHM_DB_USER" WITH SUPERUSER INHERIT NOCREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD '$STROHM_DB_PASSWORD';
 	EOSQL
     then
         echo -e "${RED}Failed to create Strohm user${NC}"
@@ -215,14 +209,8 @@ initialize_fresh_deployment() {
     # Create Odoo user
     echo "Creating Odoo user..."
     if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
-		DO \$\$
-		BEGIN
-		    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$ODOO_DB_USER') THEN
             CREATE ROLE "$ODOO_DB_USER";
             ALTER ROLE "$ODOO_DB_USER" WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS PASSWORD '$ODOO_DB_PASSWORD';
-		    END IF;
-		END
-		\$\$;
 	EOSQL
     then
         echo -e "${RED}Failed to create Odoo user${NC}"
@@ -343,6 +331,12 @@ deploy() {
         # Start services
         echo "Starting services..."
         docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
+
+       # Wait for services to be healthy
+       wait_for_database
+       wait_for_service_health "server"
+       wait_for_service_health "odoo"
+
 
         # Initialize fresh deployment
         if ! initialize_fresh_deployment; then
