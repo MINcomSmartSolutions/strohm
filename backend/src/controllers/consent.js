@@ -223,9 +223,9 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
 
         // Get user info from OIDC session (already validated by ensureAuthenticated)
         const oidcUser = req.oidc.user;
-        const userInfo = req.appSession.user;
+        const userInfo = req.appSession.user || await req.oidc.fetchUserInfo();
         if (!userInfo) {
-            throw SystemError(ErrorCodes.SYSTEM.INVALID_SESSION, 'User info missing in session during consent processing');
+            throw new SystemError(ErrorCodes.SYSTEM.INVALID_SESSION, 'User info missing in session during consent processing');
         }
 
         log.info(`Creating user and external system accounts for oauth_id: ${oidcUser.sub}`);
