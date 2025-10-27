@@ -48,7 +48,7 @@ async function createOdooUser(user) {
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     const response = await odooAuthedAxios.post(ODOO_CONFIG.USER_CREATION_URI, data);
-    if (response.status === 201) {
+    if (response.status === 201 || response.status === 200) {
         const response_data = response.data;
         const timestamp = response_data['timestamp'];
         const odoo_user_id = response_data['user_id'];
@@ -80,7 +80,7 @@ async function createOdooUser(user) {
             key_salt,
         );
 
-        logger.info('User create in Odoo with ID: ' + odoo_user_id + ' and partner ID: ' + odoo_partner_id);
+        logger.verbose('User create in Odoo with ID: ' + odoo_user_id + ' and partner ID: ' + odoo_partner_id);
         await db.recordActivityLog(user.user_id, 'CREATE USER', 'ODOO', user.rfid);
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
