@@ -19,7 +19,8 @@ services:
       - prod-db-data:/var/lib/postgresql/data
     networks:
       - strohm-network-prod
-    # ports are only accessible within the docker network
+    ports:
+      - "127.0.0.1:5432:5432"
 
   server:
     container_name: strohm_server_prod

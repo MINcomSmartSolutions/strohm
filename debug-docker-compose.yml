@@ -17,7 +17,8 @@ services:
       - debug-db-data:/var/lib/postgresql/data
     networks:
       - strohm-network-debug
-    # ports are only accessible within the docker network
+    ports:
+      - "127.0.0.1:5433:5432"
 
   server:
     container_name: strohm_server_debug
@@ -70,8 +71,8 @@ services:
     image: ghcr.io/mincomsmartsolutions/odoo:18.0
     restart: unless-stopped
     environment:
-      DOODBA_ENVIRONMENT: "prod"
-      ODOO_ENV: "production"
+      DOODBA_ENVIRONMENT: "dev"
+      ODOO_ENV: "dev"
       LIST_DB: "false"
       PGHOST: db
       PGDATABASE: ${ODOO_DB}
