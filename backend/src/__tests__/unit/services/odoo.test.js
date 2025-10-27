@@ -59,6 +59,8 @@ jest.mock('#services/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    verbose: jest.fn(),
+    debug: jest.fn(),
 }));
 
 describe('Odoo Service', () => {

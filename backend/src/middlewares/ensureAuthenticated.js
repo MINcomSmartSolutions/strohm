@@ -83,7 +83,7 @@ const ensureAuthenticated = async (req, res, next) => {
 
         // Step 2: Get OIDC user info
         const oidcUser = req.oidc.user;
-        log.debug(`Authenticating user with oauth_id: ${oidcUser.sub}`);
+        log.debug(`Authenticating user with oauth_id: ${oidcUser.sub}, email: ${oidcUser.email}`);
 
         // Step 3: Query database for user
         const user = await db.getUserUnique({oauth_id: oidcUser.sub});
@@ -110,7 +110,7 @@ const ensureAuthenticated = async (req, res, next) => {
             // User doesn't exist in database yet
             // This is OK - they might be on their way to /consent
             // We don't set req.user, so downstream middleware knows they're new
-            log.debug(`New user (oauth_id: ${oidcUser.sub}) - not yet in database`);
+            log.debug(`New user (oauth_id: ${oidcUser.email}) - not yet in database`);
 
             // Clear any stale session data if it exists for a different user
             if (req.appSession.user && req.appSession.user.oauth_id && req.appSession.user.oauth_id !== oidcUser.sub) {

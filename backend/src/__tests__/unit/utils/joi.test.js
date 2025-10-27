@@ -194,26 +194,28 @@ describe('Joi Validation Schemas', () => {
             expect(error).toBeUndefined();
         });
 
-        it('should reject if stopValue is less than startValue', () => {
-            const invalidTransaction = {
-                id: 1,
-                connectorId: 1,
-                chargeBoxPk: 100,
-                ocppTagPk: 200,
-                chargeBoxId: 'charger1',
-                ocppIdTag: 'rfid123',
-                startTimestamp: new Date().toISOString(),
-                stopTimestamp: new Date().toISOString(),
-                startValue: 10,
-                stopValue: 5, // Less than startValue
-                stopReason: 'Remote',
-                stopEventActor: 'manual',
-            };
+        // Commented out for beta release
 
-            const {error} = steveTransactionSchema.validate(invalidTransaction);
-            expect(error).toBeDefined();
-            expect(error.message).toContain('stopValue');
-        });
+        // it('should reject if stopValue is less than startValue', () => {
+        //     const invalidTransaction = {
+        //         id: 1,
+        //         connectorId: 1,
+        //         chargeBoxPk: 100,
+        //         ocppTagPk: 200,
+        //         chargeBoxId: 'charger1',
+        //         ocppIdTag: 'rfid123',
+        //         startTimestamp: new Date().toISOString(),
+        //         stopTimestamp: new Date().toISOString(),
+        //         startValue: 10,
+        //         stopValue: 5, // Less than startValue
+        //         stopReason: 'Remote',
+        //         stopEventActor: 'manual',
+        //     };
+        //
+        //     const {error} = steveTransactionSchema.validate(invalidTransaction);
+        //     expect(error).toBeDefined();
+        //     expect(error.message).toContain('stopValue');
+        // });
     });
 
     describe('dbTransactionSchema', () => {

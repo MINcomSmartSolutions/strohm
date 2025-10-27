@@ -61,6 +61,15 @@ describe('Redirect Loop Prevention Tests', () => {
                 user: null,
                 save: jest.fn((callback) => callback()),
             },
+            appSession: {
+                user: {
+                    sub: 'auth0|test-user-123',
+                    email: 'test@example.com',
+                    name: 'Test User',
+                    firstName: 'Test',
+                    lastName: 'User',
+                },
+            },
             path: '/',
             url: '/',
         };
@@ -234,6 +243,8 @@ describe('Redirect Loop Prevention Tests', () => {
 
             // Run both middlewares in sequence
             await ensureAuthenticated(req, res, next);
+            expect(res.redirect).not.toHaveBeenCalled();
+
             expect(next).toHaveBeenCalledTimes(1);
             expect(req.user).toBeUndefined();
 
