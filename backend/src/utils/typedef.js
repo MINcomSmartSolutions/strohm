@@ -33,6 +33,20 @@
 
 
 /**
+ * @typedef {Object} steve_user
+ *
+ * @property {number} ocppTagPk - PK of the OCPP tag
+ * @property {string} idTag - The OCPP tag (for example, RFID)
+ * @property {boolean|null} inTransaction - Whether the OCPP tag has active transactions
+ * @property {boolean} blocked - Whether the OCPP tag is blocked
+ * @property {number} maxActiveTransactionCount - Maximum allowed concurrent transactions for this tag
+ * @property {Date|null} expiryDate - Date/time at which the OCPP tag will expire (optional)
+ * @property {number|null} activeTransactionCount - Current number of active transactions (optional)
+ * @property {string|null} note - Additional note (optional)
+ */
+
+
+/**
  * @typedef {Object} steve_txn
  *
  * @property {number} id - PK of the transaction
