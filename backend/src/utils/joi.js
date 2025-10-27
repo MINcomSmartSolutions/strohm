@@ -78,11 +78,12 @@ const steveTransactionSchema = Joi.object({
     // The meter value reading at the start of the transaction
     startValue: Joi.number().required(),
     // The meter value reading at the end of the transaction
-    stopValue: Joi.number().min(Joi.ref('startValue')).allow(null),
+    // stopValue: Joi.number().min(Joi.ref('startValue')).allow(null),
+    stopValue: Joi.number().allow(null),
     // The reason for the transaction being stopped
     stopReason: Joi.string().allow(null),
     // The actor who stopped the transaction
-    stopEventActor: Joi.string().valid('station', 'manual').allow(null),
+    stopEventActor: Joi.string().allow(null),
 }).unknown(true); // Allow additional fields
 
 // Database transaction schema
