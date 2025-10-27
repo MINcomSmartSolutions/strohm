@@ -11,38 +11,53 @@ const {db} = require('#utils/queries');
 const {createSteveUser} = require('./steve_user');
 const logger = require('#services/logger');
 const {AuthError, ErrorCodes} = require('#utils/errors');
-const {validateUser} = require('#utils/joi');
+const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {GLOBAL_CONFIG} = require("#config");
+const {getRFIDFromFile} = require("#helpers/user");
+const {blockSteveUser} = require("#services/steve_user");
+const {DateTime} = require("luxon");
 
 /**
  * Handles user creation and linking with external systems.
  *
  * - Checks if a user exists by OIDC ID.
- * - If not, creates a new user with a random RFID (for development).
+ * - If not, and createUserIfNotExists is true creates a new user with the users' rfid.
+ * - If not, and createUserIfNotExists is false, returns null.
+ * - If user exists but is deactivated, throws an error.
+ * - If user exists, checks for updates in OIDC data and updates the user if needed.
  * - Ensures the user is registered in Odoo and Steve systems.
  * - Returns the up-to-date detailed user object.
  *
  * @async
- * @param {Object} oidc_user - OIDC user info.
+ * @param {OIDCUser} oidc_user - OIDC user info.
+ * @param {boolean} [createUserIfNotExists=true] - Whether to create a new user if not found.
  * @returns {Promise<Object>} User object from the database.
  */
-const userOperations = async (oidc_user) => {
+const userOperations = async (oidc_user, createUserIfNotExists = true) => {
+    const {error} = oidcUserSchema.validate(oidc_user);
+    if (error) {
+        throw new AuthError(ErrorCodes.AUTH.USER_INVALID, error.message, error);
+    }
+
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
 
-    if (!user) {
-        // Use random RFID for development
-        let rfid = Math.random().toString(36).substring(2, 10);
-        // const rfid = oidc_user.rfid,
+    if (!user && !createUserIfNotExists) {
+        return null;
+    }
 
-        // FOR DEVELOPMENT ONLY: Assign fixed RFIDs to known test users
-        if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            if (oidc_user.email === "tester@tester2.com") {
-                rfid = "4doiy7pg"
-            } else if (oidc_user.email === "test@mincom.com") {
-                rfid = "ov2x0v02"
-            } else if (oidc_user.email === "pontoon.scour_1g@icloud.com") {
-                rfid = "n7ok4apd"
+    if (!user) {
+        // New user
+        let rfid = oidc_user.hmMifareSerial;
+        if (!rfid && GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+            const file_rfid = await getRFIDFromFile(oidc_user.email);
+            if (file_rfid) {
+                rfid = file_rfid;
+            } else {
+                logger.error('RFID couldnt be found neither in OIDC nor in the mapping csv for email: ' + oidc_user.email);
+                throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
             }
+        } else {
+            rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
         const createdUser = await db.createUser(
@@ -59,34 +74,39 @@ const userOperations = async (oidc_user) => {
     } else if (user.deactivated_at !== null) {
         throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
     } else {
+        //TODO: needs testing!!!
+
+        // Check if OIDC data has changed
+        const needsUpdate =
+            user.name !== oidc_user.name ||
+            user.email !== oidc_user.email ||
+            (oidc_user.hmMifareSerial && (user.rfid !== oidc_user.hmMifareSerial));
+
+        if (needsUpdate) {
+            const updated_user = await db.updateUser(user.user_id, {
+                name: oidc_user.name,
+                email: oidc_user.email,
+                // Only update RFID if provided and different
+                ...(oidc_user.hmMifareSerial && {rfid: oidc_user.hmMifareSerial})
+            });
+
+            const now = DateTime.utc();
+            await blockSteveUser(updated_user, "RFID is stale. Should not be activated.", now);
+
+            const new_create_user = await createSteveUser(updated_user, false, `New active RFID of old OCPP TAG PK: ${updated_user.steve_id}`); // Create new Steve user with updated RFID
+            if (!new_create_user) {
+                logger.error("Failed to create new Steve user after RFID change for user ID: " + updated_user.user_id);
+            }
+        }
+
         await checkANDcreateUserInExternalSystems(user);
         user = await db.getUserUnique({oauth_id: oidc_user.sub});
     }
 
     // Only fully qualified users are allowed to move further
-    //TODO: If this fails show error message to user and end the session (logout)
     validateUser(user); // throws if not valid
 
-    // const has_valid_payment_method = await checkValidPaymentMethod(user);
-    // if (!has_valid_payment_method) {
-    //     logger.warn('User does not have a valid payment method');
-    // }
-
     return user;
-
-
-    // TODO: Check for fraud
-
-    //TODO: Check remote and local updated_at date
-    // and update the user if needed
-
-    // TODO: Check RFID
-    // if (oidc_user.rfid) {
-    //     const rfid = await getUserUnique({rfid: oidc_user.rfid});
-    //     if (!rfid) {
-    //         throw new ValidationError(ErrorCodes.USER.RFID_NOT_FOUND);
-    //     }
-
 };
 
 

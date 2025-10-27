@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Dev Admin - User Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 4px;
+            color: #856404;
+        }
+
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .controls {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .users-table th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+        }
+
+        .users-table td {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .users-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge.has-service {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .badge.no-service {
+            background: #e2e3e5;
+            color: #6c757d;
+        }
+
+        .actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-block {
+            background: #ffc107;
+            color: #000;
+        }
+
+        .btn-block:hover:not(:disabled) {
+            background: #e0a800;
+        }
+
+        .btn-unblock {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-unblock:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .btn-delete-steve {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-delete-steve:hover:not(:disabled) {
+            background: #c82333;
+        }
+
+        .btn-deactivate {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-deactivate:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .btn-activate {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-activate:hover:not(:disabled) {
+            background: #138496;
+        }
+
+        .btn-delete-db {
+            background: #721c24;
+            color: white;
+        }
+
+        .btn-delete-db:hover:not(:disabled) {
+            background: #5a161d;
+        }
+
+        .btn-revoke-odoo {
+            background: #fd7e14;
+            color: white;
+        }
+
+        .btn-revoke-odoo:hover:not(:disabled) {
+            background: #e86b04;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 400px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.success {
+            background: #28a745;
+        }
+
+        .toast.error {
+            background: #dc3545;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Admin Panel</h1>
+        <p>User Management for SteVe, Odoo, and Backend Database</p>
+    </div>
+
+    <div class="warning">
+        <strong>⚠️ Development Only</strong>
+        This panel provides dangerous operations. Use with extreme caution! All actions are logged.
+    </div>
+
+    <div class="controls">
+        <div class="search-box">
+            <input id="searchInput" placeholder="Search by name, email, or RFID..." type="text"/>
+        </div>
+        <button class="refresh-btn" onclick="loadUsers()">Refresh</button>
+    </div>
+
+    <div class="loading" id="loadingContainer">
+        <div class="spinner"></div>
+        <p>Loading users...</p>
+    </div>
+
+    <div class="empty-state" id="emptyContainer" style="display: none;">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  stroke-width="2"></path>
+        </svg>
+        <h2>No Users Found</h2>
+        <p>No users match your search criteria</p>
+    </div>
+
+    <div id="tableContainer" style="display: none;">
+        <table class="users-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>RFID</th>
+                <th>Status</th>
+                <th>SteVe</th>
+                <th>Odoo</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody id="usersTableBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let allUsers = [];
+    let filteredUsers = [];
+
+    // Load users on page load
+    window.addEventListener('DOMContentLoaded', () => {
+        loadUsers();
+
+        // Setup search
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            filterUsers(e.target.value);
+        });
+    });
+
+    async function loadUsers() {
+        showLoading();
+
+        try {
+            const response = await fetch('/api/dev/users');
+            const result = await response.json();
+
+            if (result.success) {
+                allUsers = result.data;
+                filteredUsers = allUsers;
+                renderUsers();
+            } else {
+                showToast('Failed to load users: ' + result.error, 'error');
+                hideLoading();
+            }
+        } catch (error) {
+            showToast('Error loading users: ' + error.message, 'error');
+            hideLoading();
+        }
+    }
+
+    function filterUsers(searchTerm) {
+        const term = searchTerm.toLowerCase().trim();
+
+        if (!term) {
+            filteredUsers = allUsers;
+        } else {
+            filteredUsers = allUsers.filter(user =>
+                user.name.toLowerCase().includes(term) ||
+                user.email.toLowerCase().includes(term) ||
+                user.rfid.toLowerCase().includes(term)
+            );
+        }
+
+        renderUsers();
+    }
+
+    function renderUsers() {
+        const tbody = document.getElementById('usersTableBody');
+        const tableContainer = document.getElementById('tableContainer');
+        const emptyContainer = document.getElementById('emptyContainer');
+
+        hideLoading();
+
+        if (filteredUsers.length === 0) {
+            tableContainer.style.display = 'none';
+            emptyContainer.style.display = 'block';
+            return;
+        }
+
+        emptyContainer.style.display = 'none';
+        tableContainer.style.display = 'block';
+
+        tbody.innerHTML = filteredUsers.map(user => `
+                <tr>
+                    <td>${user.user_id}</td>
+                    <td><strong>${escapeHtml(user.name)}</strong></td>
+                    <td>${escapeHtml(user.email)}</td>
+                    <td><code>${escapeHtml(user.rfid)}</code></td>
+                    <td>
+                        <span class="badge ${user.is_active ? 'active' : 'inactive'}">
+                            ${user.is_active ? '✓ Active' : '✗ Deactivated'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${user.has_steve ? 'has-service' : 'no-service'}">
+                            ${user.has_steve ? '✓ ID: ' + user.steve_id : '✗ None'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${user.has_odoo ? 'has-service' : 'no-service'}">
+                            ${user.has_odoo ? '✓ ID: ' + user.odoo_user_id : '✗ None'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="actions">
+                            ${user.has_steve ? `
+                                <button class="btn btn-block" onclick="blockUserInSteve(${user.user_id}, '${escapeHtml(user.name)}')">Block SteVe</button>
+                                <button class="btn btn-unblock" onclick="unblockUserInSteve(${user.user_id}, '${escapeHtml(user.name)}')">Unblock SteVe</button>
+                                <button class="btn btn-delete-steve" onclick="deleteUserFromSteve(${user.user_id}, '${escapeHtml(user.name)}')">Delete SteVe</button>
+                            ` : ''}
+                            ${user.has_odoo ? `
+                                <button class="btn btn-revoke-odoo" onclick="revokeOdooCredentials(${user.user_id}, '${escapeHtml(user.name)}')">Revoke Odoo</button>
+                            ` : ''}
+                            ${user.is_active ? `
+                                <button class="btn btn-deactivate" onclick="deactivateUserInDB(${user.user_id}, '${escapeHtml(user.name)}')">Deactivate DB</button>
+                            ` : `
+                                <button class="btn btn-activate" onclick="activateUserInDB(${user.user_id}, '${escapeHtml(user.name)}')">Activate DB</button>
+                            `}
+                            <button class="btn btn-delete-db" onclick="deleteUserFromDB(${user.user_id}, '${escapeHtml(user.name)}')">Delete DB</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+    }
+
+    async function blockUserInSteve(userId, userName) {
+        if (!confirm(`Block ${userName} in SteVe?`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/steve/block`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function unblockUserInSteve(userId, userName) {
+        if (!confirm(`Unblock ${userName} in SteVe?`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/steve/unblock`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function deleteUserFromSteve(userId, userName) {
+        if (!confirm(`Delete ${userName}
+                      from SteVe? This will remove their RFID tag.`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/steve`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function revokeOdooCredentials(userId, userName) {
+        if (!confirm(`Revoke Odoo credentials for ${userName}?`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/odoo/revoke`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function deactivateUserInDB(userId, userName) {
+        if (!confirm(`Deactivate ${userName} in database? They won't be able to login.`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/db/deactivate`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function activateUserInDB(userId, userName) {
+        if (!confirm(`Activate ${userName} in database?`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/db/activate`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function deleteUserFromDB(userId, userName) {
+        const confirmed = prompt(
+            `⚠️ DANGER: Permanently delete ${userName} from database?\n\n` +
+            `This will:\n` +
+            `- Delete all user data\n` +
+            `- Delete all transactions\n` +
+            `- This action CANNOT be undone\n\n` +
+            `Type "DELETE" to confirm:`
+        );
+
+        if (confirmed !== 'DELETE') return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/db`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({confirm: 'DELETE'})
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 5000);
+    }
+
+    function showLoading() {
+        document.getElementById('loadingContainer').style.display = 'block';
+        document.getElementById('tableContainer').style.display = 'none';
+        document.getElementById('emptyContainer').style.display = 'none';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingContainer').style.display = 'none';
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+</body>
+</html>
+

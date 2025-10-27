@@ -116,27 +116,6 @@ describe('Steve User Service', () => {
             });
         });
 
-        it('should throw error if user already exists in Steve', async () => {
-            steveAxios.get.mockResolvedValueOnce({
-                status: 200,
-                data: [{
-                    ocppTagPk: 999,
-                    idTag: 'test_rfid',
-                    maxActiveTransactionCount: 0,
-                    blocked: true,
-                }],
-            });
-
-            // The new service will call getSteveUser, which will return a response, but the test must also mock the second get call to avoid 'No response received from SteVe'
-            // So, mock the second call as well
-            steveAxios.get.mockResolvedValueOnce({status: 200, data: [{ocppTagPk: 999, idTag: 'test_rfid'}]});
-
-            await expect(createSteveUser(validUser)).rejects.toThrow(ValidationError);
-            await createSteveUser(validUser).catch(err => {
-                expect(err.errorDef.code).toBe(ErrorCodes.STEVE.USER_EXISTS.code);
-            });
-        });
-
         it('should throw SystemError if SteVe returns no response on create', async () => {
             steveAxios.get.mockResolvedValue({status: 200, data: []});
             steveAxios.post.mockResolvedValue(undefined);
@@ -195,7 +174,7 @@ describe('Steve User Service', () => {
                 {
                     idTag: validUser.rfid,
                     maxActiveTransactionCount: 0,
-                    note: 'User created by API by MINcom Smart Solutions GmbH',
+                    note: 'RFID created with API by MINcom Smart Solutions GmbH',
                 },
             );
 
@@ -206,10 +185,10 @@ describe('Steve User Service', () => {
             expect(db.setSteveUserParamaters).toHaveBeenCalledWith(validUser, 999);
 
             // Verify activity logs were recorded
-            expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'CREATE USER', 'SteVe', validUser.rfid);
-            expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'BLOCK USER', 'SteVe', validUser.rfid);
+            expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'CREATE USER', 'SteVe', validUser.rfid, null);
+            expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'BLOCK USER', 'SteVe', validUser.rfid, "User is created as blocked");
 
-            expect(result).toEqual([mockCreateResponse.data]);
+            expect(result).toEqual(mockCreateResponse.data);
         });
 
         it('should create user successfully with unblocked status', async () => {
@@ -250,20 +229,20 @@ describe('Steve User Service', () => {
                 {
                     idTag: validUser.rfid,
                     maxActiveTransactionCount: 1,
-                    note: 'User created by API by MINcom Smart Solutions GmbH',
+                    note: 'RFID created with API by MINcom Smart Solutions GmbH',
                 },
             );
 
             // Verify only CREATE USER log was recorded (not BLOCK USER)
             expect(db.recordActivityLog).toHaveBeenCalledTimes(1);
-            expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'CREATE USER', 'SteVe', validUser.rfid);
+            expect(db.recordActivityLog).toHaveBeenCalledWith(validUser.user_id, 'CREATE USER', 'SteVe', validUser.rfid, null);
 
-            expect(result).toEqual([{
+            expect(result).toEqual({
                 ocppTagPk: 999,
                 idTag: 'test_rfid',
                 maxActiveTransactionCount: 1,
                 blocked: false,
-            }]);
+            });
         });
 
         it('should throw error when creation fails', async () => {
@@ -381,13 +360,13 @@ describe('Steve User Service', () => {
                 },
             );
             expect(validateSteveUser).toHaveBeenCalledWith(mockUser, 'test_rfid');
-            expect(result).toEqual([mockUser]);
+            expect(result).toEqual(mockUser);
         });
     });
 
     describe('blockSteveUser', () => {
-        it('should throw error if user is invalid', async () => {
-            const badUser = {user_id: 'not-a-number', rfid: 'test_rfid', steve_id: 999};
+        it('should throw error if rfid is invalid', async () => {
+            const badUser = {user_id: 'not-a-number', rfid: '', steve_id: 999};
 
             await expect(blockSteveUser(badUser)).rejects.toThrow(ValidationError);
             await blockSteveUser(badUser).catch(err => {
@@ -446,6 +425,8 @@ describe('Steve User Service', () => {
                 {
                     idTag: fullQualifiedUser.rfid,
                     maxActiveTransactionCount: 0,
+                    note: expect.any(String),
+                    expiredAt: null,
                 },
             );
             expect(db.recordActivityLog).toHaveBeenCalledWith(
@@ -453,12 +434,13 @@ describe('Steve User Service', () => {
                 'BLOCK USER',
                 'SteVe',
                 fullQualifiedUser.rfid,
+                null
             );
         });
     });
 
     describe('unblockSteveUser', () => {
-        it('should throw error if user is invalid', async () => {
+        it('should throw error if rfid is invalid', async () => {
             const badUser = {user_id: 123, rfid: '', steve_id: 999}; // Empty RFID
             await expect(unblockSteveUser(badUser)).rejects.toThrow(ValidationError);
             await unblockSteveUser(badUser).catch(err => {

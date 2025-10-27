@@ -17,7 +17,8 @@ services:
       - debug-db-data:/var/lib/postgresql/data
     networks:
       - strohm-network-debug
-    # ports are only accessible within the docker network
+    ports:
+      - "127.0.0.1:5433:5432"
 
   server:
     container_name: strohm_server_debug
@@ -50,8 +51,11 @@ services:
       STROHM_DB_USER: ${STROHM_DB_USER}
       STROHM_DB_PASSWORD: ${STROHM_DB_PASSWORD}
       STEVE_BASE_URL: ${STEVE_BASE_URL}
-      STEVE_API_KEY_HEADER: ${STEVE_API_KEY_HEADER}
-      STEVE_API_KEY: ${STEVE_API_KEY}
+      STEVE_AUTH_USERNAME: ${STEVE_AUTH_USERNAME}
+      STEVE_API_PASSWORD: ${STEVE_API_PASSWORD}
+      TAILSCALE_ENABLE_ADMIN: ${TAILSCALE_ENABLE_ADMIN}
+      TAILSCALE_ALLOWED_RANGES: ${TAILSCALE_ALLOWED_RANGES}
+      TAILSCALE_ALLOWED_IPS: ${TAILSCALE_ALLOWED_IPS}
     ports:
       - "127.0.0.1:${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
       - "127.0.0.1:9229:9229"  # Node.js debug port
@@ -70,8 +74,8 @@ services:
     image: ghcr.io/mincomsmartsolutions/odoo:18.0
     restart: unless-stopped
     environment:
-      DOODBA_ENVIRONMENT: "prod"
-      ODOO_ENV: "production"
+      DOODBA_ENVIRONMENT: "dev"
+      ODOO_ENV: "dev"
       LIST_DB: "false"
       PGHOST: db
       PGDATABASE: ${ODOO_DB}

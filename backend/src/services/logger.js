@@ -61,6 +61,36 @@ const morganMiddleware = morgan(
     },
 );
 
+/**
+ * Creates a child logger with session context that automatically prefixes all log messages
+ * with the session ID. This eliminates the need to manually add [sessionId] to every log.
+ *
+ * @param {string|Object} sessionId - The session ID or request object to extract session from
+ * @returns {Object} A logger instance with all standard methods (info, debug, warn, error, etc.)
+ *
+ */
+logger.withSession = function (sessionId) {
+    // If passed a request object, extract sessionID
+    if (sessionId && typeof sessionId === 'object' && sessionId.sessionID) {
+        sessionId = sessionId.sessionID;
+    }
+
+    const sid = sessionId || 'no-session';
+
+    // Create a child logger with session context
+    return logger.child({sessionId: sid}, {
+        // Custom format to prepend session ID to message
+        format: format.combine(
+            format.printf((info) => {
+                // Prepend [sessionId] to the message
+                if (info.message && info.sessionId) {
+                    info.message = `[${info.sessionId}] ${info.message}`;
+                }
+                return info;
+            })
+        )
+    });
+};
 
 module.exports = logger;
 module.exports.morganMiddleware = morganMiddleware;

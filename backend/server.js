@@ -1,3 +1,6 @@
+// Validate environment variables before starting the server
+const {validateEnvOrExit} = require('./src/utils/env-validator');
+validateEnvOrExit();
 
 /**
  * Starts the server and listens on the specified port.

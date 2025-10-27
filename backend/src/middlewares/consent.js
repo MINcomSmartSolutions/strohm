@@ -2,11 +2,11 @@
  * @file Middleware for checking user consent status and enforcing consent requirements.
  *
  * This middleware ensures that authenticated users have provided valid consent
- * before accessing protected routes. It handles consent validation, user session
- * management, and automatic redirection to consent pages when needed.
+ * before accessing protected routes. It performs ONLY consent validation and
+ * relies on the ensureAuthenticated middleware running first.
  *
- * The middleware integrates with OIDC authentication and maintains an audit
- * trail of consent decisions while providing flexible route exclusions.
+ * **SINGLE RESPONSIBILITY**: This middleware ONLY checks consent status.
+ * Authentication must be handled by ensureAuthenticated middleware before this runs.
  *
  * **ARCHITECTURAL INTEGRATION**: This middleware leverages the consent service
  * which uses direct database connections instead of the standard `db.[query]`
@@ -16,139 +16,83 @@
  *
  * @module middlewares/consent
  * @exports requireConsent
+ * @see {@link module:middlewares/ensureAuthenticated} Must run before this middleware
  * @see {@link module:services/consent} For underlying consent operations
  * @see {@link module:controllers/consent} For consent page handling
  */
 
 const {hasLatestConsent} = require('#services/consent');
 const logger = require('#services/logger');
-const {db} = require('#utils/queries');
-const {validateOIDCProperties, createRequestId} = require('#helpers/auth');
+
 
 /**
  * Express middleware that validates user consent status before allowing access to protected routes.
  *
- * This middleware acts as a gatekeeper for the application, ensuring that only users who have
- * provided valid consent can access protected resources. It handles the complete consent
- * validation workflow including OIDC authentication, session management, and consent checking.
+ * **PREREQUISITE**: This middleware assumes that `ensureAuthenticated` has already run.
+ * It expects `req.user` to be populated for existing users, or undefined for new users.
  *
- * **SERVICE INTEGRATION**: This middleware primarily uses `getActiveConsentRevision()` and
- * `hasLatestConsent()` from the consent service, which implement direct database queries
- * rather than the centralized `db.[query]` pattern used in other parts of the application.
- * This architectural choice ensures optimal performance and compliance for consent operations.
+ * This middleware performs ONLY consent validation. Authentication and user loading
+ * are handled by the ensureAuthenticated middleware.
  *
  * @async
  * @function requireConsent
  * @param {Object} req - Express request object
- * @param {Object} req.session - Express session object for user state management
- * @param {Object} req.session.user - Current user session data (may be undefined)
- * @param {string} req.session.user.user_id - Unique identifier for the authenticated user
- * @param {Function} req.session.save - Function to persist session changes
- * @param {Object} req.oidc - Auth0 OIDC object containing authentication state
- * @param {Object} req.oidc.user - OIDC user object with OAuth provider details
- * @param {string} req.oidc.user.sub - Subject identifier from OAuth provider (unique user ID)
- * @param {string} req.path - Current request path for route matching
+ * @param {Object} req.user - User object populated by ensureAuthenticated (may be undefined for new users)
+ * @param {string} req.user.user_id - Unique identifier for the authenticated user
  * @param {Object} res - Express response object
- * @param {Function} res.redirect - Function to redirect user to different routes
  * @param {Function} next - Express next middleware function
  *
- * @throws {Error} Logs errors but does not throw to prevent application blocking
- *
- * @returns {void} Calls next() to continue middleware chain or redirects user
+ * @returns {void} Calls next() to continue middleware chain or redirects to /consent
  *
  * @description
- * Middleware Flow:
- * 1. **Route Filtering**: Checks if current route should skip consent validation
- *    - Skipped routes: /consent, /logout, /health, /welcome, /login, /callback, /scim, /assets, /favicon
- * 2. **OIDC Validation**: Validates OIDC authentication properties via `validateOIDCProperties()`
- *    - Redirects to /logout if validation fails
- * 3. **User Resolution**: Queries database directly using `db.getUserUnique()` (standard pattern)
- *    - Updates session with user data if user exists via `userOperations()`
- * 4. **Session Management**: Ensures authenticated users have proper session state
- * 5. **Consent Validation**: Uses `hasLatestConsent()` to check current consent status
- *    - Redirects to /consent page if consent is missing or outdated
- * 6. **Access Control**: Allows or denies access based on consent status
+ * Consent Validation Flow:
+ * 1. Check if user exists (req.user is populated)
+ * 2. If user exists:
+ *    - Check if they have latest consent via `hasLatestConsent()`
+ *    - If no consent, redirect to /consent
+ *    - If has consent, call next()
+ * 3. If user doesn't exist (new user):
+ *    - Redirect to /consent (they need to give consent first)
  *
  * @security
  * Security Considerations:
- * - Always validates OIDC properties before proceeding
- * - Gracefully handles errors to prevent application blocking
- * - Maintains session integrity during user operations
  * - Enforces consent requirements for data protection compliance
  * - Provides audit trail through comprehensive logging
- * - Integrates with consent service's specialized audit capabilities
+ * - On error, redirects to logout to prevent unauthorized access
  *
- * @performance
- * Performance Notes:
- * - Efficient route filtering prevents unnecessary database calls
- * - Caches user data in session to reduce database queries
- * - Fails gracefully without blocking application flow
- * - Minimal overhead for skipped routes
- * - Leverages consent service's optimized consent checking queries
- *
- * @see {@link module:services/consent.getActiveConsentRevision} For active consent retrieval
+ * @see {@link module:middlewares/ensureAuthenticated} Must run before this middleware
  * @see {@link module:services/consent.hasLatestConsent} For consent validation logic
+ *
  */
 const requireConsent = async (req, res, next) => {
-    // Generate request ID for tracing
-    const requestId = createRequestId();
-    req.requestId = requestId;
+    const sessionId = req.sessionID || 'no-session';
+    req.sessionId = sessionId;
+    const log = logger.withSession(sessionId);
 
     try {
-        // Skip consent check for certain routes
-        const skipRoutes = ['/consent', '/logout', '/health', '/welcome', '/login', '/callback', '/scim', '/assets', '/favicon'];
-        const isSkipRoute = skipRoutes.some(route => req.path.startsWith(route));
+        // Check if user exists in database (populated by ensureAuthenticated middleware)
+        if (req.user) {
+            // User exists - check if they have latest consent
+            const hasConsent = await hasLatestConsent(req.user);
 
-        if (isSkipRoute) {
-            return next();
-        }
-
-        if (!await validateOIDCProperties(req)) {
-            logger.warn(`[${requestId}] OIDC validation failed`);
-            return res.redirect('/logout?reason=invalid_session');
-        }
-
-        const oidcUser = req.oidc.user;
-        let sessionUser = req.session.user;
-        const user = await db.getUserUnique({oauth_id: oidcUser.sub});
-        if (user) {
-            // User exists in DB - check if we need to update session
-            if (!sessionUser || sessionUser.user_id !== user.user_id) {
-                // Session doesn't have user or has different user - update it
-                // Note: We don't call userOperations here to avoid creating external system users on every request
-                // External system creation only happens during consent POST when user gives consent
-                req.session.user = user;
-                // Properly await session save to prevent race conditions
-                await new Promise((resolve, reject) => {
-                    req.session.save((err) => {
-                        if (err) {
-                            logger.error(`[${requestId}] Session save failed:`, err);
-                            reject(err);
-                        } else {
-                            resolve();
-                        }
-                    });
-                });
-                sessionUser = req.session.user;
-                logger.debug(`[${requestId}] Updated session for user ${user.user_id}`);
-            }
-            const hasConsent = await hasLatestConsent(sessionUser.user_id);
             if (!hasConsent) {
-                logger.info(`[${requestId}] User ${sessionUser.user_id} does not have latest consent - redirecting to consent page`);
+                log.info(`User ${req.user.user_id} does not have latest consent - redirecting to consent page`);
                 return res.redirect('/consent');
             }
+
+            // User has consent - allow access
+            log.debug(`User ${req.user.user_id} has valid consent`);
+            return next();
         } else {
-            // User doesn't exist in DB yet - they need to give consent first before we create them
-            logger.info(`[${requestId}] New user (oauth_id: ${oidcUser.sub}) - redirecting to consent page`);
+            // User doesn't exist in DB yet - they need to give consent first
+            log.info('New user detected - redirecting to consent page');
             return res.redirect('/consent');
         }
-        return next();
     } catch (error) {
         // CRITICAL: Do NOT allow access on error - this is a security risk
-        logger.error(`[${requestId}] Critical error in consent middleware:`, error);
+        log.error('Critical error in consent middleware:', error);
 
-        // For any other error, redirect to logout with error reason
-        // This ensures consent is always properly validated before granting access
+        // Redirect to logout with error reason
         return res.redirect('/logout?reason=consent_validation_error');
     }
 }

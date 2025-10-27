@@ -18,6 +18,13 @@ const ExceptionCodes = Object.freeze({
         USER_DELETED: {code: 1012, status: 200, message: 'ungültiger Benutzer'},
         USER_MISMATCH: {code: 1013, status: 401, message: 'ungültiger Benutzer'},
         USER_NOT_AUTHORIZED: {code: 1014, status: 401, message: 'User is not authorized to perform this action'},
+        RFID_NOT_FOUND: {
+            code: 1020,
+            status: 401,
+            message: 'Leider ist für Ihren Account noch keine RFID eingetragen. Sie werden bis Ende 2025 einen' +
+                ' neuen RFID-Token (Dongle) erhalten, mit dem eine gültige RFID verknüpft ist. Sobald Sie diesen' +
+                ' bekommen haben, loggen Sie sich bitte erneut in dieses Portal ein, um den Ladezugang zu aktivieren'
+        },
     }),
 
     // Validation errors (2000-2099)
@@ -198,7 +205,7 @@ const appErrorHandler = (err, res) => {
         const status = err.getStatusCode();
         const resp = err.toResponse();
         const messageWithStatus = `${status} - ${resp.msg}`;
-        return res.redirect('/logout?message=' + encodeURIComponent(messageWithStatus) + '&type=error');
+        return res.redirect('/logout?message=' + encodeURIComponent(messageWithStatus) + '&type=error&persistent=true');
     }
 
     // Handle unexpected errors

@@ -26,9 +26,10 @@ const auth_controller = require('./controllers/auth');
 const odoo_controller = require('./controllers/odoo');
 const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
+const {ensureAuthenticated} = require('./middlewares/ensureAuthenticated');
 const {requireConsent} = require('./middlewares/consent');
+const {ensureTailscaleAccess} = require('./middlewares/tailscaleAuth');
 const {GLOBAL_CONFIG} = require("#config");
-const {createRequestId} = require("#helpers/auth");
 const {AuthError, ErrorCodes, SystemError} = require("#utils/errors");
 
 Settings.defaultZoneName = 'utc';
@@ -91,56 +92,36 @@ app.use(helmet());
 // See: https://github.com/auth0/express-openid-connect
 app.use(auth(oidc_config));
 
-// Add consent middleware after OIDC auth but before protected routes
-app.use(requireConsent);
-
 
 app.get('/health', (req, res) => {
     res.status(200).json({success: true, msg: 'OK'});
 });
 
-app.get('/', async (req, res) => {
-    const requestId = req.requestId || createRequestId();
-    req.requestId = requestId;
-
+app.get('/', ensureAuthenticated, requireConsent, async (req, res) => {
     try {
-        if (req.oidc.isAuthenticated()) {
-            const sessionUser = req.session.user || null;
-            // Always working with the OIDC data, since session data can be stale/corrupted/missing/manipulated!
-            const oidcUser = req.oidc.user;
-            if (sessionUser) {
-                const currentUser = await db.getUserUnique({oauth_id: oidcUser.sub});
-
-                if (!currentUser) {
-                    // User should've been already created but somehow is missing
-                    logger.error(`[${requestId}] Seems user consent --> creation did not worked properly. User with OIDC ID ${oidcUser.sub} not found in DB`);
-                    throw new AuthError(ErrorCodes.USER.NOT_FOUND);
-                }
-                if (currentUser.user_id !== sessionUser.user_id) {
-                    logger.warn(`[${requestId}] Session user ${sessionUser.user_id} mismatch with database user ${currentUser.user_id}`);
-                    throw new AuthError(ErrorCodes.AUTH.USER_MISMATCH);
-                }
-                if (currentUser.deactivated_at !== null) {
-                    logger.warn(`[${requestId}] User ${currentUser.user_id} is deactivated`);
-                    throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
-                }
-
-                try {
-                    logger.debug(`[${requestId}] Getting Odoo portal login for user ${sessionUser.user_id}`);
-                    const redirect_url = await getOdooPortalLogin(sessionUser);
-                    logger.info(`[${requestId}] Redirecting user ${sessionUser.user_id} to Odoo portal`);
-                    return res.redirect(redirect_url);
-                } catch (error) {
-                    logger.error(`[${requestId}] Failed to get Odoo portal login URL:`, error);
-                    // Caution: Redirecting to "/login, /, /welcome routes creates infinite redirect loop
-                    throw new SystemError(ErrorCodes.SYSTEM.UNKNOWN_ERROR, null, error);
-                }
-            }
+        // After ensureAuthenticated + requireConsent, req.user is guaranteed to exist and have consent
+        if (!req.user) {
+            logger.error('User missing after middleware - this should not happen');
+            throw new AuthError(ErrorCodes.USER.NOT_FOUND);
         }
-        logger.debug(`[${requestId}] User not authenticated or no session, redirecting to welcome`);
-        return res.redirect('/welcome');
+
+        // Check if user is deactivated
+        if (req.user.deactivated_at !== null) {
+            logger.warn(`User ${req.user.user_id} is deactivated`);
+            throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
+        }
+
+        try {
+            logger.debug(`Getting Odoo portal login for user ${req.user.user_id}`);
+            const redirect_url = await getOdooPortalLogin(req.user);
+            logger.info(`Redirecting user ${req.user.user_id} to Odoo portal`);
+            return res.redirect(redirect_url);
+        } catch (error) {
+            logger.error(`Failed to get Odoo portal login URL:`, error);
+            throw new SystemError(ErrorCodes.SYSTEM.UNKNOWN_ERROR, null, error);
+        }
     } catch (error) {
-        logger.error(`[${requestId}] Error in / route handler:`, error);
+        logger.error(`Error in / route handler:`, error);
         appErrorHandler(error, res);
     }
 });
@@ -148,7 +129,7 @@ app.get('/', async (req, res) => {
 app.get('/welcome', async (req, res) => {
     try {
         if (req.session.user) {
-            res.redirect('/');
+            return res.redirect('/');
         }
         // Serve the modern welcome page
         return res.sendFile('welcome.html', {root: 'public'});
@@ -165,6 +146,36 @@ app.use(odoo_controller);
 
 app.use(scim_controller);
 
+// Admin Panel - Protected by Tailscale network access
+// Enable with TAILSCALE_ENABLE_ADMIN=true environment variable
+if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
+    const dev_admin_controller = require('./controllers/dev_admin');
+
+    logger.info('Admin Panel enabled - protected by Tailscale authentication');
+    logger.info('Admin panel available at /dev-admin.html');
+    logger.info(`Allowed Tailscale ranges: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_RANGES.join(', ')}`);
+    if (GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.length > 0) {
+        logger.info(`Allowed specific IPs: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.join(', ')}`);
+    }
+
+    // Apply Tailscale authentication to all admin routes
+    app.use('/api/dev/{*any}', ensureTailscaleAccess);
+    app.get('/dev-admin.html', ensureTailscaleAccess, (req, res) => {
+        res.sendFile('dev-admin.html', {root: 'public'});
+    });
+
+    // API routes
+    app.get('/api/dev/users', dev_admin_controller.getAllUsers);
+    app.post('/api/dev/users/:user_id/steve/block', dev_admin_controller.blockUserInSteve);
+    app.post('/api/dev/users/:user_id/steve/unblock', dev_admin_controller.unblockUserInSteve);
+    app.delete('/api/dev/users/:user_id/steve', dev_admin_controller.deleteUserFromSteve);
+    app.post('/api/dev/users/:user_id/db/deactivate', dev_admin_controller.deactivateUserInDB);
+    app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
+    app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);
+    app.post('/api/dev/users/:user_id/odoo/revoke', dev_admin_controller.revokeOdooCredentials);
+} else {
+    logger.info('Admin Panel disabled - set TAILSCALE_ENABLE_ADMIN=true to enable');
+}
 
 startCronWithHealthCheck();
 

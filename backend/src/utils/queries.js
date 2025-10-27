@@ -827,6 +827,7 @@ async function revokeUserOdooCredentials(user) {
             logger.warn('No Odoo credentials found to revoke for user', {user_id: user.user_id});
         }
         await client.query('COMMIT');
+        await recordActivityLog(user.user_id, 'REVOKE ODOO CREDENTIALS', 'DB', user.rfid || 'N/A');
     } catch (error) {
         await client.query('ROLLBACK');
         handleQueryError(error, 'revokeUserOdooCredentials');
@@ -877,8 +878,29 @@ const getUsersCount = async (filters = {}) => {
     }
 };
 
-// This function is a placeholder for updating user information.
-//TODO: DO we need to store additional user information in the database?
+/**
+ * Updates specific user's information in the database.
+ * Uses a whitelist of allowed columns to prevent unauthorized field updates.
+ * @async
+ * @param {number} userId - The user the update applies to.
+ * @param {Object} updates - Object containing field names and values to update.
+ * @param {string} [updates.rfid] - RFID card identifier.
+ * @param {string} [updates.first_name] - User's first name.
+ * @param {string} [updates.email] - User's email address.
+ * @param {number} [updates.odoo_user_id] - Odoo system user ID.
+ * @param {string} [updates.last_name] - User's last name.
+ * @param {Date} [updates.lastlogin_at] - Last login timestamp.
+ * @param {string} [updates.postal_code] - User's postal code.
+ * @param {string} [updates.address] - User's address.
+ * @param {number} [updates.odoo_partner_id] - Odoo partner ID.
+ * @param {string} [updates.name] - User's full name.
+ * @param {number} [updates.steve_id] - SteVe system user ID.
+ * @param {Date} [updates.deactivated_at] - Deactivation timestamp.
+ * @param {Date} [updates.deleted_at] - Deletion timestamp.
+ * @returns {Promise<object>} The updated user object.
+ * @throws {ValidationError} If userId is invalid, updates is empty, or contains invalid column names.
+ * @throws {DatabaseError} If database operation fails.
+ */
 async function updateUser(userId, updates) {
     const inputsValid = ![userId, updates].some(param => !param || param === '' || (typeof param === 'object' && Object.keys(param).length === 0));
     const userIdIsInteger = Number.isSafeInteger(userId);
@@ -887,12 +909,36 @@ async function updateUser(userId, updates) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
     }
 
+    // Whitelist of allowed columns for updates
+    const allowedColumns = [
+        'rfid',
+        'first_name',
+        'email',
+        'odoo_user_id',
+        'last_name',
+        'lastlogin_at',
+        'postal_code',
+        'address',
+        'odoo_partner_id',
+        'name',
+        'steve_id',
+        'deactivated_at',
+        'deleted_at'
+    ];
+
     const setClause = [];
     const values = [];
     let valueIndex = 1;
 
     // Build dynamic SET clause based on provided updates
     for (const [key, value] of Object.entries(updates)) {
+        if (!allowedColumns.includes(key)) {
+            throw new ValidationError(
+                ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                `Invalid column name: ${key}`
+            );
+        }
+
         if (value !== undefined) {
             setClause.push(`${key} = $${valueIndex}`);
             values.push(value);
@@ -901,7 +947,7 @@ async function updateUser(userId, updates) {
     }
 
     if (setClause.length === 0) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'User ID and updates are required');
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'Updates object contains no valid values');
     }
 
     // Add updated_at timestamp
@@ -918,14 +964,13 @@ async function updateUser(userId, updates) {
         RETURNING *
     `;
 
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const result = await client.query(query, values);
 
         if (result.rows.length === 0) {
-            throw new ValidationError('User not found', ErrorCodes.USER_NOT_FOUND);
+            throw new ValidationError(ErrorCodes.USER.NOT_FOUND, `User with ID ${userId} not found`);
         }
 
         await client.query('COMMIT');
@@ -933,12 +978,94 @@ async function updateUser(userId, updates) {
         return result.rows[0];
     } catch (error) {
         await client.query('ROLLBACK');
-        handleQueryError(error, 'updateUser', true);
+        handleQueryError(error, 'updateUser');
     } finally {
         client.release();
     }
 }
 
+/**
+ * Activates a previously deactivated user.
+ *
+ * @async
+ * @param {Object} user - The user object (must include user_id).
+ * @throws {ValidationError} If required parameters are missing.
+ * @throws {DatabaseError} If activation fails.
+ */
+async function activateUser(user) {
+    if (!user || !user.user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const activate_user_query = `
+        UPDATE users
+        SET deactivated_at = NULL
+        WHERE user_id = $1::integer
+          AND deactivated_at IS NOT NULL
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(activate_user_query, [user.user_id]);
+        if (result.rowCount === 0) {
+            throw new Error('Could not activate user - user may already be active or does not exist');
+        }
+        await client.query('COMMIT');
+        await recordActivityLog(user.user_id, 'ACTIVATE USER', 'DB', user.rfid || 'N/A');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'activateUser');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Deletes a user from the database (hard delete).
+ * WARNING: This permanently removes the user and all associated records.
+ *
+ * @async
+ * @param {Object} user - The user object (must include user_id).
+ * @throws {ValidationError} If required parameters are missing.
+ * @throws {DatabaseError} If deletion fails.
+ */
+async function deleteUser(user) {
+    if (!user || !user.user_id) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            `Missing required parameters.`,
+        );
+    }
+
+    const delete_user_query = `
+        DELETE
+        FROM users
+        WHERE user_id = $1::integer
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        // Log before deletion
+        await recordActivityLog(user.user_id, 'DELETE USER', 'DB', user.rfid || 'N/A');
+
+        const result = await client.query(delete_user_query, [user.user_id]);
+        if (result.rowCount === 0) {
+            throw new Error('Could not delete user - user does not exist');
+        }
+        await client.query('COMMIT');
+        logger.info(`User ${user.user_id} deleted from database`);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'deleteUser');
+    } finally {
+        client.release();
+    }
+}
 
 module.exports = {
     db: {
@@ -960,5 +1087,7 @@ module.exports = {
         revokeUserOdooCredentials,
         getUsersCount,
         updateUser,
+        activateUser,
+        deleteUser,
     },
 };

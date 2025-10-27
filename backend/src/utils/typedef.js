@@ -20,6 +20,33 @@
 
 
 /**
+ * @typedef {Object} OIDCUser
+ *
+ * @property {string} sub - The subject (unique identifier) of the user
+ * @property {string} name - The name of the user
+ * @property {string} email - The email of the user
+ * @property {string} [hmMifareSerial] - The HM Mifare Serial (RFID) of the user (optional yet in the beta)
+ * @property {string} [preferred_username] - The preferred username of the user
+ * @property {string} [given_name] - The given name of the user
+ * @property {string} [family_name] - The family name of the user
+ */
+
+
+/**
+ * @typedef {Object} steve_user
+ *
+ * @property {number} ocppTagPk - PK of the OCPP tag
+ * @property {string} idTag - The OCPP tag (for example, RFID)
+ * @property {boolean|null} inTransaction - Whether the OCPP tag has active transactions
+ * @property {boolean} blocked - Whether the OCPP tag is blocked
+ * @property {number} maxActiveTransactionCount - Maximum allowed concurrent transactions for this tag
+ * @property {Date|null} expiryDate - Date/time at which the OCPP tag will expire (optional)
+ * @property {number|null} activeTransactionCount - Current number of active transactions (optional)
+ * @property {string|null} note - Additional note (optional)
+ */
+
+
+/**
  * @typedef {Object} steve_txn
  *
  * @property {number} id - PK of the transaction
@@ -96,4 +123,6 @@
  * @property {string} consent_method - Method by which consent was obtained (e.g., "web", "mobile")
  * @property {boolean} is_withdrawn - Indicates if the user has withdrawn consent
  * @property {Date} withdrawn_at - Timestamp when consent was withdrawn (null if not withdrawn)
+ * @property {Date} effective_from - Timestamp when the consent became effective
+ * @property {Date} updated_at - Timestamp when the consent record was last updated
  */

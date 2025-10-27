@@ -33,6 +33,10 @@ async function createOdooUser(user) {
     if (user.odoo_user_id !== null) {
         throw new ValidationError(ErrorCodes.USER.ODOO_EXISTS);
     }
+    if (!user.name || !user.email) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            'User must have name and email to create Odoo user');
+    }
 
     const data = {
         timestamp: fmt(DateTime.utc()),
@@ -44,7 +48,7 @@ async function createOdooUser(user) {
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     const response = await odooAuthedAxios.post(ODOO_CONFIG.USER_CREATION_URI, data);
-    if (response.status === 201) {
+    if (response.status === 201 || response.status === 200) {
         const response_data = response.data;
         const timestamp = response_data['timestamp'];
         const odoo_user_id = response_data['user_id'];
@@ -76,7 +80,7 @@ async function createOdooUser(user) {
             key_salt,
         );
 
-        logger.info('User create in Odoo with ID: ' + odoo_user_id + ' and partner ID: ' + odoo_partner_id);
+        logger.verbose('User create in Odoo with ID: ' + odoo_user_id + ' and partner ID: ' + odoo_partner_id);
         await db.recordActivityLog(user.user_id, 'CREATE USER', 'ODOO', user.rfid);
     } else if (response.status === 409) {
         throw new SystemError(ErrorCodes.ODOO.USER_EXISTS);
@@ -280,7 +284,7 @@ async function createOdooTxnInvoice(db_txn) {
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
             'price_unit': txn_started_with_electricity_price / 100,
-            'quantity': db_txn.delivered_energy_wh / 1000,
+            'quantity': db_txn.delivered_energy_wh / 1000, // convert Wh to kWh
         },
     ];
 

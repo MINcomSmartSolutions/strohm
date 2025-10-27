@@ -29,6 +29,7 @@
 const pool = require('./db_conn');
 const logger = require('./logger');
 const {db} = require('#utils/queries');
+const {SystemError, ErrorCodes} = require("#utils/errors");
 
 
 /**
@@ -63,7 +64,9 @@ const getActiveConsentRevision = async () => {
                    privacy_policy_url,
                    terms_url,
                    created_at,
-                   expires_at
+                   expires_at,
+                   effective_from,
+                   updated_at
             FROM consent_revisions
             WHERE is_active = true
               AND (expires_at IS NULL OR expires_at > NOW())
@@ -102,14 +105,6 @@ const getActiveConsentRevision = async () => {
  * **Note**: This function checks for ANY valid consent, not necessarily the latest.
  * For ensuring users have the most recent consent, use `hasLatestConsent()` instead.
  *
- * @example
- * const isValid = await hasValidConsent(123);
- * if (isValid) {
- *   console.log('User has valid consent');
- * } else {
- *   console.log('User needs to provide consent');
- * }
- *
  * @see {@link hasLatestConsent} For checking consent to the most recent revision
  */
 const hasValidConsent = async (userId) => {
@@ -143,7 +138,7 @@ const hasValidConsent = async (userId) => {
  *
  * @async
  * @function hasLatestConsent
- * @param {number} userId - Unique identifier for the user
+ * @param {User} user - User object containing at least the user_id property
  * @returns {Promise<boolean>} True if user has consented to the latest revision, false otherwise
  *
  * @throws {Error} Database connection or query errors (handled via db.handleQueryError)
@@ -162,7 +157,11 @@ const hasValidConsent = async (userId) => {
  *
  * @see {@link hasValidConsent} For checking any valid consent (not necessarily latest)
  */
-const hasLatestConsent = async (userId) => {
+const hasLatestConsent = async (user) => {
+    if (!user || !user.user_id) {
+        throw new SystemError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'Invalid user object provided to hasLatestConsent');
+    }
+
     const client = await pool.connect();
     try {
         // Get the latest active consent revision
@@ -191,7 +190,7 @@ const hasLatestConsent = async (userId) => {
               AND consent_revision_id = $2::integer
               AND is_withdrawn = false
             LIMIT 1
-        `, [userId, latestRevisionId]);
+        `, [user.user_id, latestRevisionId]);
 
         return userConsent.rows.length > 0;
     } catch (error) {
@@ -415,7 +414,7 @@ const createConsentRevision = async (version, title, content, privacyPolicyUrl =
         const result = await client.query(`
             INSERT INTO consent_revisions (version, title, content, privacy_policy_url, terms_url, expires_at, optional)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active, optional
+            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active, optional, effective_from, updated_at
         `, [version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optional]);
 
         await client.query('COMMIT');
