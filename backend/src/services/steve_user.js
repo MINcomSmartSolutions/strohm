@@ -36,10 +36,11 @@ const validateUserObjectForSteve = (user) => {
  * @async
  * @param {Object} user - The user object (must include rfid).
  * @param {boolean} [blocked=false] - Whether the user should be created `blocked`.
+ * @param {string|null} [reason=null] - Optional note for the user.
  * @returns {Promise<Object>} The created user data from SteVe.
  * @throws {ValidationError|Error} If validation fails or creation fails.
  */
-const createSteveUser = async (user, blocked = false) => {
+const createSteveUser = async (user, blocked = false, reason = null) => {
     validateUserObjectForSteve(user);
 
     logger.info(`Creating user in Steve with RFID: ${user.rfid}`);
@@ -53,7 +54,7 @@ const createSteveUser = async (user, blocked = false) => {
     const create_response = await steveAxios.post(STEVE_CONFIG.OCPP_TAGS_URI, {
         idTag: user.rfid,
         maxActiveTransactionCount: blocked ? 0 : 1,
-        note: 'User created by API by MINcom Smart Solutions GmbH',
+        note: reason ? reason : 'User created by API by MINcom Smart Solutions GmbH',
     });
 
     if (!create_response) {
@@ -76,9 +77,9 @@ const createSteveUser = async (user, blocked = false) => {
     }
 
     logger.debug('User created in SteVe with RFID: ' + user.rfid + ' and steve_id: ' + create_check_query.ocppTagPk);
-    await db.recordActivityLog(user.user_id, 'CREATE USER', 'SteVe', user.rfid);
+    await db.recordActivityLog(user.user_id, 'CREATE USER', 'SteVe', user.rfid, reason);
     if (blocked) {
-        await db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid);
+        await db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid, 'User is created as blocked');
     }
 
     return create_check_query;
@@ -96,6 +97,7 @@ const createSteveUser = async (user, blocked = false) => {
  */
 const getSteveUser = async (user_rfid) => {
     if (!user_rfid || user_rfid.trim() === '') {
+        // Never fetch all ocppTags
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
 
@@ -118,7 +120,7 @@ const getSteveUser = async (user_rfid) => {
         throw new SystemError(ErrorCodes.STEVE.USER_MULTIPLE_FOUND);
     }
 
-    validateSteveUser(response.data[0], user_rfid);
+    validateSteveUser(response.data[0], user_rfid); // Throws if invalid
 
     return response.data[0];
 };
@@ -130,15 +132,16 @@ const getSteveUser = async (user_rfid) => {
  *
  * @async
  * @param {Object} user - The user object (must include rfid and steve_id).
+ * @param {string|null} [reason=null] - Optional reason for blocking.
  * @throws {ValidationError|Error} If input is invalid or block fails.
  */
-const blockSteveUser = async (user) => {
+const blockSteveUser = async (user, reason = null) => {
     validateUserObjectForSteve(user);
 
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
         maxActiveTransactionCount: 0,
-        // Maybe also add a note of the reason for blocking
+        note: reason ? reason : 'User blocked by API by MINcom Smart Solutions GmbH',
     });
 
     if (!response) {
@@ -152,7 +155,7 @@ const blockSteveUser = async (user) => {
         throw new SystemError(ErrorCodes.STEVE.USER_BLOCK_FAILED, `User with RFID ${user.rfid} could not be blocked in SteVe`);
     }
 
-    await db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid);
+    await db.recordActivityLog(user.user_id, 'BLOCK USER', 'SteVe', user.rfid, reason);
 };
 
 
