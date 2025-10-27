@@ -161,7 +161,7 @@ const blockSteveUser = async (user, reason = null, expiredDate = null) => {
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
         maxActiveTransactionCount: 0,
-        note: reason ? reason : 'User blocked by API by MINcom Smart Solutions GmbH',
+        note: reason ? reason : 'User blocked with API by MINcom Smart Solutions GmbH',
         expiredAt: expiredDate ? expiredDate.toISOString() : null,
     });
 

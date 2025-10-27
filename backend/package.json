@@ -7,6 +7,7 @@
     "start": "node ./server.js",
     "debug": "node --watch ./server.js",
     "test": "NODE_ENV=test npx jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/",
+    "test:file": "NODE_ENV=test npx jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns",
     "test coverage": "NODE_ENV=test npx jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --coverage",
     "docs": "npx jsdoc2md -c jsdoc.config.json -p package.json  src/**/*.js > ../docs/docs.md"
   },

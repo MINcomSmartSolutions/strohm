@@ -28,8 +28,9 @@ service that bypass the centralized queries.js mechanism:</p>
 </dd>
 <dt><a href="#module_controllers/dev_admin">controllers/dev_admin</a></dt>
 <dd><p>Dev Admin Controller</p>
-<p>Provides admin endpoints for managing users across SteVe, Odoo, and Database
-WARNING: These endpoints should only be available in development/test environments</p>
+<p>Provides admin endpoints for managing users across SteVe, Odoo, and Database.
+These endpoints are protected by Tailscale network authentication middleware.</p>
+<p>SECURITY: Access is restricted to requests originating from Tailscale IP addresses.</p>
 </dd>
 <dt><a href="#module_controllers/odoo">controllers/odoo</a></dt>
 <dd><p>Controller for handling Odoo internal user sync webhooks.</p>
@@ -57,6 +58,11 @@ in the application database. It acts as the authentication layer that must pass
 before any authorization checks (like consent) are performed.</p>
 <p><strong>SINGLE RESPONSIBILITY</strong>: This middleware ONLY handles authentication.
 It does NOT check consent or other authorization concerns.</p>
+</dd>
+<dt><a href="#module_middlewares/tailscaleAuth">middlewares/tailscaleAuth</a></dt>
+<dd><p>Tailscale Authentication Middleware</p>
+<p>Restricts access to endpoints based on Tailscale network membership.
+Checks if the request originates from a Tailscale IP address.</p>
 </dd>
 <dt><a href="#module_services/consent">services/consent</a></dt>
 <dd><p>Service for handling user consent operations and consent revision management.</p>
@@ -278,8 +284,10 @@ service that bypass the centralized queries.js mechanism:
 ## controllers/dev\_admin
 Dev Admin Controller
 
-Provides admin endpoints for managing users across SteVe, Odoo, and Database
-WARNING: These endpoints should only be available in development/test environments
+Provides admin endpoints for managing users across SteVe, Odoo, and Database.
+These endpoints are protected by Tailscale network authentication middleware.
+
+SECURITY: Access is restricted to requests originating from Tailscale IP addresses.
 
 
 * [controllers/dev_admin](#module_controllers/dev_admin)
@@ -481,6 +489,34 @@ Authentication Flow:
 
 **Kind**: inner method of [<code>middlewares/ensureAuthenticated</code>](#module_middlewares/ensureAuthenticated)  
 **Returns**: <code>void</code> - Calls next() on success or redirects on failure  
+<a name="module_middlewares/tailscaleAuth"></a>
+
+## middlewares/tailscaleAuth
+Tailscale Authentication Middleware
+
+Restricts access to endpoints based on Tailscale network membership.
+Checks if the request originates from a Tailscale IP address.
+
+
+* [middlewares/tailscaleAuth](#module_middlewares/tailscaleAuth)
+    * [~isIPInCIDR(ip, cidr)](#module_middlewares/tailscaleAuth..isIPInCIDR) ⇒ <code>boolean</code>
+    * [~ensureTailscaleAccess(req, res, next)](#module_middlewares/tailscaleAuth..ensureTailscaleAccess)
+
+<a name="module_middlewares/tailscaleAuth..isIPInCIDR"></a>
+
+### middlewares/tailscaleAuth~isIPInCIDR(ip, cidr) ⇒ <code>boolean</code>
+Check if an IP address is within a CIDR range
+
+**Kind**: inner method of [<code>middlewares/tailscaleAuth</code>](#module_middlewares/tailscaleAuth)  
+<a name="module_middlewares/tailscaleAuth..ensureTailscaleAccess"></a>
+
+### middlewares/tailscaleAuth~ensureTailscaleAccess(req, res, next)
+Middleware to ensure request comes from Tailscale network
+
+Checks X-Forwarded-For and X-Real-IP headers against configured Tailscale IP ranges.
+In production, also validates that the request passed through nginx proxy.
+
+**Kind**: inner method of [<code>middlewares/tailscaleAuth</code>](#module_middlewares/tailscaleAuth)  
 <a name="module_services/consent"></a>
 
 ## services/consent
@@ -982,43 +1018,43 @@ All functions validate input and handle errors using custom error types.
 
 
 * [services/steve_user](#module_services/steve_user)
-    * [~createSteveUser(user, [blocked])](#module_services/steve_user..createSteveUser) ⇒ <code>Promise.&lt;Object&gt;</code>
-    * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(Array.&lt;Object&gt;\|null)&gt;</code>
-    * [~blockSteveUser(user)](#module_services/steve_user..blockSteveUser)
-    * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser)
-    * [~deleteSteveUser(user)](#module_services/steve_user..deleteSteveUser)
+    * [~createSteveUser(user, [blocked], [reason])](#module_services/steve_user..createSteveUser) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+    * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(steve\_user\|null)&gt;</code>
+    * [~blockSteveUser(user, [reason], [expiredDate])](#module_services/steve_user..blockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~deleteSteveUser(user)](#module_services/steve_user..deleteSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
 
 <a name="module_services/steve_user..createSteveUser"></a>
 
-### services/steve_user~createSteveUser(user, [blocked]) ⇒ <code>Promise.&lt;Object&gt;</code>
+### services/steve_user~createSteveUser(user, [blocked], [reason]) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
 Creates a new user in SteVe with the given RFID.
-- Checks if the user already exists.
-- Creates the user with the specified block status.
-- Validates the response and stores the steve_id in the database.
-- Returns the created user data.
+- If the user already exists in SteVe, records a FIND USER activity and saves the `ocppTagPk` to the local DB.
+- If the user does not exist, creates it with the specified block status, validates the response,
+  stores the returned `ocppTagPk` in the local DB and returns the created SteVe user data.
+- Side effects: updates DB via `db.setSteveUserParamaters` and records activity logs.
 
 **Kind**: inner method of [<code>services/steve\_user</code>](#module_services/steve_user)  
-**Returns**: <code>Promise.&lt;Object&gt;</code> - The created user data from SteVe.  
+**Returns**: <code>Promise.&lt;(Object\|null)&gt;</code> - Resolves to the created SteVe user object when a new user was created; resolves to `null` if the user already existed (no new creation).  
 **Throws**:
 
-- <code>ValidationError</code><code>Error</code> If validation fails or creation fails.
+- <code>ValidationError</code><code>SystemError</code><code>Error</code> If validation fails, SteVe returns an error or no response, or other failures occur.
 
 <a name="module_services/steve_user..getSteveUser"></a>
 
-### services/steve_user~getSteveUser(user_rfid) ⇒ <code>Promise.&lt;(Array.&lt;Object&gt;\|null)&gt;</code>
+### services/steve_user~getSteveUser(user_rfid) ⇒ <code>Promise.&lt;(steve\_user\|null)&gt;</code>
 Fetches a user from SteVe by RFID.
 Returns null if not found, throws if multiple found or on error.
 Validates the user data.
 
 **Kind**: inner method of [<code>services/steve\_user</code>](#module_services/steve_user)  
-**Returns**: <code>Promise.&lt;(Array.&lt;Object&gt;\|null)&gt;</code> - User data array or null if not found.  
+**Returns**: <code>Promise.&lt;(steve\_user\|null)&gt;</code> - User data array or null if not found.  
 **Throws**:
 
 - <code>ValidationError</code><code>Error</code> On invalid input or fetch error.
 
 <a name="module_services/steve_user..blockSteveUser"></a>
 
-### services/steve_user~blockSteveUser(user)
+### services/steve_user~blockSteveUser(user, [reason], [expiredDate]) ⇒ <code>Promise.&lt;void&gt;</code>
 Blocks a user in SteVe by setting their maxActiveTransactionCount to 0.
 Validates input, updates the user, checks the block status, and logs the action.
 
@@ -1029,7 +1065,7 @@ Validates input, updates the user, checks the block status, and logs the action.
 
 <a name="module_services/steve_user..unblockSteveUser"></a>
 
-### services/steve_user~unblockSteveUser(user)
+### services/steve_user~unblockSteveUser(user) ⇒ <code>Promise.&lt;void&gt;</code>
 Unblocks a user in SteVe by setting their maxActiveTransactionCount to 1.
 Validates input, updates the user, checks the unblock status, and logs the action.
 
@@ -1040,7 +1076,7 @@ Validates input, updates the user, checks the unblock status, and logs the actio
 
 <a name="module_services/steve_user..deleteSteveUser"></a>
 
-### services/steve_user~deleteSteveUser(user)
+### services/steve_user~deleteSteveUser(user) ⇒ <code>Promise.&lt;void&gt;</code>
 Deletes a user from SteVe by their steve_id.
 Validates input, deletes the user, and logs the action.
 
@@ -1056,11 +1092,14 @@ Service for checking overall user integrity and creating users with proper links
 
 <a name="module_services/user_operations..userOperations"></a>
 
-### services/user_operations~userOperations(oidc_user) ⇒ <code>Promise.&lt;Object&gt;</code>
+### services/user_operations~userOperations(oidc_user, [createUserIfNotExists]) ⇒ <code>Promise.&lt;Object&gt;</code>
 Handles user creation and linking with external systems.
 
 - Checks if a user exists by OIDC ID.
-- If not, creates a new user with a random RFID (for development).
+- If not, and createUserIfNotExists is true creates a new user with the users' rfid.
+- If not, and createUserIfNotExists is false, returns null.
+- If user exists but is deactivated, throws an error.
+- If user exists, checks for updates in OIDC data and updates the user if needed.
 - Ensures the user is registered in Odoo and Steve systems.
 - Returns the up-to-date detailed user object.
 
@@ -1168,6 +1207,7 @@ Global database queries
     * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>Promise.&lt;number&gt;</code> \| <code>null</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
+    * [~updateUser(userId, updates)](#module_utils/queries..updateUser) ⇒ <code>Promise.&lt;object&gt;</code>
     * [~activateUser(user)](#module_utils/queries..activateUser)
     * [~deleteUser(user)](#module_utils/queries..deleteUser)
 
@@ -1317,6 +1357,19 @@ Get total count of users matching the given filters
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Returns**: <code>Promise.&lt;number&gt;</code> - Total count of matching users  
+<a name="module_utils/queries..updateUser"></a>
+
+### utils/queries~updateUser(userId, updates) ⇒ <code>Promise.&lt;object&gt;</code>
+Updates specific user's information in the database.
+Uses a whitelist of allowed columns to prevent unauthorized field updates.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;object&gt;</code> - The updated user object.  
+**Throws**:
+
+- <code>ValidationError</code> If userId is invalid, updates is empty, or contains invalid column names.
+- <code>DatabaseError</code> If database operation fails.
+
 <a name="module_utils/queries..activateUser"></a>
 
 ### utils/queries~activateUser(user)
@@ -1365,6 +1418,8 @@ Type definitions
 
 * [utils/typedef](#module_utils/typedef)
     * [~User](#module_utils/typedef..User) : <code>Object</code>
+    * [~OIDCUser](#module_utils/typedef..OIDCUser) : <code>Object</code>
+    * [~steve_user](#module_utils/typedef..steve_user) : <code>Object</code>
     * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
     * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
     * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
@@ -1388,6 +1443,39 @@ Type definitions
 | rfid | <code>string</code> | The user's RFID |
 | steve_id | <code>number</code> | The user's OCPP tag primary key in SteVe |
 | deactivated_at | <code>Date</code> | The date and time when the user is (if any) deactivated |
+
+<a name="module_utils/typedef..OIDCUser"></a>
+
+### utils/typedef~OIDCUser : <code>Object</code>
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| sub | <code>string</code> | The subject (unique identifier) of the user |
+| name | <code>string</code> | The name of the user |
+| email | <code>string</code> | The email of the user |
+| [hmMifareSerial] | <code>string</code> | The HM Mifare Serial (RFID) of the user (optional yet in the beta) |
+| [preferred_username] | <code>string</code> | The preferred username of the user |
+| [given_name] | <code>string</code> | The given name of the user |
+| [family_name] | <code>string</code> | The family name of the user |
+
+<a name="module_utils/typedef..steve_user"></a>
+
+### utils/typedef~steve\_user : <code>Object</code>
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| ocppTagPk | <code>number</code> | PK of the OCPP tag |
+| idTag | <code>string</code> | The OCPP tag (for example, RFID) |
+| inTransaction | <code>boolean</code> \| <code>null</code> | Whether the OCPP tag has active transactions |
+| blocked | <code>boolean</code> | Whether the OCPP tag is blocked |
+| maxActiveTransactionCount | <code>number</code> | Maximum allowed concurrent transactions for this tag |
+| expiryDate | <code>Date</code> \| <code>null</code> | Date/time at which the OCPP tag will expire (optional) |
+| activeTransactionCount | <code>number</code> \| <code>null</code> | Current number of active transactions (optional) |
+| note | <code>string</code> \| <code>null</code> | Additional note (optional) |
 
 <a name="module_utils/typedef..steve_txn"></a>
 
