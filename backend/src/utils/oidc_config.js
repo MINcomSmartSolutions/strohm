@@ -48,16 +48,35 @@ const oidc_config = {
                 });
 
             // TODO: Validate userInfo properties here if needed
-            req.session.user = await userOperations(userInfo, false);
-            await saveSession(req);
+
+            // Try to get user from database (don't create yet - that happens in consent flow)
+            const user = await userOperations(userInfo, false);
+
+            // Store user in session if found
+            if (user) {
+                req.session.user = user;
+                await saveSession(req);
+                logger.info(`User ${user.user_id} loaded in afterCallback`);
+            } else {
+                logger.info(`New user detected in afterCallback (oauth_id: ${userInfo.sub})`);
+            }
+
+            // Return session with userInfo attached - this makes req.oidc.user available
+            // This is critical: even for new users who don't have a DB record yet,
+            // we need the OIDC userInfo available so consent flow can access it
+            return {
+                ...session,
+                user: userInfo, // This populates req.oidc.user with full userInfo
+            };
         } catch (e) {
             // Even though it throws here, we return the session to avoid breaking the OIDC flow
             logger.warn('Warning in afterCallback:', e);
-        }
 
-        return {
-            ...session,
-        };
+            // Return session as-is on error
+            return {
+                ...session,
+            };
+        }
     }
 };
 
