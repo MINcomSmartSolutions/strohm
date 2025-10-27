@@ -15,6 +15,7 @@ const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {GLOBAL_CONFIG} = require("#config");
 const {getRFIDFromFile} = require("#helpers/user");
 const {blockSteveUser} = require("#services/steve_user");
+const {DateTime} = require("luxon");
 
 /**
  * Handles user creation and linking with external systems.
@@ -89,12 +90,11 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
                 ...(oidc_user.hmMifareSerial && {rfid: oidc_user.hmMifareSerial})
             });
 
-            const blockedSuccess = await blockSteveUser(updated_user, "RFID is stale. Should not be activated.");
-            if (!blockedSuccess) {
-                logger.error("Failed to block user in Steve after RFID change for user ID: " + updated_user.user_id);
-            }
-            const new_create_success = await createSteveUser(updated_user, false, `New active RFID of old OCPP TAG: ${updated_user.steve_id}`); // Create new Steve user with updated RFID
-            if (!new_create_success) {
+            const now = DateTime.utc();
+            await blockSteveUser(updated_user, "RFID is stale. Should not be activated.", now);
+
+            const new_create_user = await createSteveUser(updated_user, false, `New active RFID of old OCPP TAG PK: ${updated_user.steve_id}`); // Create new Steve user with updated RFID
+            if (!new_create_user) {
                 logger.error("Failed to create new Steve user after RFID change for user ID: " + updated_user.user_id);
             }
         }
