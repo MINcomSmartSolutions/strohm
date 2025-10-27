@@ -16,6 +16,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
+      - ./backend/database/pg_hba.conf:/var/lib/postgresql/data/pg_hba.conf:ro
       - prod-db-data:/var/lib/postgresql/data
     networks:
       - strohm-network-prod
