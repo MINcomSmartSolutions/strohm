@@ -66,7 +66,7 @@ const oidc_config = {
             // we need the OIDC userInfo available so consent flow can access it
             return {
                 ...session,
-                user: userInfo, // This populates req.oidc.user with full userInfo
+                user: userInfo, // This populates req.appSession.user with full userInfo
             };
         } catch (e) {
             // Even though it throws here, we return the session to avoid breaking the OIDC flow

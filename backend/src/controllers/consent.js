@@ -223,12 +223,16 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
 
         // Get user info from OIDC session (already validated by ensureAuthenticated)
         const oidcUser = req.oidc.user;
+        const userInfo = req.appSession.user;
+        if (!userInfo) {
+            throw SystemError(ErrorCodes.SYSTEM.INVALID_SESSION, 'User info missing in session during consent processing');
+        }
 
         log.info(`Creating user and external system accounts for oauth_id: ${oidcUser.sub}`);
 
         // Now we can create (or get if this is n-th consent given for the) user
         // This also creates Odoo and Steve users if they don't exist
-        const user = await userOperations(oidcUser);
+        const user = await userOperations(userInfo);
 
         // Double-check if user already has latest consent
         const hasConsent = await hasLatestConsent(user);

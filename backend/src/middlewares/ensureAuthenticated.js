@@ -113,7 +113,7 @@ const ensureAuthenticated = async (req, res, next) => {
             log.debug(`New user (oauth_id: ${oidcUser.sub}) - not yet in database`);
 
             // Clear any stale session data if it exists for a different user
-            if (req.session.user && req.session.user.oauth_id && req.session.user.oauth_id !== oidcUser.sub) {
+            if (req.appSession.user && req.appSession.user.oauth_id && req.appSession.user.oauth_id !== oidcUser.sub) {
                 log.debug('Clearing stale session data for different user');
                 delete req.session.user;
             }
