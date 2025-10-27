@@ -48,16 +48,18 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     if (!user) {
         // New user
         let rfid = oidc_user.hmMifareSerial;
-        if (!rfid && GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            const file_rfid = await getRFIDFromFile(oidc_user.email);
-            if (file_rfid) {
-                rfid = file_rfid;
+        if (!rfid) {
+            if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+                const file_rfid = await getRFIDFromFile(oidc_user.email);
+                if (file_rfid) {
+                    rfid = file_rfid;
+                } else {
+                    logger.error('RFID couldnt be found neither in OIDC nor in the mapping csv for email: ' + oidc_user.email);
+                    throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
+                }
             } else {
-                logger.error('RFID couldnt be found neither in OIDC nor in the mapping csv for email: ' + oidc_user.email);
-                throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
+                rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
             }
-        } else {
-            rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
         const createdUser = await db.createUser(
