@@ -28,6 +28,7 @@ const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
 const {ensureAuthenticated} = require('./middlewares/ensureAuthenticated');
 const {requireConsent} = require('./middlewares/consent');
+const {ensureTailscaleAccess} = require('./middlewares/tailscaleAuth');
 const {GLOBAL_CONFIG} = require("#config");
 const {AuthError, ErrorCodes, SystemError} = require("#utils/errors");
 
@@ -145,10 +146,23 @@ app.use(odoo_controller);
 
 app.use(scim_controller);
 
-if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+// Admin Panel - Protected by Tailscale network access
+// Enable with TAILSCALE_ENABLE_ADMIN=true environment variable
+if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     const dev_admin_controller = require('./controllers/dev_admin');
 
-    logger.info('Dev Admin Panel enabled - available at /dev-admin.html');
+    logger.info('Admin Panel enabled - protected by Tailscale authentication');
+    logger.info('Admin panel available at /dev-admin.html');
+    logger.info(`Allowed Tailscale ranges: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_RANGES.join(', ')}`);
+    if (GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.length > 0) {
+        logger.info(`Allowed specific IPs: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.join(', ')}`);
+    }
+
+    // Apply Tailscale authentication to all admin routes
+    app.use('/api/dev/{*any}', ensureTailscaleAccess);
+    app.get('/dev-admin.html', ensureTailscaleAccess, (req, res) => {
+        res.sendFile('dev-admin.html', {root: 'public'});
+    });
 
     // API routes
     app.get('/api/dev/users', dev_admin_controller.getAllUsers);
@@ -159,6 +173,8 @@ if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
     app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
     app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);
     app.post('/api/dev/users/:user_id/odoo/revoke', dev_admin_controller.revokeOdooCredentials);
+} else {
+    logger.info('Admin Panel disabled - set TAILSCALE_ENABLE_ADMIN=true to enable');
 }
 
 startCronWithHealthCheck();

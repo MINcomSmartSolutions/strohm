@@ -20,6 +20,11 @@ If no default is provided below, the variable is required to be set.
 - NODE_ENV: ['dev','production','test'] (default: 'dev')
 - SERVER_PORT: (default: 3000)
 - SESSION_SECRET: Used to sign the session cookies. Should be at least 32 characters long.
+- TAILSCALE_ENABLE_ADMIN: (default: "false") Enable Tailscale admin access.
+- TAILSCALE_ALLOWED_RANGES: Tailscale CGNAT IP ranges (comma-separated CIDR notation).Default Tailscale range:
+  100.64.0.0/10. You can add multiple ranges separated by commas
+- TAILSCALE_ALLOWED_IPS=Specific allowed Tailscale IP addresses (comma-separated). Leave empty to allow all IPs in the
+  ranges. Or specify exact IPs for tighter security
 
 #### OIDC
 
@@ -32,9 +37,7 @@ If no default is provided below, the variable is required to be set.
 
 #### ODOO
 
-- ODOO_ADMIN_API_KEY: This api key needs to be created for admin user in Odoo and provided here to allow the server to
-  create users and do other operations in Odoo by admin rights.
-- ODOO_API_SECRET: This is used to verify the redirections or requests hashed with this secret.
+- ODOO_API_SECRET: This is used to authenticate and secure the communication between server and Odoo.
 - ODOO_HOST: (default: "odoo") Used for making calls by internal docker network
 - ODOO_PORT: (default: 8069) Used for making calls by internal docker network
 - ODOO_EXTERNAL_BASE_URL: The full base URL used to access Odoo from outside the docker network (
@@ -79,7 +82,8 @@ in default, but not specified here.
   all" to avoid loading demo data.
 - PROXY_MODE: [boolean] (default: "false") Whether to enable proxy mode. This should be enabled if Odoo is behind a
   reverse proxy.
-- ADMIN_PASSWORD: (default: "admin") Password for the admin user created by doodba.
+- ADMIN_PASSWORD: (default: "admin") Password for the admin user created by doodba. FYI somereason it is always "admin"
+  even if we set it to something else.
 
 ###### SMTP (To be used for sending emails from Odoo)
 
@@ -105,7 +109,7 @@ Same instance of database used with the Server but with different user and datab
 - WEBHOOK_API_KEY: To be the same as SERVER --> ODOO --> WEBHOOK_API_KEY
 - BACKEND_HOST
 - BACKEND_PORT: (default: 3000) To be the same as SERVER --> General --> SERVER_PORT
-- BACKEND_EXTERNAL_URL: The servers base url (e.g. http://localhost:3000, https://domain.com).
+- BACKEND_EXTERNAL_URL: The servers external reachable base url (e.g. http://localhost:3000, https://domain.com).
 
 ----
 

@@ -1,8 +1,10 @@
 /**
  * @file Dev Admin Controller
  *
- * Provides admin endpoints for managing users across SteVe, Odoo, and Database
- * WARNING: These endpoints should only be available in development/test environments
+ * Provides admin endpoints for managing users across SteVe, Odoo, and Database.
+ * These endpoints are protected by Tailscale network authentication middleware.
+ *
+ * SECURITY: Access is restricted to requests originating from Tailscale IP addresses.
  *
  * @module controllers/dev_admin
  */
@@ -251,7 +253,7 @@ async function revokeOdooCredentials(req, res) {
         }
 
         if (!user.odoo_user_id) {
-            return res.status(400).json({success: false, error: 'User does not have Odoo credentials'});
+            return res.status(400).json({success: false, error: 'User does not have Odoo id'});
         }
 
         await db.revokeUserOdooCredentials(user);

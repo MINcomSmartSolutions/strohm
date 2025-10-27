@@ -53,6 +53,20 @@ const GLOBAL_CONFIG = {
     },
     OIDC: {
         DISCOVERY_CACHE_TTL: 24 * 60 * 60 * 1000, // 24 hours - configurable TTL for OIDC discovery cache
+    },
+    TAILSCALE: {
+        // Enable admin panel access from Tailscale network
+        ENABLE_ADMIN: process.env.TAILSCALE_ENABLE_ADMIN === 'true',
+        // Tailscale CGNAT IP range: 100.64.0.0/10
+        // You can also use your specific Tailnet range from tailscale status
+        // No default - must be explicitly configured
+        ALLOWED_RANGES: process.env.TAILSCALE_ALLOWED_RANGES
+            ? process.env.TAILSCALE_ALLOWED_RANGES.split(',').map(r => r.trim())
+            : [],
+        // Specific IPs to allow (comma-separated in env var)
+        ALLOWED_IPS: process.env.TAILSCALE_ALLOWED_IPS
+            ? process.env.TAILSCALE_ALLOWED_IPS.split(',').map(ip => ip.trim())
+            : [],
     }
 }
 
