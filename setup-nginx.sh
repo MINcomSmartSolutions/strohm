@@ -108,8 +108,7 @@ fi
 
 # Start and enable nginx
 echo -e "${BLUE} Starting nginx...${NC}"
-systemctl enable nginx
-systemctl start nginx
+systemctl restart nginx
 
 if systemctl is-active --quiet nginx; then
     echo -e "${GREEN}Nginx is running successfully${NC}"
