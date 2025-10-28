@@ -59,6 +59,8 @@ services:
     ports:
       - "127.0.0.1:${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
       - "127.0.0.1:9229:9229"  # Node.js debug port
+    volumes:
+      - ./backend/rfid_mapping.csv:/usr/src/app/rfid_mapping.csv
     networks:
       - strohm-network-debug
     healthcheck:
@@ -99,7 +101,7 @@ services:
       - "127.0.0.1:8069:8069"
       - "127.0.0.1:8072:8072"
     volumes:
-      - odoo-debug-web-data:/var/lib/odoo:z
+      - odoo-debug-web-data:/var/lib/odoo
     depends_on:
       db:
         condition: service_healthy
