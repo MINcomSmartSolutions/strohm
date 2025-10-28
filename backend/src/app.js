@@ -15,7 +15,6 @@ const oidc_config = require('./utils/oidc_config');
 const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
 const {getOdooPortalLogin} = require('./services/odoo');
-const {db} = require('./utils/queries');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session);
 const logger = require('./services/logger');
@@ -85,8 +84,32 @@ app.use(hpp());
 
 // Helmet helps secure Express apps by setting various HTTP headers
 // See: https://helmetjs.github.io/
-app.use(helmet());
+let form_action_urls = [
+    "'self'",
+    "https://laden.hm.edu",
+    "https://backend.laden.hm.edu",
+];
+if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+    form_action_urls.push("http://localhost:3000", "http://localhost:18069");
+}
 
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for inline scripts
+            styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for inline styles
+            imgSrc: ["'self'", "data:", "https:"], // Allow images from same origin, data URIs, and HTTPS
+            connectSrc: ["'self'"], // Allow AJAX/fetch to same origin
+            fontSrc: ["'self'"], // Allow fonts from same origin
+            objectSrc: ["'none'"], // Block plugins (Flash, etc.)
+            mediaSrc: ["'self'"], // Allow media from same origin
+            frameSrc: ["'self'"], // Allow iframes from same origin
+            formAction: form_action_urls,
+        },
+    },
+    crossOriginEmbedderPolicy: false, // Needed for Auth0 OIDC compatibility
+}));
 
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 // See: https://github.com/auth0/express-openid-connect
