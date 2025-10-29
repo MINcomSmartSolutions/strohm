@@ -118,15 +118,6 @@ else
     exit 1
 fi
 
-# Set up automatic certificate renewal
-echo -e "${BLUE}Setting up automatic certificate renewal...${NC}"
-if ! crontab -l 2>/dev/null | grep -q "certbot renew"; then
-    (crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet --reload-nginx") | crontab -
-    echo -e "${GREEN}Automatic certificate renewal configured${NC}"
-else
-    echo -e "${YELLOW}Certificate renewal already configured${NC}"
-fi
-
 echo ""
 echo -e "${GREEN}Nginx setup completed successfully!${NC}"
 echo ""
