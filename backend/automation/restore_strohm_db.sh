@@ -90,8 +90,9 @@ done
 
 echo "Please select the environment to restore from:"
 echo "1) Development"
-echo "2) Production"
-echo "3) Staging"
+echo "2) Staging"
+echo "3) Production"
+
 
 read -r -p "Enter your choice (1-3): " choice
 
@@ -100,10 +101,10 @@ case $choice in
         ENV="development"
         ;;
     2)
-        ENV="production"
+        ENV="staging"
         ;;
     3)
-        ENV="staging"
+        ENV="production"
         ;;
     *)
         error "Invalid choice. Exiting..."
@@ -156,18 +157,9 @@ if [ -z "$SNAPSHOT_ID" ]; then
     RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots --tag "$BACKUP_TAG"
     echo ""
 
-    read -r -p "Enter snapshot ID to restore (or 'latest' for most recent): " SNAPSHOT_INPUT
+    read -r -p "Enter snapshot ID to restore" SNAPSHOT_INPUT
+    SNAPSHOT_ID="$SNAPSHOT_INPUT"
 
-    if [ "$SNAPSHOT_INPUT" = "latest" ]; then
-        SNAPSHOT_ID=$(RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots --tag "$BACKUP_TAG" --json | grep -o '"short_id":"[^"]*"' | head -1 | cut -d'"' -f4)
-        if [ -z "$SNAPSHOT_ID" ]; then
-            error "Could not find latest snapshot"
-            exit 1
-        fi
-        info "Using latest snapshot: $SNAPSHOT_ID"
-    else
-        SNAPSHOT_ID="$SNAPSHOT_INPUT"
-    fi
 fi
 
 # Verify snapshot exists
