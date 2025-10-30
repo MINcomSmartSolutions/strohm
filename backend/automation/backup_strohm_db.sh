@@ -80,8 +80,8 @@ done
 
 echo "Please select the environment you want backup to be saved:"
 echo "1) Development"
-echo "2) Production"
-echo "3) Staging"
+echo "2) Staging"
+echo "3) Production"
 
 read -r -p "Enter your choice (1-3): " choice
 
@@ -90,11 +90,12 @@ case $choice in
         ENV="development"
         ;;
     2)
-        ENV="production"
-        ;;
-    3)
         ENV="staging"
         ;;
+    3)
+        ENV="production"
+        ;;
+
     *)
         error "Invalid choice. Exiting..."
         exit 1
