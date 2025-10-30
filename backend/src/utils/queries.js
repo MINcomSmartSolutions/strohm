@@ -179,7 +179,7 @@ const getUsers = async (filters = {}, options = {}) => {
  *
  * @async
  * @param {Object} filters - Object containing field names and values to filter by
- * @returns {Promise<Object<User>|null>} - The matching user or null if not found
+ * @returns {Promise<User|null>} - The matching user or null if not found
  * @throws {DatabaseError} - database operation fails
  * @throws {ValidationError} - if multiple users match the criteria
  */
@@ -469,6 +469,50 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
 
 
 /**
+ * Cross-check user by steve_id and validate RFID consistency
+ * @async
+ * @param {Object} client - Database client
+ * @param {number} ocppTagPk - Steve user ID
+ * @param {string} ocppIdTag - RFID tag from transaction
+ * @param {number} txn_steve_id - Transaction Steve ID for logging
+ * @returns {Promise<number|null>} - user_id if found, null otherwise
+ */
+async function userCrossCheckForTxn(client, ocppTagPk, ocppIdTag, txn_steve_id) {
+    const userLookupQuery = `
+        SELECT user_id, rfid
+        FROM users
+        WHERE steve_id = $1::integer
+    `;
+
+    const userLookupResult = await client.query(userLookupQuery, [ocppTagPk]);
+
+    if (userLookupResult.rowCount > 0) {
+        const user = userLookupResult.rows[0];
+
+        // Cross-check RFID to detect data inconsistencies
+        if (user.rfid !== ocppIdTag) {
+            logger.error(`RFID mismatch for steve_id ${ocppTagPk}: Database has '${user.rfid}' but transaction has '${ocppIdTag}'`, {
+                steve_id: ocppTagPk,
+                db_rfid: user.rfid,
+                txn_rfid: ocppIdTag,
+                txn_steve_id: txn_steve_id,
+                user_id: user.user_id,
+            });
+        }
+
+        return user.user_id;
+    } else {
+        logger.warn(`Unknown user's transaction is received. User not found.`, {
+            ocppTagPk: ocppTagPk,
+            ocppIdTag: ocppIdTag,
+            txn_steve_id: txn_steve_id,
+        });
+        return null;
+    }
+}
+
+
+/**
  * Record a transaction record into the `charging_transactions` table.
  * If transaction already exists and is complete, returns it without modification.
  * Otherwise, inserts a new record with proper user association or updates existing one.
@@ -478,11 +522,11 @@ async function recordActivityLog(user_id, event_type, target, rfid, reason = nul
  * @returns {Promise<Object<db_txn>>} db_txn - The transaction record from database
  */
 async function recordSteveTxn(steve_txn) {
-    const {transactionError} = steveTransactionSchema.validate(steve_txn);
-    if (transactionError) {
+    const {error} = steveTransactionSchema.validate(steve_txn);
+    if (error) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
-            `Invalid transaction data: ${transactionError.message}`,
+            `Invalid transaction data: ${error.message}`,
         );
     }
 
@@ -500,80 +544,67 @@ async function recordSteveTxn(steve_txn) {
 
         const existingTxnResult = await client.query(existingTxnQuery, [steve_txn.id]);
 
-        // If transaction exists, check if values match to avoid unnecessary updates
+        // If transaction exists, check if it's complete or needs updating
         if (existingTxnResult.rows.length > 0) {
             const existing_txn = existingTxnResult.rows[0];
-            // const existing_txn_start_datetime = existing_txn.start_timestamp ? DateTime.fromJSDate(existing_txn.start_timestamp).toUTC() : null;
-            // const incoming_txn_start_datetime = steve_txn.startTimestamp ? DateTime.fromISO(steve_txn.startTimestamp).toUTC() : null;
             const existing_txn_stop_datetime = existing_txn.stop_timestamp ? DateTime.fromJSDate(existing_txn.stop_timestamp).toUTC() : null;
             const incoming_txn_stop_datetime = steve_txn.stopTimestamp ? DateTime.fromISO(steve_txn.stopTimestamp).toUTC() : null;
 
-            /// I am skeptical about checking timestamps with such precision, or even at all
-            // const has_same_start = existing_txn_start_datetime && incoming_txn_start_datetime && existing_txn_start_datetime.toMillis() === incoming_txn_start_datetime.toMillis();
-            // const has_same_stop = existing_txn_stop_datetime && incoming_txn_stop_datetime && existing_txn_stop_datetime.toMillis() === incoming_txn_stop_datetime.toMillis();
-
-            // TODO: This much precision check might brake the check, examine more
-            // Check if transaction is complete and matches incoming data
-            if (existing_txn.txn_steve_id === steve_txn.id) {
-                if (incoming_txn_stop_datetime && existing_txn_stop_datetime) {
-                    logger.info('Transaction already exists - returning existing record');
-                    await client.query('COMMIT');
-                    return existing_txn;
-                }
-
-                // Transaction exists but needs updating
-                logger.info(`Updating existing transaction ${existing_txn.id} (Steve txn ID: ${steve_txn.id})`);
-                // How much safe to update existing transaction?
-                // We assume that start values are immutable, only stop values can change
-                const updateQuery = `
-                    UPDATE charging_transactions
-                    SET start_timestamp = $1,
-                        stop_timestamp  = $2,
-                        start_value     = $3::numeric,
-                        stop_value      = $4::numeric,
-                        stop_reason     = $5::varchar
-                    WHERE txn_steve_id = $6::integer
-                    RETURNING *
-                `;
-
-                const updateValues = [
-                    steve_txn.startTimestamp,
-                    steve_txn.stopTimestamp,
-                    steve_txn.startValue,
-                    steve_txn.stopValue,
-                    steve_txn.stopReason,
-                    steve_txn.id,
-                ];
-
-                const updateResult = await client.query(updateQuery, updateValues);
+            // If both existing and incoming transactions have stop timestamps, transaction is complete
+            if ((incoming_txn_stop_datetime && existing_txn_stop_datetime) && (incoming_txn_stop_datetime.equals(existing_txn_stop_datetime))) {
+                logger.info(`Transaction of Steve ID: ${steve_txn.id} already exists and is complete - returning existing record`);
                 await client.query('COMMIT');
-                return updateResult.rows[0];
+                return existing_txn;
             }
+
+            // Transaction exists but needs updating (adding stop values to an ongoing transaction)
+            logger.info(`Updating existing transaction ${existing_txn.id} (Steve txn ID: ${steve_txn.id})`);
+            logger.debug(`Changes: stop_timestamp: ${existing_txn.stop_timestamp} -> ${steve_txn.stopTimestamp}, stop_value: ${existing_txn.stop_value} -> ${steve_txn.stopValue}, stop_reason: ${existing_txn.stop_reason} -> ${steve_txn.stopReason}`);
+
+            // Try to resolve user_id if it's currently NULL (in case user was registered after transaction started)
+            let resolved_user_id = existing_txn.user_id;
+            if (!resolved_user_id) {
+                resolved_user_id = await userCrossCheckForTxn(client, steve_txn.ocppTagPk, steve_txn.ocppIdTag, steve_txn.id);
+                if (resolved_user_id) {
+                    logger.info(`Resolved user_id ${resolved_user_id} for previously unknown transaction ${steve_txn.id}`);
+                }
+            }
+
+            // Update stop-related fields and user_id (if resolved)
+            const updateQuery = `
+                UPDATE charging_transactions
+                SET stop_timestamp   = $1,
+                    stop_value       = $2::numeric,
+                    stop_reason      = $3::varchar,
+                    stop_event_actor = $4::varchar,
+                    user_id          = $5
+                WHERE txn_steve_id = $6::integer
+                RETURNING *
+            `;
+
+            const updateValues = [
+                steve_txn.stopTimestamp,
+                steve_txn.stopValue,
+                steve_txn.stopReason,
+                steve_txn.stopEventActor,
+                resolved_user_id,
+                steve_txn.id,
+            ];
+
+            const updateResult = await client.query(updateQuery, updateValues);
+            await client.query('COMMIT');
+            logger.info(`Transaction ${steve_txn.id} updated successfully`);
+            return updateResult.rows[0];
         }
 
         // Transaction doesn't exist, proceed to insert
-        const userCrossCheckQuery = `
-            SELECT user_id
-            FROM users
-            WHERE steve_id = $1::integer
-              AND rfid = $2::varchar
-        `;
-
-        const userCrossCheckResult = await client.query(userCrossCheckQuery, [steve_txn.ocppTagPk, steve_txn.ocppIdTag]);
-        let user_id = null;
-
-        if (userCrossCheckResult.rowCount > 0) user_id = userCrossCheckResult.rows[0].user_id;
-        else {
-            logger.warn(`Unknown user's transaction is received. Inserting without user_id.`, {
-                ocppTagPk: steve_txn.ocppTagPk,
-                ocppIdTag: steve_txn.ocppIdTag,
-            });
-        }
+        // Look up user by steve_id and validate RFID consistency
+        const user_id = await userCrossCheckForTxn(client, steve_txn.ocppTagPk, steve_txn.ocppIdTag, steve_txn.id);
 
         const insertQuery = `INSERT INTO charging_transactions
                              (txn_steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
-                              stop_reason, user_id)
-                             VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar, $8)
+                              stop_reason, stop_event_actor, user_id)
+                             VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar, $8::varchar, $9)
                              RETURNING *`;
 
         const values = [
@@ -584,11 +615,13 @@ async function recordSteveTxn(steve_txn) {
             steve_txn.startValue,
             steve_txn.stopValue,
             steve_txn.stopReason,
+            steve_txn.stopEventActor,
             user_id,
         ];
 
         const result = await client.query(insertQuery, values);
         await client.query('COMMIT');
+        logger.info(`New transaction ${steve_txn.id} inserted successfully`);
         return result.rows[0];
     } catch (error) {
         await client.query('ROLLBACK');
