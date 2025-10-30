@@ -728,6 +728,13 @@ Get cron job status
 ## services/logger : <code>winston</code>
 Logger service using winston with file rotation and enhanced console output
 
+<a name="module_services/logger..safeStringify"></a>
+
+### services/logger~safeStringify(obj) ⇒ <code>string</code>
+Safely stringify objects with circular references
+
+**Kind**: inner method of [<code>services/logger</code>](#module_services/logger)  
+**Returns**: <code>string</code> - JSON string or empty string if no metadata  
 <a name="module_services/network"></a>
 
 ## services/network
@@ -814,7 +821,7 @@ It is responsible for user creation, login, key rotation, and invoicing with Odo
     * [~getOdooPortalLogin(user)](#module_services/odoo..getOdooPortalLogin) ⇒ <code>string</code>
     * [~rotateOdooUserAuth(user)](#module_services/odoo..rotateOdooUserAuth) ⇒ <code>Promise.&lt;Object&gt;</code>
     * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;Number&gt;</code>
-    * [~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>Promise.&lt;boolean&gt;</code>
+    * ~~[~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>Promise.&lt;boolean&gt;</code>~~
 
 <a name="module_services/odoo..createOdooUser"></a>
 
@@ -897,7 +904,9 @@ Request payload to Odoo:
 
 <a name="module_services/odoo..checkValidPaymentMethod"></a>
 
-### services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>
+### ~~services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>~~
+***Deprecated***
+
 Checks if the given user has a valid payment method in Odoo.
 
 - Validates the user object.
@@ -1195,12 +1204,13 @@ Global database queries
 * [utils/queries](#module_utils/queries)
     * [~handleQueryError(error, operation, silent)](#module_utils/queries..handleQueryError)
     * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
-    * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code>
+    * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(User\|null)&gt;</code>
     * [~setUserOdooCredentials(user, odoo_user_id, odoo_partner_id, encrypted_key, salt)](#module_utils/queries..setUserOdooCredentials) ⇒ <code>Promise.&lt;number&gt;</code>
     * [~getUserOdooCredentials(user_id)](#module_utils/queries..getUserOdooCredentials) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
     * [~rotateOdooUserKey(user_id, old_key_id, new_key, new_key_salt)](#module_utils/queries..rotateOdooUserKey) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~setSteveUserParamaters(user, steve_id)](#module_utils/queries..setSteveUserParamaters) ⇒ <code>Promise.&lt;(Object\|undefined)&gt;</code>
     * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~userCrossCheckForTxn(client, ocppTagPk, ocppIdTag, txn_steve_id)](#module_utils/queries..userCrossCheckForTxn) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
     * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
     * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
@@ -1240,12 +1250,12 @@ getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users 
 ```
 <a name="module_utils/queries..getUserUnique"></a>
 
-### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code>
+### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(User\|null)&gt;</code>
 Gets a single user with uniqueness validation.
 Throws an error if multiple users match the criteria.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;(Object.&lt;User&gt;\|null)&gt;</code> - - The matching user or null if not found  
+**Returns**: <code>Promise.&lt;(User\|null)&gt;</code> - - The matching user or null if not found  
 **Throws**:
 
 - <code>DatabaseError</code> - database operation fails
@@ -1306,6 +1316,13 @@ Sets the SteVe user ID for a user in the database.
 Records an activity event for a user in the activity log.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+<a name="module_utils/queries..userCrossCheckForTxn"></a>
+
+### utils/queries~userCrossCheckForTxn(client, ocppTagPk, ocppIdTag, txn_steve_id) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+Cross-check user by steve_id and validate RFID consistency
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(number\|null)&gt;</code> - - user_id if found, null otherwise  
 <a name="module_utils/queries..recordSteveTxn"></a>
 
 ### utils/queries~recordSteveTxn(steve_txn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
@@ -1438,7 +1455,7 @@ Type definitions
 | name | <code>string</code> | The user's name |
 | email | <code>string</code> | The user's email |
 | odoo_user_id | <code>number</code> | The user's Odoo ID |
-| partner_id | <code>number</code> | The user's Odoo partner ID |
+| odoo_partner_id | <code>number</code> | The user's Odoo partner ID |
 | oauth_id | <code>string</code> | The OAuth ID |
 | rfid | <code>string</code> | The user's RFID |
 | steve_id | <code>number</code> | The user's OCPP tag primary key in SteVe |

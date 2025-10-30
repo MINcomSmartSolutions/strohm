@@ -1,6 +1,6 @@
 {
   "name": "strohm-backend",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "main": "server.js",
   "scripts": {
     "clean": "rm -rf node_modules && rm -rf package-lock.json && npm cache clean --force",

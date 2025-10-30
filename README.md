@@ -77,6 +77,8 @@ in default, but not specified here.
 - LIST_DB: [boolean] (default: "false"): Whether to disable the database manager. This should be false in production
   otherwise deleting, copying or creating databases will be possible from the web interface.
 - ODOO_ENV: ['dev','production','test'] (default: 'production')
+- ALLOWED_HOSTS: (default: "*") Comma-separated list of allowed hosts for Odoo. In production, this should be set to
+  the domain name or IP address of the Odoo and backend.
 - INITIAL_LANG: (default: "de_DE") Initial language to be activated for Odoo.
 - WITHOUT_DEMO: ['all','false] (default: "all") Whether to load odoo demo data. In production, this should be set to "
   all" to avoid loading demo data.
