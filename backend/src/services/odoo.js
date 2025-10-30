@@ -272,9 +272,9 @@ async function createOdooTxnInvoice(db_txn) {
     // The price of electricity at the time of transaction started
     let txn_started_with_electricity_price;
     txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
-    if (!txn_started_with_electricity_price) {
+    if (Number.isNaN(txn_started_with_electricity_price) || txn_started_with_electricity_price === null) {
         const default_price = 35; //in cents/kwh
-        logger.warn(`No price found for period ${db_txn.start_timestamp}, falling back to default price ${default_price}`);
+        logger.warn(`No price found for period ${db_txn.start_timestamp.toISOString()}, falling back to default price ${default_price}`);
         txn_started_with_electricity_price = default_price;
     }
 
@@ -335,6 +335,7 @@ async function createOdooTxnInvoice(db_txn) {
  * - Returns true if the payment method is valid, false otherwise.
  *
  * @async
+ * @deprecated
  * @param {Object<User>} user - User object with odoo_user_id, odoo_partner_id, and user_id.
  * @returns {Promise<boolean>} True if payment method is valid, false otherwise.
  * @throws {ValidationError|SystemError} On validation or Odoo errors.

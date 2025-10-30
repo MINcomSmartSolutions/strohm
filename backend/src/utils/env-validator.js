@@ -56,9 +56,7 @@ const envSchema = Joi.object({
         .messages({'any.required': 'SERVER_OIDC_CLIENT_SECRET is required'}),
 
     // ODOO Configuration
-    ODOO_ADMIN_API_KEY: Joi.string()
-        .required()
-        .messages({'any.required': 'ODOO_ADMIN_API_KEY is required'}),
+    ODOO_ADMIN_API_KEY: Joi.string().optional(),
     ODOO_API_SECRET: Joi.string()
         .required()
         .messages({'any.required': 'ODOO_API_SECRET is required'}),

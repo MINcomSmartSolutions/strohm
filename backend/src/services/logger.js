@@ -38,13 +38,35 @@ const logger = winston.createLogger({
     ],
 });
 
+/**
+ * Safely stringify objects with circular references
+ * @param {Object} obj - Object to stringify
+ * @returns {string} JSON string or empty string if no metadata
+ */
+function safeStringify(obj) {
+    if (!obj || Object.keys(obj).length === 0) {
+        return '';
+    }
+
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+                return '[Circular]';
+            }
+            seen.add(value);
+        }
+        return value;
+    }, 2);
+}
+
 logger.add(new winston.transports.Console({
     format: format.combine(
         format.colorize(),
         format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
         format.printf(({timestamp, level, message, stack, file, line, label, ...meta}) => {
             const logStack = stack ? `\n${stack}` : '';
-            let metaStr = Object.keys(meta).length ? JSON.stringify(meta, null, 2) : '';
+            let metaStr = Object.keys(meta).length ? safeStringify(meta) : '';
             let envLabel = label ? `[${label.toUpperCase()}]` : '';
             return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${logStack}`.trim();
         }),

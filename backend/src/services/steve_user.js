@@ -154,8 +154,7 @@ const getSteveUser = async (user_rfid) => {
  */
 const blockSteveUser = async (user, reason = null, expiredDate = null) => {
     validateUserObjectForSteve(user);
-    if (expiredDate && !expiredDate.isValid()) {
-        //FIXME:  Warning in afterCallback: expiredDate.isValid is not a function
+    if (expiredDate && !expiredDate.isValid) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'Invalid expiredDate provided');
     }
 
