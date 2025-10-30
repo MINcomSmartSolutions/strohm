@@ -30,7 +30,7 @@ jest.mock('#services/db_conn', () => {
 
 // Import queries after mocking the database connection
 const {db} = require('#utils/queries');
-const {ValidationError} = require('#utils/errors');
+const {ValidationError, DatabaseError} = require('#utils/errors');
 
 describe('Database Queries Integration Tests', () => {
     let pool;
@@ -552,6 +552,188 @@ describe('Database Queries Integration Tests', () => {
             expect(savedAgainTx.txn_steve_id).toBe(initialTx.txn_steve_id);
         });
 
+        test('recordTransaction should resolve user_id during update if initially NULL', async () => {
+            const now = new Date();
+            const startTime = new Date(now.getTime() - 3600000);
+
+            // Create a transaction WITHOUT user (unknown user)
+            const steveTransaction = {
+                id: 54323,
+                connectorId: 1,
+                chargeBoxPk: 100,
+                ocppTagPk: 9999, // Unknown steve_id initially
+                chargeBoxId: 'TEST-CHARGER-01',
+                ocppIdTag: 'new_user_rfid',
+                startTimestamp: startTime.toISOString(),
+                stopTimestamp: null,
+                startValue: 0,
+                stopValue: null,
+                stopReason: null,
+                stopEventActor: null,
+            };
+
+            const initialTx = await db.recordTransaction(steveTransaction);
+            expect(initialTx.user_id).toBeNull(); // No user initially
+
+            // Now "register" the user by updating testUser with this steve_id and rfid
+            await pool.query(
+                'UPDATE users SET steve_id = $1, rfid = $2 WHERE user_id = $3',
+                [9999, 'new_user_rfid', testUser.user_id],
+            );
+
+            // Update the transaction with stop values
+            const updatedTransaction = {
+                ...steveTransaction,
+                stopTimestamp: now.toISOString(),
+                stopValue: 25,
+                stopReason: 'Remote',
+            };
+
+            const updatedTx = await db.recordTransaction(updatedTransaction);
+
+            // Should now have the user_id resolved
+            expect(updatedTx.user_id).toBe(testUser.user_id);
+            expect(Number(updatedTx.stop_value)).toBe(25);
+        });
+
+        test('recordTransaction should log error when RFID mismatches during INSERT', async () => {
+            const logger = require('#services/logger');
+            const errorSpy = jest.spyOn(logger, 'error');
+
+            const now = new Date();
+            const startTime = new Date(now.getTime() - 3600000);
+
+            // Transaction with RFID that doesn't match the user's RFID in database
+            const steveTransaction = {
+                id: 54324,
+                connectorId: 1,
+                chargeBoxPk: 100,
+                ocppTagPk: 1000, // Matches testUser's steve_id
+                chargeBoxId: 'TEST-CHARGER-01',
+                ocppIdTag: 'mismatched_rfid', // Different from testUser.rfid
+                startTimestamp: startTime.toISOString(),
+                stopTimestamp: now.toISOString(),
+                startValue: 0,
+                stopValue: 15,
+                stopReason: 'Remote',
+                stopEventActor: 'manual',
+            };
+
+            const savedTx = await db.recordTransaction(steveTransaction);
+
+            // Transaction should still be saved with the user_id
+            expect(savedTx.user_id).toBe(testUser.user_id);
+            expect(savedTx.ocpp_id_tag).toBe('mismatched_rfid');
+
+            // But should have logged an error about the RFID mismatch
+            expect(errorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('RFID mismatch'),
+                expect.objectContaining({
+                    steve_id: 1000,
+                    txn_steve_id: 54324,
+                }),
+            );
+
+            errorSpy.mockRestore();
+        });
+
+        test('recordTransaction should log error when RFID mismatches during UPDATE', async () => {
+            const logger = require('#services/logger');
+            const errorSpy = jest.spyOn(logger, 'error');
+
+            const now = new Date();
+            const startTime = new Date(now.getTime() - 3600000);
+
+            // First create a transaction without user
+            const steveTransaction = {
+                id: 54325,
+                connectorId: 1,
+                chargeBoxPk: 100,
+                ocppTagPk: 8888, // Unknown initially
+                chargeBoxId: 'TEST-CHARGER-01',
+                ocppIdTag: 'another_rfid',
+                startTimestamp: startTime.toISOString(),
+                stopTimestamp: null,
+                startValue: 0,
+                stopValue: null,
+                stopReason: null,
+                stopEventActor: null,
+            };
+
+            await db.recordTransaction(steveTransaction);
+
+            // Now create a user with this steve_id but DIFFERENT rfid
+            await pool.query(
+                'UPDATE users SET steve_id = $1, rfid = $2 WHERE user_id = $3',
+                [8888, 'different_rfid', testUser.user_id],
+            );
+
+            // Update transaction
+            const updatedTransaction = {
+                ...steveTransaction,
+                stopTimestamp: now.toISOString(),
+                stopValue: 30,
+                stopReason: 'Remote',
+            };
+
+            const updatedTx = await db.recordTransaction(updatedTransaction);
+
+            // Should resolve user_id but log error about mismatch
+            expect(updatedTx.user_id).toBe(testUser.user_id);
+            expect(errorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('RFID mismatch'),
+                expect.any(Object),
+            );
+
+            errorSpy.mockRestore();
+        });
+
+        test('recordTransaction should reject invalid transaction data', async () => {
+            const invalidTransaction = {
+                id: 54326,
+                // Missing required fields like ocppTagPk, ocppIdTag, startTimestamp, startValue
+            };
+
+            await expect(db.recordTransaction(invalidTransaction))
+                .rejects.toThrow();
+        });
+
+        test('recordTransaction should update stop_event_actor field', async () => {
+            const now = new Date();
+            const startTime = new Date(now.getTime() - 3600000);
+
+            const steveTransaction = {
+                id: 54327,
+                connectorId: 1,
+                chargeBoxPk: 100,
+                ocppTagPk: 1000,
+                chargeBoxId: 'TEST-CHARGER-01',
+                ocppIdTag: testUser.rfid,
+                startTimestamp: startTime.toISOString(),
+                stopTimestamp: null,
+                startValue: 0,
+                stopValue: null,
+                stopReason: null,
+                stopEventActor: null,
+            };
+
+            await db.recordTransaction(steveTransaction);
+
+            // Update with stop_event_actor
+            const updatedTransaction = {
+                ...steveTransaction,
+                stopTimestamp: now.toISOString(),
+                stopValue: 35,
+                stopReason: 'Remote',
+                stopEventActor: 'operator',
+            };
+
+            const updatedTx = await db.recordTransaction(updatedTransaction);
+
+            expect(updatedTx.stop_event_actor).toBe('operator');
+            expect(Number(updatedTx.stop_value)).toBe(35);
+        });
+
         test('saveInvoiceId should link an invoice to a transaction', async () => {
             // First create a transaction
             const txn = await insertTestTransaction(pool, testUser);
@@ -629,6 +811,42 @@ describe('Database Queries Integration Tests', () => {
                 // Check current price (should be 42)
                 const currentPrice = await db.getCurrentElectricityPrice();
                 expect(currentPrice).toBe(42);
+            } finally {
+                client.release();
+            }
+        });
+
+        test('getCurrentElectricityPrice should handle price of "0" correctly without specified date', async () => {
+            // Insert a price of 0
+            const client = await pool.connect();
+            try {
+                await client.query(
+                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
+                     VALUES ($1, NOW() - INTERVAL '1 hour', NULL)`,
+                    [0],
+                );
+
+                const price = await db.getCurrentElectricityPrice();
+                expect(price).toBe(0);
+            } finally {
+                client.release();
+            }
+        });
+
+        test('getCurrentElectricityPrice should handle price of "0" correctly with specified date', async () => {
+            const client = await pool.connect();
+            try {
+                // Insert a price of 0 effective from 2 days ago to 1 day ago
+                await client.query(
+                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
+                     VALUES ($1, NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day')`,
+                    [0],
+                );
+
+                const testDate = DateTime.now().minus({days: 1, hours: 12});
+                const price = await db.getCurrentElectricityPrice(testDate);
+                expect(price).toBe(0);
+
             } finally {
                 client.release();
             }
@@ -889,6 +1107,343 @@ describe('Database Queries Integration Tests', () => {
 
             // Verify different results
             expect(firstPage[0].user_id).not.toBe(secondPage[0].user_id);
+        });
+    });
+
+    describe('User Management Functions', () => {
+        test('deactivateUser should deactivate an active user', async () => {
+            // Deactivate the test user
+            await db.deactivateUser(testUser);
+
+            // Verify user is deactivated
+            const deactivatedUser = await db.getUserUnique({user_id: testUser.user_id});
+            expect(deactivatedUser.deactivated_at).not.toBeNull();
+        });
+
+        test('deactivateUser should throw when trying to deactivate already deactivated user', async () => {
+            // Deactivate the test user first
+            await db.deactivateUser(testUser);
+
+            // Try to deactivate again
+            await expect(db.deactivateUser(testUser))
+                .rejects.toThrow('Error during deactivateUser operation.');
+        });
+
+        test('deactivateUser should throw when user parameter is missing', async () => {
+            await expect(db.deactivateUser(null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.deactivateUser({name: 'No user_id'}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('activateUser should activate a deactivated user', async () => {
+            // First deactivate the user
+            await db.deactivateUser(testUser);
+
+            // Verify user is deactivated
+            let user = await db.getUserUnique({user_id: testUser.user_id});
+            expect(user.deactivated_at).not.toBeNull();
+
+            // Now activate the user
+            await db.activateUser(user);
+
+            // Verify user is active
+            user = await db.getUserUnique({user_id: testUser.user_id});
+            expect(user.deactivated_at).toBeNull();
+        });
+
+        test('activateUser should throw when trying to activate already active user', async () => {
+            // Try to activate an already active user
+            await expect(db.activateUser(testUser))
+                .rejects.toThrow('Error during activateUser operation.');
+        });
+
+        test('activateUser should throw when user parameter is missing', async () => {
+            await expect(db.activateUser(null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.activateUser({name: 'No user_id'}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('revokeUserOdooCredentials should revoke credentials when they exist', async () => {
+            // First set credentials
+            await db.setUserOdooCredentials(testUser, 1234, 5678, 'test_key', 'test_salt');
+
+            // Revoke credentials
+            await db.revokeUserOdooCredentials(testUser);
+
+            // Verify credentials are revoked
+            const credentials = await db.getUserOdooCredentials(testUser.user_id);
+            expect(credentials).toBeNull();
+        });
+
+        test('revokeUserOdooCredentials should handle users with no credentials gracefully', async () => {
+            const logger = require('#services/logger');
+            const warnSpy = jest.spyOn(logger, 'warn');
+
+            // Try to revoke credentials for user without any
+            await expect(db.revokeUserOdooCredentials(testUser))
+                .resolves.not.toThrow();
+
+            // Should log warning
+            expect(warnSpy).toHaveBeenCalledWith(
+                'No Odoo credentials found to revoke for user',
+                expect.objectContaining({user_id: testUser.user_id})
+            );
+
+            warnSpy.mockRestore();
+        });
+
+        test('revokeUserOdooCredentials should throw when user parameter is missing', async () => {
+            await expect(db.revokeUserOdooCredentials(null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.revokeUserOdooCredentials({name: 'No user_id'}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('deleteUser should permanently delete a user', async () => {
+            // Create a user to delete
+            const userToDelete = await db.createUser('delete_me', 'Delete Me', 'delete@test.com', 'delete_rfid');
+
+            // Delete the user
+            await db.deleteUser(userToDelete);
+
+            // Verify user is gone
+            const deletedUser = await db.getUserUnique({user_id: userToDelete.user_id});
+            expect(deletedUser).toBeNull();
+        });
+
+        test('deleteUser should throw when trying to delete non-existent user', async () => {
+            const fakeUser = {user_id: 999999, rfid: 'fake'};
+
+            await expect(db.deleteUser(fakeUser))
+                .rejects.toThrow();
+        });
+
+        test('deleteUser should throw when user parameter is missing', async () => {
+            await expect(db.deleteUser(null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.deleteUser({name: 'No user_id'}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('getUsersCount should return correct count with no filters', async () => {
+            // Create some users
+            await db.createUser('count_user1', 'Count User 1', 'count1@test.com', 'count_rfid1');
+            await db.createUser('count_user2', 'Count User 2', 'count2@test.com', 'count_rfid2');
+
+            const count = await db.getUsersCount();
+            expect(count).toBeGreaterThanOrEqual(3);
+        });
+
+        test('getUsersCount should return correct count with filters', async () => {
+            // Create users with specific attributes
+            await db.createUser('filtered1', 'Filtered User', 'filtered1@test.com', 'filtered_rfid1');
+            await db.createUser('filtered2', 'Filtered User', 'filtered2@test.com', 'filtered_rfid2');
+
+            const count = await db.getUsersCount({name: 'Filtered User'});
+            expect(count).toBe(2);
+        });
+
+        test('getUsersCount should handle null value filters', async () => {
+            // Create a user without steve_id to ensure at least one result
+            await db.createUser('no_steve_id', 'No Steve User', 'nosteve@test.com', 'no_steve_rfid');
+
+            const count = await db.getUsersCount({steve_id: null});
+            expect(count).toBeGreaterThan(0);
+        });
+
+        test('updateUser should update user fields correctly', async () => {
+            const updates = {
+                name: 'Updated Name',
+                email: 'updated@test.com',
+                rfid: 'updated_rfid',
+            };
+
+            const updatedUser = await db.updateUser(testUser.user_id, updates);
+
+            expect(updatedUser.name).toBe('Updated Name');
+            expect(updatedUser.email).toBe('updated@test.com');
+            expect(updatedUser.rfid).toBe('updated_rfid');
+            expect(updatedUser.updated_at).not.toBeNull();
+        });
+
+        test('updateUser should update multiple fields at once', async () => {
+            const updates = {
+                first_name: 'John',
+                last_name: 'Doe',
+                address: '123 Main St',
+                postal_code: 12345,
+            };
+
+            const updatedUser = await db.updateUser(testUser.user_id, updates);
+
+            expect(updatedUser.first_name).toBe('John');
+            expect(updatedUser.last_name).toBe('Doe');
+            expect(updatedUser.address).toBe('123 Main St');
+            expect(updatedUser.postal_code).toEqual(12345);
+        });
+
+        test('updateUser should handle undefined values by skipping them', async () => {
+            const updates = {
+                name: 'New Name',
+                email: undefined,
+            };
+
+            const updatedUser = await db.updateUser(testUser.user_id, updates);
+
+            expect(updatedUser.name).toBe('New Name');
+            expect(updatedUser.email).toBe(testUser.email); // Should remain unchanged
+        });
+
+        test('updateUser should throw when userId is invalid', async () => {
+            await expect(db.updateUser(null, {name: 'Test'}))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.updateUser(undefined, {name: 'Test'}))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.updateUser('not_a_number', {name: 'Test'}))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.updateUser(3.14, {name: 'Test'}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('updateUser should throw when updates is empty or invalid', async () => {
+            await expect(db.updateUser(testUser.user_id, {}))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.updateUser(testUser.user_id, null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.updateUser(testUser.user_id, ''))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('updateUser should throw when updates contains only undefined values', async () => {
+            await expect(db.updateUser(testUser.user_id, {name: undefined, email: undefined}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('updateUser should throw when trying to update non-whitelisted column', async () => {
+            await expect(db.updateUser(testUser.user_id, {malicious_field: 'hack'}))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.updateUser(testUser.user_id, {user_id: 999}))
+                .rejects.toThrow(ValidationError);
+        });
+
+        test('updateUser should throw when user does not exist', async () => {
+            await expect(db.updateUser(999999, {name: 'Test'}))
+                .rejects.toThrow(DatabaseError);
+        });
+
+        test('updateUser should update timestamp fields correctly', async () => {
+            const testDate = new Date('2025-01-01T12:00:00Z');
+
+            const updatedUser = await db.updateUser(testUser.user_id, {
+                lastlogin_at: testDate,
+            });
+
+            expect(updatedUser.lastlogin_at).toBeDefined();
+        });
+    });
+
+    describe('setUserOdooCredentials edge cases', () => {
+        test('setUserOdooCredentials should throw when rowCount is 0', async () => {
+            // Mock pool.connect to return a client that returns rowCount 0
+            const originalConnect = pool.connect;
+            pool.connect = jest.fn().mockImplementation(() => {
+                const mockClient = {
+                    query: jest.fn()
+                        .mockResolvedValueOnce({}) // BEGIN
+                        .mockResolvedValueOnce({}) // UPDATE users
+                        .mockResolvedValueOnce({rows: [], rowCount: 0}), // INSERT odoo_apikeys
+                    release: jest.fn()
+                };
+                return Promise.resolve(mockClient);
+            });
+
+            try {
+                await expect(db.setUserOdooCredentials(testUser, 1234, 5678, 'key', 'salt'))
+                    .rejects.toThrow();
+            } finally {
+                pool.connect = originalConnect;
+            }
+        });
+    });
+
+    describe('rotateOdooUserKey edge cases', () => {
+        test('rotateOdooUserKey should throw when old key is already revoked', async () => {
+            // Set and then revoke credentials
+            const keyId = await db.setUserOdooCredentials(testUser, 1234, 5678, 'initial_key', 'initial_salt');
+            await db.revokeUserOdooCredentials(testUser);
+
+            // Try to rotate using the revoked key
+            await expect(db.rotateOdooUserKey(testUser.user_id, keyId, 'new_key', 'new_salt'))
+                .rejects.toThrow();
+        });
+
+        test('rotateOdooUserKey should throw when INSERT fails', async () => {
+            // First set credentials
+            const keyId = await db.setUserOdooCredentials(testUser, 1234, 5678, 'initial_key', 'initial_salt');
+
+            // Mock pool.connect to fail on INSERT
+            const originalConnect = pool.connect;
+            pool.connect = jest.fn().mockImplementation(() => {
+                const mockClient = {
+                    query: jest.fn()
+                        .mockResolvedValueOnce({}) // BEGIN
+                        .mockResolvedValueOnce({rows: [{revoked_at: null}], rowCount: 1}) // UPDATE (revoke)
+                        .mockResolvedValueOnce({rows: [], rowCount: 0}), // INSERT (fails)
+                    release: jest.fn()
+                };
+                return Promise.resolve(mockClient);
+            });
+
+            try {
+                await expect(db.rotateOdooUserKey(testUser.user_id, keyId, 'new_key', 'new_salt'))
+                    .rejects.toThrow();
+            } finally {
+                pool.connect = originalConnect;
+            }
+        });
+    });
+
+    describe('setSteveUserParamaters edge cases', () => {
+        test('setSteveUserParamaters should throw when update fails', async () => {
+            const fakeUser = {user_id: 999999};
+
+            await expect(db.setSteveUserParamaters(fakeUser, 5555))
+                .rejects.toThrow(DatabaseError);
+
+        });
+    });
+
+    describe('setLastStopTimestamp edge cases', () => {
+        test('setLastStopTimestamp should throw when watermark is invalid', async () => {
+            await expect(db.setLastStopTimestamp(null))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.setLastStopTimestamp(DateTime.invalid('invalid')))
+                .rejects.toThrow(ValidationError);
+
+            await expect(db.setLastStopTimestamp('not a datetime'))
+                .rejects.toThrow(ValidationError);
+        });
+    });
+
+    describe('saveInvoiceId validation', () => {
+        test('saveInvoiceId should throw when transaction format is invalid', async () => {
+            const invalidTxn = {id: 'not_a_number'};
+
+            await expect(db.saveInvoiceId(invalidTxn, 12345))
+                .rejects.toThrow(ValidationError);
         });
     });
 });

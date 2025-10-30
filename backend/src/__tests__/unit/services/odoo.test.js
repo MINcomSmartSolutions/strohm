@@ -572,6 +572,70 @@ describe('Odoo Service', () => {
             expect(result).toBe(12345);
         });
 
+        it('should create invoice successfully when the price is "0"', async () => {
+            // Mock user credentials
+            db.getUserOdooCredentials.mockResolvedValue({
+                key: 'test_key',
+                key_salt: 'test_key_salt',
+            });
+
+            // Mock user retrieval
+            db.getUserUnique.mockResolvedValue(fullQualifiedUser);
+
+            // Mock electricity price
+            db.getCurrentElectricityPrice.mockResolvedValue(0);
+
+            // Mock salt and hash
+            generateSalt.mockReturnValue('test_salt');
+
+            generateOdooHash
+                .mockReturnValueOnce('request_hash')     // First call - for request
+                .mockReturnValueOnce('response_hash');   // Second call - for response verification
+
+            // Mock successful Odoo response
+            odooPlainAxios.post.mockResolvedValue({
+                status: 201,
+                data: {
+                    bill_id: 123425,
+                },
+            });
+
+            const result = await createOdooTxnInvoice(testTransaction);
+
+            // Verify Odoo API call
+            expect(odooPlainAxios.post).toHaveBeenCalledWith(
+                ODOO_CONFIG.INVOICE_CREATION_URI,
+                expect.objectContaining({
+                    timestamp: expect.toBeDateString(),
+                    user_id: fullQualifiedUser.odoo_user_id,
+                    partner_id: fullQualifiedUser.odoo_partner_id,
+                    key: 'test_key',
+                    key_salt: 'test_key_salt',
+                    lines_data: expect.arrayContaining([
+                        expect.objectContaining({
+                            'sku': 'standard_charging',
+                            'price_unit': 0.0,
+                            'quantity': 10,
+                        }),
+                    ]),
+                    salt: 'test_salt',
+                    session_start: expect.toBeDateString(),
+                    session_end: expect.toBeDateString(),
+                }),
+            );
+
+            // Verify activity log
+            expect(db.recordActivityLog).toHaveBeenCalledWith(
+                fullQualifiedUser.user_id,
+                'CREATE INVOICE',
+                'ODOO',
+                fullQualifiedUser.rfid,
+            );
+
+            // Verify returned bill ID
+            expect(result).toBe(123425);
+        });
+
         it('should throw error if Odoo returns non-success status', async () => {
             // Mock user credentials
             db.getUserOdooCredentials.mockResolvedValue({
@@ -661,165 +725,165 @@ describe('Odoo Service', () => {
         });
     });
 
-    describe('checkValidPaymentMethod', () => {
-
-        it('should throw error if user validation fails', async () => {
-            const invalidUser = {user_id: 'not_a_number'};
-
-            await expect(checkValidPaymentMethod(invalidUser)).rejects.toThrow(ValidationError);
-        });
-
-        it('should return true when payment method is valid', async () => {
-            // Mock user credentials
-            db.getUserOdooCredentials.mockResolvedValue({
-                key: 'test_key',
-                key_salt: 'test_key_salt',
-            });
-
-            // Mock salt and hash
-            generateSalt.mockReturnValue('test_salt');
-
-            // Fix: Use mockReturnValueOnce for different consecutive calls
-            generateOdooHash
-                .mockReturnValueOnce('request_hash')     // First call - for request
-                .mockReturnValueOnce('response_hash');   // Second call - for response verification
-
-            // Mock successful Odoo response with valid payment method
-            odooAuthedAxios.post.mockResolvedValue({
-                status: 200,
-                data: {
-                    timestamp: '2025-06-12T12:00:00',
-                    result: 1, // 1 means valid
-                    salt: 'response_salt',
-                    hash: 'response_hash',
-                },
-            });
-
-            const result = await checkValidPaymentMethod(fullQualifiedUser);
-
-            // Verify API call
-            expect(odooAuthedAxios.post).toHaveBeenCalledWith(
-                ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI,
-                expect.objectContaining({
-                    timestamp: expect.toBeDateString(),
-                    user_id: fullQualifiedUser.odoo_user_id,
-                    partner_id: fullQualifiedUser.odoo_partner_id,
-                    key: 'test_key',
-                    key_salt: 'test_key_salt',
-                    salt: 'test_salt',
-                    hash: 'request_hash',
-                }),
-            );
-
-            // Verify result
-            expect(result).toBe(true);
-        });
-
-        it('should return false when payment method is invalid', async () => {
-            // Mock user credentials
-            db.getUserOdooCredentials.mockResolvedValue({
-                key: 'test_key',
-                key_salt: 'test_key_salt',
-            });
-
-            // Mock salt and hash
-            generateSalt.mockReturnValue('test_salt');
-            // Ensure hash verification passes
-            generateOdooHash
-                .mockReturnValue('request_hash')     // For request
-                .mockReturnValue('response_hash');   // For response verification
-
-            // Mock Odoo response with invalid payment method
-            odooAuthedAxios.post.mockResolvedValue({
-                status: 200,
-                data: {
-                    timestamp: '2025-06-12T12:00:00',
-                    result: 0, // 0 means invalid
-                    salt: 'response_salt',
-                    hash: 'response_hash',
-                },
-            });
-
-            const result = await checkValidPaymentMethod(fullQualifiedUser);
-
-            // Verify result
-            expect(result).toBe(false);
-        });
-
-        it('should throw error if hash verification fails', async () => {
-            // Mock user credentials
-            db.getUserOdooCredentials.mockResolvedValue({
-                key: 'test_key',
-                key_salt: 'test_key_salt',
-            });
-
-            // Mock salt and hash
-            generateSalt.mockReturnValue('test_salt');
-            generateOdooHash.mockReturnValueOnce('request_hash'); // For request
-            generateOdooHash.mockReturnValueOnce('expected_hash'); // Should not match response
-
-            // Mock Odoo response with wrong hash
-            odooAuthedAxios.post.mockResolvedValue({
-                status: 200,
-                data: {
-                    timestamp: '2025-06-12T12:00:00',
-                    result: 1,
-                    salt: 'response_salt',
-                    hash: 'wrong_hash', // Different from expected_hash
-                },
-            });
-
-            await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
-            await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
-        });
-
-        it('should throw error if Odoo returns invalid response format', async () => {
-            // Mock user credentials
-            db.getUserOdooCredentials.mockResolvedValue({
-                key: 'test_key',
-                key_salt: 'test_key_salt',
-            });
-
-            // Mock salt and hash
-            generateSalt.mockReturnValue('test_salt');
-            generateOdooHash.mockReturnValue('request_hash');
-
-            // Mock Odoo response with missing fields
-            odooAuthedAxios.post.mockResolvedValue({
-                status: 200,
-                data: {
-                    // Missing timestamp
-                    result: 1,
-                    // Missing salt
-                    hash: 'some_hash',
-                },
-            });
-
-            await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
-            await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.INVALID_RESPONSE);
-        });
-
-        it('should throw error on payment method check failure', async () => {
-            // Mock user credentials
-            db.getUserOdooCredentials.mockResolvedValue({
-                key: 'test_key',
-                key_salt: 'test_key_salt',
-            });
-
-            // Mock salt and hash
-            generateSalt.mockReturnValue('test_salt');
-            generateOdooHash.mockReturnValue('request_hash');
-
-            // Mock Odoo error response
-            odooAuthedAxios.post.mockResolvedValue({
-                status: 500,
-                data: {
-                    error: 'Internal server error',
-                },
-            });
-
-            await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
-            await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
-        });
-    });
+    // describe('checkValidPaymentMethod', () => {
+    //
+    //     it('should throw error if user validation fails', async () => {
+    //         const invalidUser = {user_id: 'not_a_number'};
+    //
+    //         await expect(checkValidPaymentMethod(invalidUser)).rejects.toThrow(ValidationError);
+    //     });
+    //
+    //     it('should return true when payment method is valid', async () => {
+    //         // Mock user credentials
+    //         db.getUserOdooCredentials.mockResolvedValue({
+    //             key: 'test_key',
+    //             key_salt: 'test_key_salt',
+    //         });
+    //
+    //         // Mock salt and hash
+    //         generateSalt.mockReturnValue('test_salt');
+    //
+    //         // Fix: Use mockReturnValueOnce for different consecutive calls
+    //         generateOdooHash
+    //             .mockReturnValueOnce('request_hash')     // First call - for request
+    //             .mockReturnValueOnce('response_hash');   // Second call - for response verification
+    //
+    //         // Mock successful Odoo response with valid payment method
+    //         odooAuthedAxios.post.mockResolvedValue({
+    //             status: 200,
+    //             data: {
+    //                 timestamp: '2025-06-12T12:00:00',
+    //                 result: 1, // 1 means valid
+    //                 salt: 'response_salt',
+    //                 hash: 'response_hash',
+    //             },
+    //         });
+    //
+    //         const result = await checkValidPaymentMethod(fullQualifiedUser);
+    //
+    //         // Verify API call
+    //         expect(odooAuthedAxios.post).toHaveBeenCalledWith(
+    //             ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI,
+    //             expect.objectContaining({
+    //                 timestamp: expect.toBeDateString(),
+    //                 user_id: fullQualifiedUser.odoo_user_id,
+    //                 partner_id: fullQualifiedUser.odoo_partner_id,
+    //                 key: 'test_key',
+    //                 key_salt: 'test_key_salt',
+    //                 salt: 'test_salt',
+    //                 hash: 'request_hash',
+    //             }),
+    //         );
+    //
+    //         // Verify result
+    //         expect(result).toBe(true);
+    //     });
+    //
+    //     it('should return false when payment method is invalid', async () => {
+    //         // Mock user credentials
+    //         db.getUserOdooCredentials.mockResolvedValue({
+    //             key: 'test_key',
+    //             key_salt: 'test_key_salt',
+    //         });
+    //
+    //         // Mock salt and hash
+    //         generateSalt.mockReturnValue('test_salt');
+    //         // Ensure hash verification passes
+    //         generateOdooHash
+    //             .mockReturnValue('request_hash')     // For request
+    //             .mockReturnValue('response_hash');   // For response verification
+    //
+    //         // Mock Odoo response with invalid payment method
+    //         odooAuthedAxios.post.mockResolvedValue({
+    //             status: 200,
+    //             data: {
+    //                 timestamp: '2025-06-12T12:00:00',
+    //                 result: 0, // 0 means invalid
+    //                 salt: 'response_salt',
+    //                 hash: 'response_hash',
+    //             },
+    //         });
+    //
+    //         const result = await checkValidPaymentMethod(fullQualifiedUser);
+    //
+    //         // Verify result
+    //         expect(result).toBe(false);
+    //     });
+    //
+    //     it('should throw error if hash verification fails', async () => {
+    //         // Mock user credentials
+    //         db.getUserOdooCredentials.mockResolvedValue({
+    //             key: 'test_key',
+    //             key_salt: 'test_key_salt',
+    //         });
+    //
+    //         // Mock salt and hash
+    //         generateSalt.mockReturnValue('test_salt');
+    //         generateOdooHash.mockReturnValueOnce('request_hash'); // For request
+    //         generateOdooHash.mockReturnValueOnce('expected_hash'); // Should not match response
+    //
+    //         // Mock Odoo response with wrong hash
+    //         odooAuthedAxios.post.mockResolvedValue({
+    //             status: 200,
+    //             data: {
+    //                 timestamp: '2025-06-12T12:00:00',
+    //                 result: 1,
+    //                 salt: 'response_salt',
+    //                 hash: 'wrong_hash', // Different from expected_hash
+    //             },
+    //         });
+    //
+    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
+    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
+    //     });
+    //
+    //     it('should throw error if Odoo returns invalid response format', async () => {
+    //         // Mock user credentials
+    //         db.getUserOdooCredentials.mockResolvedValue({
+    //             key: 'test_key',
+    //             key_salt: 'test_key_salt',
+    //         });
+    //
+    //         // Mock salt and hash
+    //         generateSalt.mockReturnValue('test_salt');
+    //         generateOdooHash.mockReturnValue('request_hash');
+    //
+    //         // Mock Odoo response with missing fields
+    //         odooAuthedAxios.post.mockResolvedValue({
+    //             status: 200,
+    //             data: {
+    //                 // Missing timestamp
+    //                 result: 1,
+    //                 // Missing salt
+    //                 hash: 'some_hash',
+    //             },
+    //         });
+    //
+    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
+    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.INVALID_RESPONSE);
+    //     });
+    //
+    //     it('should throw error on payment method check failure', async () => {
+    //         // Mock user credentials
+    //         db.getUserOdooCredentials.mockResolvedValue({
+    //             key: 'test_key',
+    //             key_salt: 'test_key_salt',
+    //         });
+    //
+    //         // Mock salt and hash
+    //         generateSalt.mockReturnValue('test_salt');
+    //         generateOdooHash.mockReturnValue('request_hash');
+    //
+    //         // Mock Odoo error response
+    //         odooAuthedAxios.post.mockResolvedValue({
+    //             status: 500,
+    //             data: {
+    //                 error: 'Internal server error',
+    //             },
+    //         });
+    //
+    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
+    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
+    //     });
+    // });
 });

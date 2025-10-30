@@ -70,9 +70,9 @@ describe('Environment Variable Validation', () => {
         expect(() => validateEnv()).toThrow('Environment variable validation failed');
     });
 
-    test('should fail when required ODOO variables are missing', () => {
+    test('should fail when required ODOO variables is missing', () => {
         process.env = {...validEnv};
-        delete process.env.ODOO_ADMIN_API_KEY;
+        delete process.env.ODOO_API_SECRET;
         expect(() => validateEnv()).toThrow('Environment variable validation failed');
     });
 
