@@ -298,15 +298,30 @@ async function changeRFIDofSteveUser(user, old_rfid) {
         throw new SystemError(ErrorCodes.STEVE.USER_NOT_FOUND, `User with RFID ${old_rfid} not found in SteVe for RFID change`);
     }
 
-    await blockSteveUser(user, `Blocked in favor of ${new_rfid}`, DateTime.now());
-    //
-    // CAUTION!!!
-    //
-    // If failIfExists is not set and new RFID matches someone else's RFID, it will replace the existing user with someone else's RFID.
-    await createSteveUser(user, user.deactivated_at, `Created as replacement for ${old_rfid}`, true);
+    // Create a user object with the old RFID for blocking
+    const user_with_old_rfid = {...user, rfid: old_rfid};
+    await blockSteveUser(user_with_old_rfid, `Blocked in favor of ${new_rfid}`, DateTime.now());
+
+    try {
+        //
+        // CAUTION!!!
+        //
+        // If failIfExists is not set and new RFID matches someone else's RFID, it will replace the existing user with someone else's RFID.
+        await createSteveUser(user, user.deactivated_at, `Created as replacement for ${old_rfid}`, true);
+    } catch (error) {
+        // Rollback: unblock the old RFID if creating the new one failed
+        logger.error(`Failed to create new RFID ${new_rfid}, rolling back block on ${old_rfid}`, error);
+        try {
+            await unblockSteveUser(user_with_old_rfid);
+            logger.info(`Successfully rolled back block on old RFID ${old_rfid}`);
+        } catch (rollbackError) {
+            logger.error(`Failed to rollback block on old RFID ${old_rfid}`, rollbackError);
+        }
+        throw error;
+    }
 
     logger.debug(`RFID changed in SteVe from ${old_rfid} to ${new_rfid}`);
-    await db.recordActivityLog(null, 'CHANGE RFID', 'SteVe', `${old_rfid} -> ${new_rfid}`);
+    await db.recordActivityLog(user.user_id, 'CHANGE RFID', 'SteVe', `${old_rfid} -> ${new_rfid}`);
 }
 
 

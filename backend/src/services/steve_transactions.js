@@ -101,12 +101,17 @@ async function fetchTxnsSince(since) {
     const stoppedTxns = stoppedRes?.data || [];
     const activeTxns = activeRes?.data || [];
 
-    logger.verbose(`Fetched ${stoppedTxns.length} stopped transactions from SteVe`, stoppedTxns ? {
+    if (stoppedTxns.length) logger.verbose(`Fetched ${stoppedTxns.length} stopped transactions from SteVe`, stoppedTxns ? {
         sample: stoppedTxns.slice(0, 2),
     } : 0);
-    logger.verbose(`Fetched ${activeTxns.length} active transactions from SteVe`, activeTxns ? {
+    else logger.verbose('No stopped transactions fetched from SteVe');
+
+
+    if (activeTxns.length) logger.verbose(`Fetched ${activeTxns.length} active transactions from SteVe`, activeTxns ? {
         sample: activeTxns.slice(0, 2),
     } : 0);
+    else logger.verbose('No active transactions fetched from SteVe');
+
 
     return [...stoppedTxns, ...activeTxns];
 }
@@ -216,7 +221,6 @@ async function processTxns(txns) {
         logger.info('Recording transaction: ' + txn.id);
         const db_txn = await db.recordTransaction(txn);
 
-        // Only create bills for transactions with permanent stop reasons
         if (shouldProcessTransaction(txn)) {
             // If the transaction does not have a invoice_ref to odoo
             // and have a associated user, create a bill.

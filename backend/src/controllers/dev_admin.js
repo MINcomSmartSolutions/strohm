@@ -11,7 +11,6 @@
 
 const {db, normalizeRFID} = require('#utils/queries');
 const {
-    getSteveUser,
     blockSteveUser,
     unblockSteveUser,
     deleteSteveUser,
