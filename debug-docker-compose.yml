@@ -61,6 +61,7 @@ services:
       - "127.0.0.1:9229:9229"  # Node.js debug port
     volumes:
       - ./backend/rfid_mapping.csv:/usr/src/app/rfid_mapping.csv
+      - ./backend/logs:/usr/src/app/logs
     networks:
       - strohm-network-debug
     healthcheck:

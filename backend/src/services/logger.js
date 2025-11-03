@@ -8,6 +8,7 @@ const winston = require('winston');
 const {format} = winston;
 const DailyRotateFile = require('winston-daily-rotate-file');
 const morgan = require('morgan');
+const {GLOBAL_CONFIG} = require("#config");
 
 
 const logger = winston.createLogger({
@@ -31,7 +32,7 @@ const logger = winston.createLogger({
         new DailyRotateFile({
             filename: 'logs/combined-%DATE%.log',
             datePattern: 'YYYY-MM-DD',
-            level: process.env.LOG_LEVEL || 'info',
+            level: process.env.LOG_LEVEL || 'silly',
             maxFiles: '14d',
             zippedArchive: true,
         }),
@@ -60,18 +61,26 @@ function safeStringify(obj) {
     }, 2);
 }
 
-logger.add(new winston.transports.Console({
-    format: format.combine(
+// Use JSON format in production, pretty format in development
+const consoleFormat = GLOBAL_CONFIG.ENV.IS_PRODUCTION
+    ? format.combine(
+        format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
+        format.errors({stack: true}),
+        format.json()
+    )
+    : format.combine(
         format.colorize(),
         format.timestamp({format: 'YYYY-MM-DD HH:mm:ss,SSS'}),
         format.printf(({timestamp, level, message, stack, file, line, label, ...meta}) => {
             const logStack = stack ? `\n${stack}` : '';
             let metaStr = Object.keys(meta).length ? safeStringify(meta) : '';
-            let envLabel = label ? `[${label.toUpperCase()}]` : '';
-            return `${envLabel} [${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${logStack}`.trim();
+            return `$[${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${logStack}`.trim();
         }),
         format.errors({stack: true}),
-    ),
+    );
+
+logger.add(new winston.transports.Console({
+    format: consoleFormat,
 }));
 
 const morganMiddleware = morgan(
