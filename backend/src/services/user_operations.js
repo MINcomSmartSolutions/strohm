@@ -7,7 +7,7 @@
 
 
 const {createOdooUser} = require('./odoo');
-const {db} = require('#utils/queries');
+const {db, normalizeRFID} = require('#utils/queries');
 const {createSteveUser} = require('./steve_user');
 const logger = require('#services/logger');
 const {AuthError, ErrorCodes} = require('#utils/errors');
@@ -78,28 +78,28 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     } else {
         //TODO: needs testing!!!
 
-        // Check if OIDC data has changed
-        const needsUpdate =
-            user.name !== oidc_user.name ||
-            user.email !== oidc_user.email ||
-            (oidc_user.hmMifareSerial && (user.rfid !== oidc_user.hmMifareSerial));
-
-        if (needsUpdate) {
-            const updated_user = await db.updateUser(user.user_id, {
-                name: oidc_user.name,
-                email: oidc_user.email,
-                // Only update RFID if provided and different
-                ...(oidc_user.hmMifareSerial && {rfid: oidc_user.hmMifareSerial})
-            });
-
-            const now = DateTime.utc();
-            await blockSteveUser(updated_user, "RFID is stale. Should not be activated.", now);
-
-            const new_create_user = await createSteveUser(updated_user, false, `New active RFID of old OCPP TAG PK: ${updated_user.steve_id}`); // Create new Steve user with updated RFID
-            if (!new_create_user) {
-                logger.error("Failed to create new Steve user after RFID change for user ID: " + updated_user.user_id);
-            }
-        }
+        // Check if OIDC data has changed (normalize RFIDs for comparison)
+        // const needsUpdate =
+        //     user.name !== oidc_user.name ||
+        //     user.email !== oidc_user.email ||
+        //     (oidc_user.hmMifareSerial && (normalizeRFID(user.rfid) !== normalizeRFID(oidc_user.hmMifareSerial)));
+        //
+        // if (needsUpdate) {
+        //     const updated_user = await db.updateUser(user.user_id, {
+        //         name: oidc_user.name,
+        //         email: oidc_user.email,
+        //         // Only update RFID if provided and different
+        //         ...(oidc_user.hmMifareSerial && {rfid: oidc_user.hmMifareSerial})
+        //     });
+        //
+        //     const now = DateTime.utc();
+        //     await blockSteveUser(updated_user, "RFID is stale. Should not be activated.", now);
+        //
+        //     const new_create_user = await createSteveUser(updated_user, false, `New active RFID of old OCPP TAG PK: ${updated_user.steve_id}`); // Create new Steve user with updated RFID
+        //     if (!new_create_user) {
+        //         logger.error("Failed to create new Steve user after RFID change for user ID: " + updated_user.user_id);
+        //     }
+        // }
 
         await checkANDcreateUserInExternalSystems(user);
         user = await db.getUserUnique({oauth_id: oidc_user.sub});
