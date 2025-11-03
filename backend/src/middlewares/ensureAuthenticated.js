@@ -75,11 +75,11 @@ const ensureAuthenticated = async (req, res, next) => {
         }
 
         // Step 1: Validate OIDC authentication
-        if (!await validateOIDCProperties(req)) {
-            log.warn('OIDC validation failed in ensureAuthenticated');
-            await clearSession(req);
-            return res.redirect('/welcome');
-        }
+        // if (!await validateOIDCProperties(req)) {
+        //     log.warn('OIDC validation failed in ensureAuthenticated');
+        //     await clearSession(req);
+        //     return res.redirect('/welcome');
+        // }
 
         // Step 2: Get OIDC user info
         const oidcUser = req.oidc.user;

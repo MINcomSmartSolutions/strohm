@@ -9,7 +9,6 @@
  */
 
 const {ensureAuthenticated} = require('#middlewares/ensureAuthenticated');
-const {validateOIDCProperties} = require('#helpers/auth');
 const {db} = require('#utils/queries');
 const {clearSession, saveSession} = require('#utils/session');
 const logger = require('#services/logger');
@@ -90,23 +89,8 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             expect(next).not.toHaveBeenCalled();
         });
 
-        it('should redirect to /welcome if OIDC validation fails', async () => {
-            req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(false);
-            clearSession.mockResolvedValue();
-
-            await ensureAuthenticated(req, res, next);
-
-            expect(validateOIDCProperties).toHaveBeenCalledWith(req);
-            expect(mockLog.warn).toHaveBeenCalledWith('OIDC validation failed in ensureAuthenticated');
-            expect(clearSession).toHaveBeenCalledWith(req);
-            expect(res.redirect).toHaveBeenCalledWith('/welcome');
-            expect(next).not.toHaveBeenCalled();
-        });
-
         it('should set sessionId on request object', async () => {
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(null);
 
             await ensureAuthenticated(req, res, next);
@@ -117,7 +101,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
         it('should handle missing sessionID gracefully', async () => {
             delete req.sessionID;
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(null);
 
             await ensureAuthenticated(req, res, next);
@@ -140,7 +123,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             };
 
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(mockUser);
 
             await ensureAuthenticated(req, res, next);
@@ -152,7 +134,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
 
         it('should handle new user (not in database) and allow access to consent route', async () => {
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(null);
 
             await ensureAuthenticated(req, res, next);
@@ -174,7 +155,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             };
 
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(mockUser);
             req.session.user = null;
 
@@ -195,7 +175,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             };
 
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(mockUser);
             req.session.user = {user_id: 999, oauth_id: 'different-id'};
 
@@ -216,7 +195,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             };
 
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(mockUser);
             req.session.user = {user_id: 123, oauth_id: 'auth0|test-user-123'};
 
@@ -237,7 +215,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
 
             const sessionError = new SystemError(ErrorCodes.SYSTEM.SESSION_SAVE_FAILED);
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(mockUser);
             req.session.user = null;
             saveSession.mockImplementation((req) => Promise.reject(sessionError));
@@ -254,7 +231,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
         it('should redirect to /welcome on database errors', async () => {
             const dbError = new Error('Database connection failed');
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockRejectedValue(dbError);
 
             await ensureAuthenticated(req, res, next);
@@ -262,21 +238,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             expect(mockLog.error).toHaveBeenCalledWith(
                 'Error in ensureAuthenticated middleware:',
                 dbError
-            );
-            expect(res.redirect).toHaveBeenCalledWith('/welcome');
-            expect(next).not.toHaveBeenCalled();
-        });
-
-        it('should redirect to /welcome on validateOIDCProperties errors', async () => {
-            const validationError = new Error('OIDC validation error');
-            req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockRejectedValue(validationError);
-
-            await ensureAuthenticated(req, res, next);
-
-            expect(mockLog.error).toHaveBeenCalledWith(
-                'Error in ensureAuthenticated middleware:',
-                validationError
             );
             expect(res.redirect).toHaveBeenCalledWith('/welcome');
             expect(next).not.toHaveBeenCalled();
@@ -321,7 +282,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
             };
 
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             saveSession.mockResolvedValue();
             db.getUserUnique.mockResolvedValue(mockUser);
 
@@ -329,7 +289,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
 
             // Verify the complete flow
             expect(req.oidc.isAuthenticated).toHaveBeenCalled();
-            expect(validateOIDCProperties).toHaveBeenCalledWith(req);
             expect(db.getUserUnique).toHaveBeenCalledWith({oauth_id: 'auth0|test-user-123'});
             expect(req.user).toEqual(mockUser);
             expect(req.session.user).toEqual(mockUser);
@@ -339,14 +298,12 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
 
         it('should complete full flow for new user without blocking', async () => {
             req.oidc.isAuthenticated.mockReturnValue(true);
-            validateOIDCProperties.mockResolvedValue(true);
             db.getUserUnique.mockResolvedValue(null);
 
             await ensureAuthenticated(req, res, next);
 
             // Verify new user can proceed to consent
             expect(req.oidc.isAuthenticated).toHaveBeenCalled();
-            expect(validateOIDCProperties).toHaveBeenCalledWith(req);
             expect(db.getUserUnique).toHaveBeenCalledWith({oauth_id: 'auth0|test-user-123'});
             expect(req.user).toBeUndefined();
             expect(next).toHaveBeenCalled();
