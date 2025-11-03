@@ -130,6 +130,7 @@ const ExceptionCodes = Object.freeze({
         USER_UNBLOCK_FAILED: {code: 9007, status: 500, message: 'User unblock in Steve failed'},
         USER_GET_FAILED: {code: 9008, status: 500, message: 'User retrieval from Steve failed'},
         NO_RESPONSE: {code: 9009, status: 500, message: 'No response from SteVe'},
+        UNHEALTHY: {code: 9010, status: 500, message: 'SteVe service is unhealthy'},
     }),
 });
 

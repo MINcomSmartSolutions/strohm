@@ -29,7 +29,7 @@ jest.mock('#services/db_conn', () => {
 });
 
 // Import queries after mocking the database connection
-const {db} = require('#utils/queries');
+const {db, normalizeRFID} = require('#utils/queries');
 const {ValidationError, DatabaseError} = require('#utils/errors');
 
 describe('Database Queries Integration Tests', () => {
@@ -75,7 +75,7 @@ describe('Database Queries Integration Tests', () => {
             expect(newUser.oauth_id).toBe('new_oauth_id');
             expect(newUser.name).toBe('New User');
             expect(newUser.email).toBe('new@example.com');
-            expect(newUser.rfid).toBe('new_rfid');
+            expect(newUser.rfid).toBe(normalizeRFID('new_rfid'));
             expect(newUser.user_id).toBeDefined();
         });
 
@@ -1268,7 +1268,7 @@ describe('Database Queries Integration Tests', () => {
 
             expect(updatedUser.name).toBe('Updated Name');
             expect(updatedUser.email).toBe('updated@test.com');
-            expect(updatedUser.rfid).toBe('updated_rfid');
+            expect(updatedUser.rfid).toBe(normalizeRFID('updated_rfid'));
             expect(updatedUser.updated_at).not.toBeNull();
         });
 

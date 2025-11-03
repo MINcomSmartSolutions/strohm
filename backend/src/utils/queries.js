@@ -13,6 +13,17 @@ const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
 const {dbTransactionSchema} = require('#utils/joi');
 
+/**
+ * Normalizes RFID tags to uppercase for consistent storage and comparison.
+ * RFIDs may come in different cases from different sources (SteVe, OIDC, etc.)
+ *
+ * @param {string} rfid - The RFID tag to normalize
+ * @returns {string} Normalized RFID in uppercase
+ */
+function normalizeRFID(rfid) {
+    if (!rfid) return rfid;
+    return rfid.trim().toUpperCase();
+}
 
 /**
  * Handles query errors.
@@ -51,13 +62,15 @@ const createUser = async (oauth_id, name, email, rfid) => {
         );
     }
 
+    // Normalize RFID to uppercase for consistency
+    const normalizedRFID = normalizeRFID(rfid);
 
     const query = `
         INSERT INTO users (oauth_id, name, email, rfid)
         VALUES ($1, $2, $3::varchar, $4)
         RETURNING *
     `;
-    const values = [oauth_id, name, email, rfid];
+    const values = [oauth_id, name, email, normalizedRFID];
 
     const client = await pool.connect();
     try {
@@ -67,7 +80,7 @@ const createUser = async (oauth_id, name, email, rfid) => {
         await client.query('COMMIT');
 
         // Since recordActivityLog is now async, await it
-        await recordActivityLog(created_user.user_id, 'CREATE USER', 'DB', rfid);
+        await recordActivityLog(created_user.user_id, 'CREATE USER', 'DB', normalizedRFID);
         return created_user;
     } catch (error) {
         await client.query('ROLLBACK');
@@ -489,8 +502,8 @@ async function userCrossCheckForTxn(client, ocppTagPk, ocppIdTag, txn_steve_id) 
     if (userLookupResult.rowCount > 0) {
         const user = userLookupResult.rows[0];
 
-        // Cross-check RFID to detect data inconsistencies
-        if (user.rfid !== ocppIdTag) {
+        // Cross-check RFID to detect data inconsistencies (case-insensitive comparison)
+        if (user.rfid.toLowerCase() !== ocppIdTag.toLowerCase()) {
             logger.error(`RFID mismatch for steve_id ${ocppTagPk}: Database has '${user.rfid}' but transaction has '${ocppIdTag}'`, {
                 steve_id: ocppTagPk,
                 db_rfid: user.rfid,
@@ -973,8 +986,10 @@ async function updateUser(userId, updates) {
         }
 
         if (value !== undefined) {
+            // Normalize RFID to uppercase if it's being updated
+            const normalizedValue = key === 'rfid' ? normalizeRFID(value) : value;
             setClause.push(`${key} = $${valueIndex}`);
-            values.push(value);
+            values.push(normalizedValue);
             valueIndex++;
         }
     }
@@ -1100,6 +1115,130 @@ async function deleteUser(user) {
     }
 }
 
+/**
+ * Retrieves unbilled transactions that are stopped and have an associated user.
+ * These are transactions that:
+ * - Have a stop_timestamp (transaction is complete)
+ * - Have a user_id (user is known)
+ * - Do NOT have an invoice_ref (not yet billed)
+ *
+ * @async
+ * @param {Object} options - Query options
+ * @param {number} [options.limit] - Maximum number of transactions to retrieve
+ * @param {number} [options.olderThanHours] - Only get transactions stopped more than X hours ago (default: 0)
+ * @returns {Promise<Array<Object<db_txn>>>} Array of unbilled transaction objects
+ * @throws {DatabaseError} On query error
+ */
+async function getUnbilledTransactions(options = {}) {
+    const {limit = null, olderThanHours = 0} = options;
+
+    let query = `
+        SELECT *
+        FROM charging_transactions
+        WHERE stop_timestamp IS NOT NULL
+          AND invoice_ref IS NULL
+    `;
+
+    const values = [];
+    let paramIndex = 1;
+
+    // Add time filter if specified
+    if (olderThanHours > 0) {
+        query += ` AND stop_timestamp < NOW() - INTERVAL '${olderThanHours} hours'`;
+    }
+
+    // Order by stop timestamp (oldest first for fair processing)
+    query += ` ORDER BY stop_timestamp ASC`;
+
+    // Add limit if specified
+    if (limit && Number.isSafeInteger(limit) && limit > 0) {
+        query += ` LIMIT $${paramIndex}`;
+        values.push(limit);
+        paramIndex++;
+    }
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query, values);
+        return result.rows;
+    } catch (error) {
+        handleQueryError(error, 'getUnbilledTransactions');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Attempts to associate a user with a transaction by looking up the user via RFID.
+ * This is useful for retroactively associating users who registered after their transaction started.
+ *
+ * @async
+ * @param {Object<db_txn>} db_txn - The database transaction object
+ * @returns {Promise<number|null>} The user_id if found and updated, null otherwise
+ * @throws {DatabaseError|ValidationError} On query error
+ */
+async function tryAssociateUserToTransaction(db_txn) {
+    const {error} = dbTransactionSchema.validate(db_txn);
+    if (error) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error);
+    }
+
+    // If transaction already has a user, nothing to do
+    if (db_txn.user_id) {
+        logger.debug(`Transaction ${db_txn.id} already has user_id ${db_txn.user_id}`);
+        return db_txn.user_id;
+    }
+
+    // If no RFID tag, cannot lookup user
+    if (!db_txn.ocpp_id_tag) {
+        logger.warn(`Transaction ${db_txn.id} has no RFID tag, cannot associate user`);
+        return null;
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Look up user by RFID (case-insensitive)
+        const userLookupQuery = `
+            SELECT user_id, steve_id
+            FROM users
+            WHERE LOWER(rfid) = LOWER($1)
+            LIMIT 1
+        `;
+
+        const userLookupResult = await client.query(userLookupQuery, [db_txn.ocpp_id_tag]);
+
+        if (userLookupResult.rowCount === 0) {
+            logger.info(`No user found with RFID '${db_txn.ocpp_id_tag}' for transaction ${db_txn.id}`);
+            await client.query('COMMIT');
+            return null;
+        }
+
+        const user = userLookupResult.rows[0];
+
+        // Update transaction with user_id
+        const updateQuery = `
+            UPDATE charging_transactions
+            SET user_id = $1
+            WHERE id = $2
+            RETURNING *
+        `;
+
+        const updateResult = await client.query(updateQuery, [user.user_id, db_txn.id]);
+
+        await client.query('COMMIT');
+        logger.info(`Successfully associated user ${user.user_id} with transaction ${db_txn.id}`);
+
+        return user.user_id;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'tryAssociateUserToTransaction');
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     db: {
         handleQueryError,
@@ -1122,5 +1261,8 @@ module.exports = {
         updateUser,
         activateUser,
         deleteUser,
+        getUnbilledTransactions,
+        tryAssociateUserToTransaction,
     },
+    normalizeRFID,
 };

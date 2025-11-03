@@ -225,6 +225,15 @@
             background: #e86b04;
         }
 
+        .btn-change-rfid {
+            background: #6f42c1;
+            color: white;
+        }
+
+        .btn-change-rfid:hover:not(:disabled) {
+            background: #5a32a3;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -444,6 +453,7 @@
                                 <button class="btn btn-block" onclick="blockUserInSteve(${user.user_id}, '${escapeHtml(user.name)}')">Block SteVe</button>
                                 <button class="btn btn-unblock" onclick="unblockUserInSteve(${user.user_id}, '${escapeHtml(user.name)}')">Unblock SteVe</button>
                                 <button class="btn btn-delete-steve" onclick="deleteUserFromSteve(${user.user_id}, '${escapeHtml(user.name)}')">Delete SteVe</button>
+                                <button class="btn btn-change-rfid" onclick="changeUserRFID(${user.user_id}, '${escapeHtml(user.name)}', '${escapeHtml(user.rfid)}')">Change RFID</button>
                             ` : ''}
                             ${user.has_odoo ? `
                                 <button class="btn btn-revoke-odoo" onclick="revokeOdooCredentials(${user.user_id}, '${escapeHtml(user.name)}')">Revoke Odoo</button>
@@ -507,6 +517,45 @@
         try {
             const response = await fetch(`/api/dev/users/${userId}/steve`, {
                 method: 'DELETE'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                loadUsers();
+            } else {
+                showToast('Error: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error');
+        }
+    }
+
+    async function changeUserRFID(userId, userName, currentRFID) {
+        const newRFID = prompt(
+            `Change RFID for ${userName}\n\n` +
+            `Current RFID: ${currentRFID}\n\n` +
+            `Enter new RFID:`
+        );
+
+        if (!newRFID || newRFID.trim() === '') return;
+
+        const trimmedRFID = newRFID.trim();
+
+        if (trimmedRFID === currentRFID) {
+            showToast('New RFID is the same as current RFID', 'error');
+            return;
+        }
+
+        if (!confirm(`Confirm changing RFID for ${userName} from "${currentRFID}" to "${trimmedRFID}"?`)) return;
+
+        try {
+            const response = await fetch(`/api/dev/users/${userId}/steve/change-rfid`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({new_rfid: trimmedRFID})
             });
             const result = await response.json();
 

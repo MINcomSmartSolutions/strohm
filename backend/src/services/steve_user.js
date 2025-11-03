@@ -16,12 +16,13 @@ const {steveAxios} = require('./network');
 const {validateSteveUser} = require('#utils/steve');
 const logger = require('./logger');
 const {db} = require('#utils/queries');
-const {STEVE_CONFIG} = require('#config');
+const {STEVE_CONFIG, GLOBAL_CONFIG} = require('#config');
+const {DateTime} = require("luxon");
 //TODO: Check everything even the response returned 200 or 201
 
 
 const validateUserObjectForSteve = (user) => {
-    if (!user || !user.rfid || user.rfid.trim() === '') {
+    if (!user || !user.rfid || user.rfid.trim() === '' || user.rfid.length > GLOBAL_CONFIG.MAX_RFID_LENGTH) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
 }
@@ -38,11 +39,16 @@ const validateUserObjectForSteve = (user) => {
  * @param {Object} user - The user object (must include `rfid` and may include `user_id`).
  * @param {boolean} [blocked=false] - Whether the user should be created as blocked.
  * @param {string|null} [reason=null] - Optional note for the user.
+ * @param {boolean} [failIfExists=false] - If true, throws an error if the user already exists in SteVe.
  * @returns {Promise<Object|null>} Resolves to the created SteVe user object when a new user was created; resolves to `null` if the user already existed (no new creation).
  * @throws {ValidationError|SystemError|Error} If validation fails, SteVe returns an error or no response, or other failures occur.
  */
-const createSteveUser = async (user, blocked = false, reason = null) => {
+const createSteveUser = async (user, blocked = false, reason = null, failIfExists = false) => {
     validateUserObjectForSteve(user);
+
+    if (!STEVE_CONFIG.IS_HEALTHY) {
+        throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
+    }
 
     let ocppTagPk = null;
     let steveUser = null;
@@ -52,6 +58,9 @@ const createSteveUser = async (user, blocked = false, reason = null) => {
     // Check if the user already exists in SteVe
     const user_query = await getSteveUser(user.rfid);
     if (user_query) {
+        if (failIfExists) {
+            throw new SystemError(ErrorCodes.STEVE.USER_EXISTS);
+        }
         // Already exists,take the existing ocppTagPk
         logger.info(`User with RFID ${user.rfid} already exists in SteVe`);
         ocppTagPk = user_query.ocppTagPk;
@@ -116,6 +125,10 @@ const getSteveUser = async (user_rfid) => {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
     }
 
+    if (!STEVE_CONFIG.IS_HEALTHY) {
+        throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
+    }
+
     const response = await steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
         params: {
             idTag: user_rfid,
@@ -158,11 +171,15 @@ const blockSteveUser = async (user, reason = null, expiredDate = null) => {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'Invalid expiredDate provided');
     }
 
+    if (!STEVE_CONFIG.IS_HEALTHY) {
+        throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
+    }
+
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
         maxActiveTransactionCount: 0,
         note: reason ? reason : 'User blocked with API by MINcom Smart Solutions GmbH',
-        expiredAt: expiredDate ? expiredDate.toISOString() : null,
+        expiredAt: expiredDate ? expiredDate.toLocaleString() : null,
     });
 
     if (!response) {
@@ -191,6 +208,10 @@ const blockSteveUser = async (user, reason = null, expiredDate = null) => {
  */
 const unblockSteveUser = async (user) => {
     validateUserObjectForSteve(user);
+
+    if (!STEVE_CONFIG.IS_HEALTHY) {
+        throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
+    }
 
     // Check if its already unblocked
     const existing_user = await getSteveUser(user.rfid);
@@ -232,6 +253,10 @@ const unblockSteveUser = async (user) => {
 const deleteSteveUser = async (user) => {
     validateUserObjectForSteve(user);
 
+    if (!STEVE_CONFIG.IS_HEALTHY) {
+        throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
+    }
+
     logger.info(`Deleting user from SteVe with RFID: ${user.rfid} and steve_id: ${user.steve_id}`);
 
     const response = await steveAxios.delete(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`);
@@ -254,10 +279,42 @@ const deleteSteveUser = async (user) => {
 };
 
 
+/**
+ * Changes the RFID of an existing SteVe user.
+ * Should run after the RFID is changed in the local DB.
+ * @async
+ * @param {Object} user - The user object (must include new `rfid` and may include `user_id`).
+ * @param {string} old_rfid - The old RFID of the user to be changed.
+ */
+async function changeRFIDofSteveUser(user, old_rfid) {
+    validateUserObjectForSteve(user);
+
+    if (!STEVE_CONFIG.IS_HEALTHY) {
+        throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
+    }
+    const new_rfid = user.rfid;
+    const existing_user = await getSteveUser(old_rfid);
+    if (!existing_user) {
+        throw new SystemError(ErrorCodes.STEVE.USER_NOT_FOUND, `User with RFID ${old_rfid} not found in SteVe for RFID change`);
+    }
+
+    await blockSteveUser(user, `Blocked in favor of ${new_rfid}`, DateTime.now());
+    //
+    // CAUTION!!!
+    //
+    // If failIfExists is not set and new RFID matches someone else's RFID, it will replace the existing user with someone else's RFID.
+    await createSteveUser(user, user.deactivated_at, `Created as replacement for ${old_rfid}`, true);
+
+    logger.debug(`RFID changed in SteVe from ${old_rfid} to ${new_rfid}`);
+    await db.recordActivityLog(null, 'CHANGE RFID', 'SteVe', `${old_rfid} -> ${new_rfid}`);
+}
+
+
 module.exports = {
     createSteveUser,
     getSteveUser,
     blockSteveUser,
     unblockSteveUser,
     deleteSteveUser,
+    changeRFIDofSteveUser,
 };

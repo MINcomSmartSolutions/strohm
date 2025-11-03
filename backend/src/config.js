@@ -67,7 +67,8 @@ const GLOBAL_CONFIG = {
         ALLOWED_IPS: process.env.TAILSCALE_ALLOWED_IPS
             ? process.env.TAILSCALE_ALLOWED_IPS.split(',').map(ip => ip.trim())
             : [],
-    }
+    },
+    MAX_RFID_LENGTH: 36,
 }
 
 module.exports = {

@@ -192,6 +192,7 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     app.post('/api/dev/users/:user_id/steve/block', dev_admin_controller.blockUserInSteve);
     app.post('/api/dev/users/:user_id/steve/unblock', dev_admin_controller.unblockUserInSteve);
     app.delete('/api/dev/users/:user_id/steve', dev_admin_controller.deleteUserFromSteve);
+    app.post('/api/dev/users/:user_id/steve/change-rfid', dev_admin_controller.changeRFIDofUser);
     app.post('/api/dev/users/:user_id/db/deactivate', dev_admin_controller.deactivateUserInDB);
     app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
     app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);

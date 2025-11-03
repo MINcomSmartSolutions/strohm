@@ -38,7 +38,11 @@ jest.mock('#utils/steve', () => ({
 jest.mock('#config', () => ({
     STEVE_CONFIG: {
         OCPP_TAGS_URI: '/api/v1/tags',
+        IS_HEALTHY: true,
     },
+    GLOBAL_CONFIG: {
+        MAX_RFID_LENGTH: 36
+    }
 }));
 
 describe('Steve User Service', () => {

@@ -7,6 +7,7 @@
 
 const {ValidationError, ErrorCodes} = require('./errors');
 const {steveUserSchema} = require('./joi');
+const {normalizeRFID} = require("#utils/queries");
 
 /**
  * Validates Steve user response data.
@@ -35,7 +36,7 @@ const validateSteveUser = (response_data, userRfid) => {
     }
 
     // Check if idTag matches the expected RFID
-    if (response_data.idTag !== userRfid) {
+    if (normalizeRFID(response_data.idTag) !== normalizeRFID(userRfid)) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.GIVEN_RETURN_DISCREPANCY,
             `ID tag mismatch. Expected "${userRfid}", but got "${response_data.idTag}".`,

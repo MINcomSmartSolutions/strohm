@@ -9,9 +9,17 @@
  * @module controllers/dev_admin
  */
 
-const {db} = require('#utils/queries');
-const {getSteveUser, blockSteveUser, unblockSteveUser, deleteSteveUser} = require('#services/steve_user');
+const {db, normalizeRFID} = require('#utils/queries');
+const {
+    getSteveUser,
+    blockSteveUser,
+    unblockSteveUser,
+    deleteSteveUser,
+    changeRFIDofSteveUser
+} = require('#services/steve_user');
 const logger = require('#services/logger');
+const {GLOBAL_CONFIG} = require("#config");
+const {ValidationError, ErrorCodes} = require("#utils/errors");
 
 /**
  * Get all users with their status across all systems
@@ -138,6 +146,52 @@ async function deleteUserFromSteve(req, res) {
         res.status(500).json({
             success: false,
             error: error.message || 'Failed to delete user from SteVe'
+        });
+    }
+}
+
+
+async function changeRFIDofUser(req, res) {
+    try {
+        const {user_id} = req.params;
+        const {new_rfid} = req.body;
+
+        if (!new_rfid) {
+            return res.status(400).json({success: false, error: 'New RFID is required'});
+        }
+
+        const user = await db.getUserUnique({user_id: parseInt(user_id)});
+
+        if (!user) {
+            return res.status(404).json({success: false, error: 'User not found'});
+        }
+
+        if (!user.steve_id || !Number.isSafeInteger(user.steve_id) || !new_rfid || new_rfid.trim() === '' || new_rfid.length > GLOBAL_CONFIG.MAX_RFID_LENGTH) {
+            throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS);
+        }
+        if (normalizeRFID(user.rfid) === normalizeRFID(new_rfid)) {
+            logger.info(`Old RFID and new RFID are the same (${new_rfid}); no change needed.`);
+            return;
+        }
+        const old_rfid = user.rfid;
+        try {
+            const updated_user = await db.updateUser(user.user_id, {rfid: normalizeRFID(new_rfid)});
+            await changeRFIDofSteveUser(updated_user, user.rfid);
+        } catch (e) {
+            // Rollback in case of error
+            await db.updateUser(user.user_id, {rfid: normalizeRFID(old_rfid)});
+            throw e;
+        }
+
+        res.json({
+            success: true,
+            message: `RFID for user ${user.name} changed to ${new_rfid}`
+        });
+    } catch (error) {
+        logger.error('Error changing RFID of user:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to change RFID of user'
         });
     }
 }
@@ -279,6 +333,7 @@ module.exports = {
     deactivateUserInDB,
     activateUserInDB,
     deleteUserFromDB,
-    revokeOdooCredentials
+    revokeOdooCredentials,
+    changeRFIDofUser
 };
 
