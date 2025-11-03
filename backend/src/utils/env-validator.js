@@ -132,7 +132,7 @@ function validateEnv() {
         throw new Error('Environment variable validation failed');
     }
 
-    console.log(' Environment variables validated successfully');
+    console.log(`\n Starting application in ${value.NODE_ENV} mode. Version: ${require('../../package.json').version}`);
     return value;
 }
 

@@ -174,9 +174,9 @@ app.use(scim_controller);
 if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     const dev_admin_controller = require('./controllers/dev_admin');
 
-    logger.info('Admin Panel enabled - protected by Tailscale authentication');
+    logger.verbose('Admin Panel enabled - protected by Tailscale authentication');
     logger.info('Admin panel available at /dev-admin.html');
-    logger.info(`Allowed Tailscale ranges: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_RANGES.join(', ')}`);
+    logger.debug(`Allowed Tailscale ranges: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_RANGES.join(', ')}`);
     if (GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.length > 0) {
         logger.info(`Allowed specific IPs: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.join(', ')}`);
     }

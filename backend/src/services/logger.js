@@ -16,7 +16,6 @@ const logger = winston.createLogger({
     levels: winston.config.npm.levels,
     format: format.combine(
         format.timestamp(),
-        format.label({label: process.env.NODE_ENV}),
         format.errors({stack: true}),
         format.splat(),
         format.json(),
@@ -74,7 +73,7 @@ const consoleFormat = GLOBAL_CONFIG.ENV.IS_PRODUCTION
         format.printf(({timestamp, level, message, stack, file, line, label, ...meta}) => {
             const logStack = stack ? `\n${stack}` : '';
             let metaStr = Object.keys(meta).length ? safeStringify(meta) : '';
-            return `$[${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${logStack}`.trim();
+            return `[${timestamp}] ${level} ${file ? `[${file}:${line}]` : ''}: ${message} ${metaStr} ${logStack}`.trim();
         }),
         format.errors({stack: true}),
     );
