@@ -41,7 +41,10 @@ jest.mock('#config', () => ({
         IS_HEALTHY: true,
     },
     GLOBAL_CONFIG: {
-        MAX_RFID_LENGTH: 36
+        MAX_RFID_LENGTH: 36,
+        ENV: {
+            IS_PRODUCTION: false,
+        }
     }
 }));
 
