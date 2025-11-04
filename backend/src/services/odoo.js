@@ -13,8 +13,9 @@ const {odooAuthedAxios, odooPlainAxios} = require('./network');
 const {DateTime} = require('luxon');
 const {fmt} = require('#utils/datetime_format');
 const {ODOO_CONFIG} = require('#config');
-const {dbTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('#utils/joi');
+const {qualifiedTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('#utils/joi');
 const logger = require('#services/logger');
+const {isValidNumber} = require("#helpers/validators");
 
 
 /**
@@ -249,18 +250,23 @@ async function rotateOdooUserAuth(user) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function createOdooTxnInvoice(db_txn) {
-    const {error} = dbTransactionSchema.validate(db_txn);
+    const {error} = qualifiedTransactionSchema.validate(db_txn);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
             `Invalid transaction ${error.message}`);
     }
 
-    const odoo_credentials = await db.getUserOdooCredentials(db_txn.user_id);
-    const odoo_credentials_valid = odoo_credentials && odoo_credentials.key && odoo_credentials.key_salt;
-    if (!odoo_credentials_valid) {
-        // TODO: Instead of throwing an error, trigger a key rotation process
+    let odoo_credentials = await db.getUserOdooCredentials(db_txn.user_id);
+    const odoo_credentials_present = odoo_credentials && odoo_credentials.key && odoo_credentials.key_salt;
+    if (!odoo_credentials_present) {
+        // await rotateOdooUserAuth(await db.getUserUnique({user_id: db_txn.user_id}));
+        // odoo_credentials = await db.getUserOdooCredentials(db_txn.user_id);
+        // if (!odoo_credentials) {
+        //     throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
+        // }
         throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
     }
+
     const {key, key_salt} = odoo_credentials;
     const user = await db.getUserUnique({user_id: db_txn.user_id});
     const user_error = fullyQualifiedUserSchema.validate(user);
@@ -272,9 +278,9 @@ async function createOdooTxnInvoice(db_txn) {
     // The price of electricity at the time of transaction started
     let txn_started_with_electricity_price;
     txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
-    if (Number.isNaN(txn_started_with_electricity_price) || txn_started_with_electricity_price === null) {
+    if (!isValidNumber(txn_started_with_electricity_price)) {
         const default_price = 35; //in cents/kwh
-        logger.warn(`No price found for period ${db_txn.start_timestamp.toISOString()}, falling back to default price ${default_price}`);
+        logger.warn(`No price could be found for ${db_txn.start_timestamp.toISOString()}, falling back to default price ${default_price}`);
         txn_started_with_electricity_price = default_price;
     }
 

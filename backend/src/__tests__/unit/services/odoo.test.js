@@ -7,14 +7,14 @@ const {
     getOdooPortalLogin,
     rotateOdooUserAuth,
     createOdooTxnInvoice,
-    checkValidPaymentMethod,
 } = require('#services/odoo');
 const {odooAuthedAxios, odooPlainAxios} = require('#services/network');
 const {db} = require('#utils/queries');
 const {ValidationError, SystemError, ErrorCodes} = require('#utils/errors');
 const {generateOdooHash, generateSalt} = require('#helpers/auth');
 const {ODOO_CONFIG} = require('#config');
-const {dbTransactionSchema} = require('#utils/joi');
+const {qualifiedTransactionSchema} = require('#utils/joi');
+const {isValidNumber} = require("#helpers/validators");
 
 // Mock dependencies
 jest.mock('#services/network', () => ({
@@ -489,7 +489,7 @@ describe('Odoo Service', () => {
 
         it('should throw error if transaction validation fails', async () => {
             // This test should fail because in the implementation:
-            // const {txn_error} = dbTransactionSchema.validate(db_txn);
+            // const {txn_error} = qualifiedTransactionSchema.validate(db_txn);
             // The destructuring is incorrect - Joi returns {error, value}
             // So txn_error will be undefined and the validation check passes
             //
@@ -498,7 +498,7 @@ describe('Odoo Service', () => {
 
             // We need to mock the implementation to trigger the correct error
             // as the actual implementation has a bug
-            jest.spyOn(dbTransactionSchema, 'validate').mockImplementationOnce(() => {
+            jest.spyOn(qualifiedTransactionSchema, 'validate').mockImplementationOnce(() => {
                 return {
                     error: new Error('Invalid transaction format'),
                     value: invalidTransaction,
@@ -697,6 +697,7 @@ describe('Odoo Service', () => {
             });
 
             await createOdooTxnInvoice(testTransaction);
+
 
             // Verify Odoo API call with default price
             expect(odooPlainAxios.post).toHaveBeenCalledWith(
