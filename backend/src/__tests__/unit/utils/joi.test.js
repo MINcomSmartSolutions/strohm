@@ -3,7 +3,7 @@ const {
     fullyQualifiedUserSchema,
     steveUserSchema,
     steveTransactionSchema,
-    dbTransactionSchema,
+    qualifiedTransactionSchema,
 } = require('#utils/joi');
 
 describe('Joi Validation Schemas', () => {
@@ -218,7 +218,7 @@ describe('Joi Validation Schemas', () => {
         // });
     });
 
-    describe('dbTransactionSchema', () => {
+    describe('qualifiedTransactionSchema', () => {
         it('should validate a valid db transaction', () => {
             const validDbTransaction = {
                 id: 1,
@@ -231,7 +231,7 @@ describe('Joi Validation Schemas', () => {
                 ocpp_id_tag: 'rfid123',
             };
 
-            const {error} = dbTransactionSchema.validate(validDbTransaction);
+            const {error} = qualifiedTransactionSchema.validate(validDbTransaction);
             expect(error).toBeUndefined();
         });
 
@@ -247,7 +247,7 @@ describe('Joi Validation Schemas', () => {
                 ocpp_id_tag: 'rfid123',
             };
 
-            const {error} = dbTransactionSchema.validate(invalidDbTransaction);
+            const {error} = qualifiedTransactionSchema.validate(invalidDbTransaction);
             expect(error).toBeDefined();
             expect(error.message).toContain('delivered_energy_wh');
         });

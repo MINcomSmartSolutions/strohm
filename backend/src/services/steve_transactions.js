@@ -1,10 +1,11 @@
 /**
  * @file SteVe Transactions Service
  *
- * Incremental fetch of all transactions since last high‑water mark (T0).
- * Records all transactions in database, but only bills permanently stopped ones.
- * High‑Water Mark Concept:
- * We persist the timestamp of the latest processed transaction (the "high‑water mark" or T0).
+ * Responsible for fetching and recording transactions from the external SteVe API.
+ * This service does NOT handle billing - all billing logic is in billing_reconciliation service.
+ *
+ * Incremental fetch strategy using high-water mark (T0):
+ * We persist the timestamp of the latest processed transaction (the "high-water mark" or T0).
  * On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
  * After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
  *   • No overlap or reprocessing of already handled transactions.
@@ -19,11 +20,11 @@ const {DateTime} = require('luxon');
 const {steveAxios} = require('./network');
 const {fmt} = require('#utils/datetime_format');
 const {STEVE_CONFIG} = require('#config');
-const {steveTransactionSchema} = require('#utils/joi');
+const {steveTransactionSchema, qualifiedTransactionSchema, steveCompletedTransactionSchema} = require('#utils/joi');
 const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const {db} = require('#utils/queries');
-const {createOdooTxnInvoice} = require('./odoo');
 const logger = require('#services/logger');
+const {isValidInteger} = require("#helpers/validators");
 
 
 // Transaction fetch parameters according to Steve API
@@ -44,6 +45,12 @@ const TxnType = Object.freeze({
 });
 
 
+function txnPossiblyActive(txn) {
+    const parameters = [txn.stopValue, txn.stopReason, txn.stopTimestamp];
+    return parameters.every(param => param === null || param === undefined);
+}
+
+
 /**
  * Fetch all transactions since a given timestamp (exclusive)
  * If no timestamp is provided, fetch all transactions
@@ -54,11 +61,9 @@ const TxnType = Object.freeze({
 async function fetchTxnsSince(since) {
     const now = DateTime.now();
 
-
-// Fetch all transactions (both active and stopped) to record them in database
     let baseParams = {};
 
-// If `since` is provided, add periodType and date range
+    // If `since` is provided, add periodType and date range
     if (since) {
         if (!since.isValid) {
             throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid 'since' DateTime: ${since.invalidExplanation}`);
@@ -72,7 +77,7 @@ async function fetchTxnsSince(since) {
         baseParams.from = fmt(since.toUTC());
         baseParams.to = fmt(now.toUTC());
 
-        logger.info(`Fetching transactions from SteVe since ${since.toISO()} to ${now.toISO()}`);
+        logger.info(`Fetching transaction from SteVe since ${since.toISO()} to ${now.toISO()}`);
     } else {
         // If `since` is not provided, fetch all transactions
         baseParams.periodType = TxnPeriodType.ALL;
@@ -101,16 +106,16 @@ async function fetchTxnsSince(since) {
     const stoppedTxns = stoppedRes?.data || [];
     const activeTxns = activeRes?.data || [];
 
-    if (stoppedTxns.length) logger.verbose(`Fetched ${stoppedTxns.length} stopped transactions from SteVe`, stoppedTxns ? {
+    if (stoppedTxns.length) logger.verbose(`Fetched ${stoppedTxns.length} stopped transaction from SteVe`, stoppedTxns ? {
         sample: stoppedTxns.slice(0, 2),
     } : 0);
-    else logger.verbose('No stopped transactions fetched from SteVe');
+    else logger.verbose('No stopped transaction fetched from SteVe for the period');
 
 
-    if (activeTxns.length) logger.verbose(`Fetched ${activeTxns.length} active transactions from SteVe`, activeTxns ? {
+    if (activeTxns.length) logger.verbose(`Fetched ${activeTxns.length} active transaction from SteVe`, activeTxns ? {
         sample: activeTxns.slice(0, 2),
     } : 0);
-    else logger.verbose('No active transactions fetched from SteVe');
+    else logger.verbose('No active transaction fetched from SteVe for the period');
 
 
     return [...stoppedTxns, ...activeTxns];
@@ -149,94 +154,43 @@ const PERMANENT_STOP_REASONS = new Set([
     'Other',            // Other reasons - assume complete
 ]);
 
-/**
- * Determines if a transaction should be processed for billing based on its stop reason
- * @param {Object<steve_txn>} txn - Transaction object
- * @returns {boolean} True if transaction should be billed
- */
-function shouldProcessTransaction(txn) {
-    const stop_reason = txn.stopReason ?? null;
-    const stop_timestamp = txn.stopTimestamp ?? null;
-
-    if (!stop_timestamp) {
-        // The txn is possibly active
-        return false;
-    }
-
-    // if (stop_timestamp && TEMPORARY_STOP_REASONS.has(stop_reason)) {
-    //     logger.warn('Discrepancy in the txn data: stop_timestamp is set but stop_reason indicates temporary stop. Transaction ID: ' + txn.id);
-    // }
-    //
-    // // If it's a known temporary stop reason, don't process yet
-    // if (TEMPORARY_STOP_REASONS.has(stop_reason)) {
-    //     logger.info(`Skipping transaction ${txn.id} with temporary stop reason: ${stop_reason}`);
-    //     return false;
-    // }
-    //
-    // // If it's a known permanent stop reason, process it
-    // if (PERMANENT_STOP_REASONS.has(stop_reason)) {
-    //     return true;
-    // }
-
-
-    // logger.warn(`Unknown stop reason '${stop_reason}' for transaction ${txn.id}, processing for billing`);
-    return true;
-}
 
 /**
- * Record all transactions and create bills for permanently stopped transactions
+ * Record all transactions in the database.
+ *
  * @async
- * @param {Array<Object<steve_txn>>} txns
- * @returns {Promise<{maxStop: DateTime, processedCount: number, billedCount: number}>} The new high‑water mark (max stopTimestamp), count of all processed transactions, and count of billed transactions
+ * @param {Array<Object<steve_txn>>} txns - Array of transactions from SteVe API
+ * @returns {Promise<{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}>} The new high-water mark and count of processed transactions
  * @throws {ValidationError} If any transaction does not match the expected schema
  */
 async function processTxns(txns) {
-    // dedupe by id: ensure unique set. To be effecient, while we are going through txns we also validate their format.
+    let completedCount = 0;
+    // dedupe by id: ensure unique set. To be efficient, while we are going through txns we also validate their format.
     const unique = Array.from(
         txns.reduce((map, txn) => {
-            logger.info('Processing transaction: ' + txn.id);
+            logger.info('Processing transaction SteveId: ' + txn.id);
             // Validate transaction against schema
             const {error} = steveTransactionSchema.validate(txn);
             if (error) {
-                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error);
+                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format from steve`, error);
+            }
+            const {completedCheckError} = steveCompletedTransactionSchema.validate(txn);
+            if (!completedCheckError) {
+                completedCount += 1;
             }
             return map.set(txn.id, txn);
         }, new Map()).values(),
     );
 
-    // Filter transactions based on stop reason for billing
-    const billableTransactions = unique.filter(shouldProcessTransaction);
+    logger.info(`Found ${unique.length} unique transactions`);
 
-    //TODO: More checks needed.
-    // 1. Check if the bill already exists in Odoo
-    //
-
-    let maxStop;
-
-    logger.info('Processing transactions since last high-water mark');
-    logger.info(`Found ${unique.length} unique transactions, ${billableTransactions.length} billable transactions`);
-
-    // Record ALL transactions in database regardless of billing status
+    // Record ALL transactions in database
     for (const txn of unique) {
-        logger.info('Recording transaction: ' + txn.id);
-        const db_txn = await db.recordTransaction(txn);
-
-        if (shouldProcessTransaction(txn)) {
-            // If the transaction does not have a invoice_ref to odoo
-            // and have a associated user, create a bill.
-            if (!db_txn.invoice_ref && db_txn.user_id) {
-                logger.info('Creating bill for transaction: ' + txn.id);
-                const bill_id = await createOdooTxnInvoice(db_txn);
-                await db.saveInvoiceId(db_txn, bill_id);
-                logger.info(`Created bill ${bill_id} for transaction ${txn.id}`);
-            }
-        } else {
-            logger.info(`Transaction ${txn.id} recorded but not billed due to its state: ${txn.stopReason}`);
-        }
+        await db.recordTransaction(txn);
     }
 
-    // Determine new high‑water mark: max stopTimestamp of ALL unique transactions (not just billable ones)
-    // This ensures we don't re-fetch temporarily stopped transactions on the next run
+    // Determine new high-water mark: max stopTimestamp of all transactions
+    let maxStop;
     const transactionsWithStop = unique.filter(txn => txn.stopTimestamp);
     if (transactionsWithStop.length > 0) {
         maxStop = transactionsWithStop.reduce((max, txn) => {
@@ -244,20 +198,20 @@ async function processTxns(txns) {
             return stop > max ? stop : max;
         }, DateTime.fromMillis(0));
     } else {
-        // No stopped transactions, keep the previous watermark or use current time
+        // No stopped transactions, use current time
         maxStop = DateTime.now();
     }
 
-    return {maxStop, processedCount: unique.length, billedCount: billableTransactions.length};
+    return {maxStop, processedTxnCount: unique.length, completedTxnCount: completedCount};
 }
 
 /**
- * Run incremental billing cycle: fetch and process since last watermark
+ * Run incremental fetch: fetch and record transactions since last watermark
  * @async
- * @returns {Promise<{fetched: number, billed: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{high_water_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
  */
 async function runIncremental() {
-    logger.info('Running incremental transaction fetch and processing');
+    logger.verbose('Running incremental transaction fetch');
 
     const since = await db.getLastStopTimestamp();
 
@@ -266,21 +220,21 @@ async function runIncremental() {
     let new_watermark = since ? since : DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince(last_high_water);
+    let fetchedCount = new_txns.length;
     let processedCount = 0;
-    let billedCount = 0;
+    let completedCount = 0;
 
-    if (new_txns.length > 0) {
-        logger.info('Sending ' + new_txns.length + ' transactions for processing');
+    if (fetchedCount > 0) {
         try {
-            const {maxStop, processedCount: processed, billedCount: billed} = await processTxns(new_txns);
+            const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
             new_watermark = maxStop;
             processedCount = processed;
-            billedCount = billed;
+            completedCount = completed;
 
             // Only update high-water mark after successful processing to prevent transaction miss
             await db.setLastStopTimestamp(new_watermark);
         } catch (e) {
-            logger.error('Failed to process transactions, high-water mark not updated', e);
+            logger.error('Failed to record transactions, high-water mark not updated', e);
             throw e;
         }
     } else {
@@ -288,37 +242,48 @@ async function runIncremental() {
         await db.setLastStopTimestamp(new_watermark);
     }
 
-    return {fetched: processedCount, billed: billedCount, high_water_mark: new_watermark};
+    return {
+        high_water_mark: new_watermark,
+        fetchedTxnCount: fetchedCount,
+        processedTxnCount: processedCount,
+        completedTxnCount: completedCount,
+    };
 }
 
 /**
  * Fetches all transactions from Steve, processes them, and updates the high-water mark.
  * Use for a full sync (no time filter).
  * @async
- * @returns {Promise<{fetched: number, billed: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime}>}
  */
 async function runFull() {
     let watermark = DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince();
     let processedCount = 0;
-    let billedCount = 0;
+    let completedCount = 0;
+
 
     if (new_txns.length > 0) {
-        const {maxStop, processedCount: processed, billedCount: billed} = await processTxns(new_txns);
+        const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
         watermark = maxStop;
         processedCount = processed;
-        billedCount = billed;
+        completedCount = completed;
     }
     await db.setLastStopTimestamp(watermark);
-    return {fetched: processedCount, billed: billedCount, high_water_mark: watermark};
+    return {
+        high_water_mark: watermark,
+        fetchedTxnCount: new_txns.length,
+        processedTxnCount: processedCount,
+        completedTxnCount: completedCount
+    };
 }
 
 
 /**
  * Fetch and process all of today's transactions and updates the high-water mark.
  * @async
- * @returns {Promise<{fetched: number, billed: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime}>}
  */
 async function runToday() {
     // Get today's date and set it to midnight
@@ -326,16 +291,22 @@ async function runToday() {
 
     const new_txns = await fetchTxnsSince(watermark);
     let processedCount = 0;
-    let billedCount = 0;
+    let completedCount = 0;
+
 
     if (new_txns.length > 0) {
-        const {maxStop, processedCount: processed, billedCount: billed} = await processTxns(new_txns);
+        const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
         watermark = maxStop;
         processedCount = processed;
-        billedCount = billed;
+        completedCount = completed;
     }
     await db.setLastStopTimestamp(watermark);
-    return {fetched: processedCount, billed: billedCount, high_water_mark: watermark};
+    return {
+        high_water_mark: watermark,
+        fetchedTxnCount: new_txns.length,
+        processedTxnCount: processedCount,
+        completedTxnCount: completedCount
+    };
 }
 
 module.exports = {

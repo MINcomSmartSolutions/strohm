@@ -57,7 +57,7 @@ const steveUserSchema = Joi.object({
     note: Joi.string().allow(null, ''),
 }).unknown(true); // Allow additional fields
 
-
+// more flexible schema 
 const steveTransactionSchema = Joi.object({
     // PK of the transaction
     id: Joi.number().integer().positive().required(),
@@ -78,7 +78,6 @@ const steveTransactionSchema = Joi.object({
     // The meter value reading at the start of the transaction
     startValue: Joi.number().required(),
     // The meter value reading at the end of the transaction
-    // stopValue: Joi.number().min(Joi.ref('startValue')).allow(null),
     stopValue: Joi.number().allow(null),
     // The reason for the transaction being stopped
     stopReason: Joi.string().allow(null),
@@ -86,8 +85,35 @@ const steveTransactionSchema = Joi.object({
     stopEventActor: Joi.string().allow(null),
 }).unknown(true); // Allow additional fields
 
-// Database transaction schema
-const dbTransactionSchema = Joi.object({
+const steveCompletedTransactionSchema = Joi.object({
+    // PK of the transaction
+    id: Joi.number().integer().positive().required(),
+    // Connector ID of the charge box at which the transaction took place
+    connectorId: Joi.number().integer().positive().allow(null),
+    // PK of the charge box at which the transaction took place
+    chargeBoxPk: Joi.number().integer().positive().allow(null),
+    // PK of the OCPP tag used in the transaction
+    ocppTagPk: Joi.number().integer().positive().required(),
+    // The identifier of the charge box at which the transaction took place
+    chargeBoxId: Joi.string().allow(null),
+    // The Ocpp Tag used in the transaction
+    ocppIdTag: Joi.string().required(),
+    // The timestamp at which the transaction started
+    startTimestamp: Joi.date().required(),
+    // The timestamp at which the transaction ended
+    stopTimestamp: Joi.date(),
+    // The meter value reading at the start of the transaction
+    startValue: Joi.number().required(),
+    // The meter value reading at the end of the transaction
+    stopValue: Joi.number().min(Joi.ref('startValue')).required(),
+    // The reason for the transaction being stopped
+    stopReason: Joi.string().required(),
+    // The actor who stopped the transaction
+    stopEventActor: Joi.string().allow(null),
+}).unknown(true); // Allow additional fields
+
+
+const qualifiedTransactionSchema = Joi.object({
     id: Joi.number().integer().positive().required(),
     created_at: Joi.date().required(),
     start_timestamp: Joi.date().required(),
@@ -111,6 +137,7 @@ module.exports = {
     fullyQualifiedUserSchema,
     steveUserSchema,
     steveTransactionSchema,
-    dbTransactionSchema,
+    qualifiedTransactionSchema,
+    steveCompletedTransactionSchema,
     validateUser,
 };

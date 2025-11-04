@@ -7,7 +7,7 @@
 /**
  * @typedef {Object} User
  *
- * @property {string} user_id - The user's ID
+ * @property {number} user_id - The user's ID
  * @property {string} name - The user's name
  * @property {string} email - The user's email
  * @property {number} odoo_user_id - The user's Odoo ID
