@@ -23,9 +23,8 @@ DB_NAME="strohm"
 DB_USER="strohm_admin"
 DB_PASSWORD=""
 BACKUP_TAG="strohm_db_backup"
-DUMP_FORMAT="custom"
 BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
-
+ENV=""
 
 # Ensure restic is installed
 if ! command -v restic &> /dev/null; then
@@ -111,7 +110,7 @@ fi
 
 echo "Selected environment: $ENV"
 RESTIC_REPOSITORY="/home/resticuser/backups-strohm/${ENV}/db"
-
+RESTIC_CONN_STRING="sftp:restic-backup-host:$RESTIC_REPOSITORY"
 
 # Ask user for restic repository password if not found in the environment
 if [ -z "$RESTIC_PASSWORD" ]; then
@@ -139,7 +138,7 @@ if ! docker exec "$CONTAINER_NAME" psql --version &> /dev/null; then
 fi
 
 # Check if restic repository exists
-if ! restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots &> /dev/null; then
+if ! restic -r "$RESTIC_CONN_STRING" snapshots &> /dev/null; then
     error "Restic repository at '$RESTIC_REPOSITORY' not found or not initialized"
     exit 1
 fi
@@ -148,7 +147,7 @@ success "Starting backup process..."
 echo "Container: $CONTAINER_NAME"
 echo "Database: $DB_NAME"
 echo "User: $DB_USER"
-echo "Repository: $RESTIC_RESTIC_REPOSITORY"
+echo "Repository: $RESTIC_REPOSITORY"
 echo "Tag: $BACKUP_TAG"
 echo ""
 
@@ -156,7 +155,7 @@ echo ""
 echo "Dumping database and streaming to restic..."
 if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" \
     pg_dump -U "$DB_USER" -Fc "$DB_NAME" 2>/dev/null | \
-    RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" backup --stdin \
+    RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "$RESTIC_CONN_STRING" backup --stdin \
     --stdin-filename "${DB_NAME}_$BACKUP_DATE.dump" \
     --tag "$BACKUP_TAG" 2>&1; then
 
@@ -165,7 +164,7 @@ if docker exec -e PGPASSWORD="$DB_PASSWORD" "$CONTAINER_NAME" \
     # Show recent snapshots
     echo ""
     echo "Recent backups:"
-    RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots --tag "$BACKUP_TAG" --last 3
+    RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "$RESTIC_CONN_STRING" snapshots --tag "$BACKUP_TAG" --latest 3
 
     exit 0
 else
