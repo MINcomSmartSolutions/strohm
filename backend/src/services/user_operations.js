@@ -7,15 +7,13 @@
 
 
 const {createOdooUser} = require('./odoo');
-const {db, normalizeRFID} = require('#utils/queries');
+const {db} = require('#utils/queries');
 const {createSteveUser} = require('./steve_user');
 const logger = require('#services/logger');
 const {AuthError, ErrorCodes} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {GLOBAL_CONFIG} = require("#config");
 const {getRFIDFromFile} = require("#helpers/user");
-const {blockSteveUser} = require("#services/steve_user");
-const {DateTime} = require("luxon");
 
 /**
  * Handles user creation and linking with external systems.
@@ -47,19 +45,21 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
 
     if (!user) {
         // New user
-        let rfid = oidc_user.hmMifareSerial;
-        if (!rfid) {
-            if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-                const file_rfid = await getRFIDFromFile(oidc_user.email);
-                if (file_rfid) {
-                    rfid = file_rfid;
-                } else {
-                    logger.error('RFID couldnt be found neither in OIDC nor in the mapping csv for email: ' + oidc_user.email);
-                    throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
-                }
+        let rfid = null;
+        // Primary check: read from RFID file
+        if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+            const file_rfid = await getRFIDFromFile(oidc_user.email);
+            if (file_rfid) {
+                rfid = file_rfid;
+            } else if (oidc_user.hmMifareSerial) {
+                // Fallback: use hmMifareSerial if file lookup fails
+                rfid = oidc_user.hmMifareSerial;
             } else {
-                rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+                logger.error('RFID couldnt be found neither in file mapping nor in OIDC for email: ' + oidc_user.email);
+                throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
             }
+        } else {
+            rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
         }
 
         const createdUser = await db.createUser(
