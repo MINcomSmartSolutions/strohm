@@ -275,7 +275,7 @@ create_backup() {
     fi
     
     # Determine environment based on test mode
-    local backup_env="production"
+    local backup_env="staging"
     if [ "$TEST_MODE" = true ]; then
         backup_env="development"
         echo -e "${YELLOW}Test mode: Using development environment for backup${NC}"
@@ -306,7 +306,7 @@ restore_backup() {
     fi
 
     # Determine environment based on test mode
-    local restore_env="production"
+    local restore_env="staging"
     if [ "$TEST_MODE" = true ]; then
         restore_env="development"
         echo -e "${YELLOW}Test mode: Using development environment for restore${NC}"
