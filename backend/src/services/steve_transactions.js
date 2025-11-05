@@ -55,7 +55,7 @@ function txnPossiblyActive(txn) {
  * Fetch all transactions since a given timestamp (exclusive)
  * If no timestamp is provided, fetch all transactions
  * @async
- * @param {DateTime|null} since  Only transactions with stopTimestamp > since
+ * @param {DateTime|null} [since]  Only transactions with stopTimestamp > since
  * @returns {Promise<Array<{steve_txn}>>} Array of transactions
  */
 async function fetchTxnsSince(since) {
@@ -77,19 +77,19 @@ async function fetchTxnsSince(since) {
         baseParams.from = fmt(since.toUTC());
         baseParams.to = fmt(now.toUTC());
 
-        logger.info(`Fetching transaction from SteVe since ${since.toISO()} to ${now.toISO()}`);
+        logger.verbose(`Fetching transaction from SteVe since ${since.toISO()} to ${now.toISO()}`);
     } else {
         // If `since` is not provided, fetch all transactions
         baseParams.periodType = TxnPeriodType.ALL;
-        logger.info('Fetching all transactions from SteVe');
+        logger.verbose('Fetching all transactions from SteVe');
     }
 
     // Fetch both stopped and active transactions
     const stoppedParams = {...baseParams, type: TxnType.STOPPED};
     const activeParams = {...baseParams, type: TxnType.ACTIVE};
 
-    logger.verbose('Fetch parameters for stopped transactions', stoppedParams);
-    logger.verbose('Fetch parameters for active transactions', activeParams);
+    logger.debug('Fetch parameters for stopped transactions', stoppedParams);
+    logger.debug('Fetch parameters for active transactions', activeParams);
 
     const [stoppedRes, activeRes] = await Promise.all([
         steveAxios.get(STEVE_CONFIG.TRANSACTIONS_URI, {params: stoppedParams}),
@@ -106,15 +106,11 @@ async function fetchTxnsSince(since) {
     const stoppedTxns = stoppedRes?.data || [];
     const activeTxns = activeRes?.data || [];
 
-    if (stoppedTxns.length) logger.verbose(`Fetched ${stoppedTxns.length} stopped transaction from SteVe`, stoppedTxns ? {
-        sample: stoppedTxns.slice(0, 2),
-    } : 0);
+    if (stoppedTxns.length) logger.verbose(`Fetched ${stoppedTxns.length} stopped transaction from SteVe [${[stoppedTxns.map(txn => txn.id)]}]`);
     else logger.verbose('No stopped transaction fetched from SteVe for the period');
 
 
-    if (activeTxns.length) logger.verbose(`Fetched ${activeTxns.length} active transaction from SteVe`, activeTxns ? {
-        sample: activeTxns.slice(0, 2),
-    } : 0);
+    if (activeTxns.length) logger.verbose(`Fetched ${activeTxns.length} active transaction from SteVe [${[activeTxns.map(txn => txn.id)]}]`);
     else logger.verbose('No active transaction fetched from SteVe for the period');
 
 
@@ -168,7 +164,7 @@ async function processTxns(txns) {
     // dedupe by id: ensure unique set. To be efficient, while we are going through txns we also validate their format.
     const unique = Array.from(
         txns.reduce((map, txn) => {
-            logger.info('Processing transaction SteveId: ' + txn.id);
+            logger.verbose('Processing transaction Steve ID: ' + txn.id);
             // Validate transaction against schema
             const {error} = steveTransactionSchema.validate(txn);
             if (error) {
@@ -182,7 +178,7 @@ async function processTxns(txns) {
         }, new Map()).values(),
     );
 
-    logger.info(`Found ${unique.length} unique transactions`);
+    logger.verbose(`Found ${unique.length} unique transactions`);
 
     // Record ALL transactions in database
     for (const txn of unique) {
@@ -241,6 +237,7 @@ async function runIncremental() {
         // No new transactions, but still update the high-water mark to current time
         await db.setLastStopTimestamp(new_watermark);
     }
+    logger.info(`Incremental run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} was completed, ${processedCount - completedCount} was active.`);
 
     return {
         high_water_mark: new_watermark,
@@ -254,26 +251,34 @@ async function runIncremental() {
  * Fetches all transactions from Steve, processes them, and updates the high-water mark.
  * Use for a full sync (no time filter).
  * @async
- * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime, completedTxnCount: number}>}
  */
 async function runFull() {
+    logger.info('Running daily full transaction fetch');
+
     let watermark = DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince();
+    let fetchedCount = new_txns.length;
     let processedCount = 0;
     let completedCount = 0;
 
-
-    if (new_txns.length > 0) {
-        const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
-        watermark = maxStop;
-        processedCount = processed;
-        completedCount = completed;
+    if (fetchedCount > 0) {
+        try {
+            const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
+            watermark = maxStop;
+            processedCount = processed;
+            completedCount = completed;
+        } catch (e) {
+            logger.error('Failed to record transactions during full fetch, high-water mark not updated', e);
+        }
     }
-    await db.setLastStopTimestamp(watermark);
+
+    logger.info(`Daily full run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} was completed, ${processedCount - completedCount} was active.`);
+
     return {
         high_water_mark: watermark,
-        fetchedTxnCount: new_txns.length,
+        fetchedTxnCount: fetchedCount,
         processedTxnCount: processedCount,
         completedTxnCount: completedCount
     };
@@ -283,7 +288,7 @@ async function runFull() {
 /**
  * Fetch and process all of today's transactions and updates the high-water mark.
  * @async
- * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime, completedTxnCount: number}>}
  */
 async function runToday() {
     // Get today's date and set it to midnight
@@ -311,6 +316,8 @@ async function runToday() {
 
 module.exports = {
     runIncremental,
+    runFull,
+    runToday,
     TEMPORARY_STOP_REASONS,
     PERMANENT_STOP_REASONS,
     TxnPeriodType,

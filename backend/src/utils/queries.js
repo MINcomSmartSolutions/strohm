@@ -500,7 +500,7 @@ async function userCrossCheckForTxn(client, ocppTagPk, ocppIdTag, txn_steve_id) 
 
         // Cross-check RFID to detect data inconsistencies (case-insensitive comparison)
         if (user.rfid.toLowerCase() !== ocppIdTag.toLowerCase()) {
-            logger.error(`RFID mismatch for steve_id ${ocppTagPk}: Database has '${user.rfid}' but transaction has '${ocppIdTag}'`, {
+            logger.warn(`RFID mismatch for steve_id ${ocppTagPk}: Database has '${user.rfid}' but transaction has '${ocppIdTag}'`, {
                 steve_id: ocppTagPk,
                 db_rfid: user.rfid,
                 txn_rfid: ocppIdTag,
@@ -541,7 +541,7 @@ async function recordSteveTxn(steve_txn) {
 
     const client = await pool.connect();
     try {
-        logger.info(`Recording transaction from Steve ID: ${steve_txn.id}`);
+        logger.verbose(`Recording transaction from Steve ID: ${steve_txn.id}`);
         await client.query('BEGIN');
 
         // First check if transaction already exists in our database
@@ -562,14 +562,14 @@ async function recordSteveTxn(steve_txn) {
 
             // If both existing and incoming transactions have stop timestamps, transaction is complete
             if ((incoming_txn_stop_datetime && existing_txn_stop_datetime) && (incoming_txn_stop_datetime.equals(existing_txn_stop_datetime))) {
-                logger.info(`Transaction of Steve ID: ${steve_txn.id} already exists and is complete - returning existing record`);
+                logger.verbose(`Transaction of Steve ID: ${steve_txn.id} already exists and is complete - returning existing record`);
                 await client.query('COMMIT');
                 return existing_txn;
             }
 
             // Transaction exists but needs updating (adding stop values to an ongoing transaction)
-            logger.info(`Updating existing transaction ${existing_txn.id} (Steve txn ID: ${steve_txn.id})`);
-            logger.debug(`Changes: stop_timestamp: ${existing_txn.stop_timestamp} -> ${steve_txn.stopTimestamp}, stop_value: ${existing_txn.stop_value} -> ${steve_txn.stopValue}, stop_reason: ${existing_txn.stop_reason} -> ${steve_txn.stopReason}`);
+            logger.verbose(`Updating existing transaction ${existing_txn.id} (Steve txn ID: ${steve_txn.id})`);
+            logger.verbose(`Changes: stop_timestamp: ${existing_txn.stop_timestamp} -> ${steve_txn.stopTimestamp}, stop_value: ${existing_txn.stop_value} -> ${steve_txn.stopValue}, stop_reason: ${existing_txn.stop_reason} -> ${steve_txn.stopReason}`);
 
             // Try to resolve user_id if it's currently NULL (in case user was registered after transaction started)
             let resolved_user_id = existing_txn.user_id;
@@ -603,7 +603,7 @@ async function recordSteveTxn(steve_txn) {
 
             const updateResult = await client.query(updateQuery, updateValues);
             await client.query('COMMIT');
-            logger.info(`Transaction ${steve_txn.id} updated successfully`);
+            logger.verbose(`Transaction ${steve_txn.id} updated successfully`);
             return updateResult.rows[0];
         }
 
@@ -631,7 +631,7 @@ async function recordSteveTxn(steve_txn) {
 
         const result = await client.query(insertQuery, values);
         await client.query('COMMIT');
-        logger.info(`New transaction ${steve_txn.id} inserted successfully`);
+        logger.verbose(`New transaction ${steve_txn.id} inserted successfully`);
         return result.rows[0];
     } catch (error) {
         await client.query('ROLLBACK');
@@ -1217,7 +1217,7 @@ async function tryAssociateUserToTransaction(db_txn) {
             RETURNING *
         `;
 
-        const updateResult = await client.query(updateQuery, [user.user_id, db_txn.id]);
+        await client.query(updateQuery, [user.user_id, db_txn.id]);
 
         await client.query('COMMIT');
         logger.info(`Successfully associated user ${user.user_id} with transaction ${db_txn.id}`);

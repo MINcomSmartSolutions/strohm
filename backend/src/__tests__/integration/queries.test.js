@@ -598,7 +598,7 @@ describe('Database Queries Integration Tests', () => {
 
         test('recordTransaction should log error when RFID mismatches during INSERT', async () => {
             const logger = require('#services/logger');
-            const errorSpy = jest.spyOn(logger, 'error');
+            const errorSpy = jest.spyOn(logger, 'warn');
 
             const now = new Date();
             const startTime = new Date(now.getTime() - 3600000);
@@ -639,7 +639,7 @@ describe('Database Queries Integration Tests', () => {
 
         test('recordTransaction should log error when RFID mismatches during UPDATE', async () => {
             const logger = require('#services/logger');
-            const errorSpy = jest.spyOn(logger, 'error');
+            const errorSpy = jest.spyOn(logger, 'warn');
 
             const now = new Date();
             const startTime = new Date(now.getTime() - 3600000);

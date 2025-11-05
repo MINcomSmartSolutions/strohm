@@ -128,12 +128,13 @@ async function runBillingReconciliation(options = {}) {
         const unbilledTxns = await db.getUnbilledTransactions({limit});
 
         if (unbilledTxns.length === 0) {
-            logger.info('No unbilled transactions found');
+            logger.verbose('No unbilled transactions found');
             return stats;
         }
 
         // Process each transaction
         for (const txn of unbilledTxns) {
+            logger.verbose(`Processing transaction ID: ${txn.id}, Steve ID: ${txn.txn_steve_id}`);
             const result = await processSingleUnbilledTransaction(txn);
 
             stats.processed++;
@@ -151,7 +152,7 @@ async function runBillingReconciliation(options = {}) {
             stats.results.push(result);
         }
 
-        logger.verbose(`Billing reconciliation complete: ${stats.processed} processed, ${stats.users_associated} users associated, ${stats.invoices_created} invoices created, ${stats.failed} failed`);
+        logger.verbose(`Billing reconciliation complete: ${stats.processed} processed, ${stats.users_associated} users associated, ${stats.invoices_created} invoices created, ${stats.failed} failed.`);
 
         return stats;
     } catch (error) {
@@ -168,7 +169,6 @@ async function runBillingReconciliation(options = {}) {
  *   total_unbilled: number,
  *   unbilled_with_user: number,
  *   unbilled_without_user: number,
- *   oldest_unbilled: DateTime|null
  * }>}
  */
 async function getUnbilledTransactionStats() {
