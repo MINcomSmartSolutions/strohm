@@ -6,7 +6,6 @@ const {runIncremental, TxnType, TxnPeriodType} = require('#services/steve_transa
 const {steveAxios} = require('#services/network');
 const {db} = require('#utils/queries');
 const {fmt} = require('#utils/datetime_format');
-const {createOdooTxnInvoice} = require('#services/odoo');
 const {STEVE_CONFIG} = require('#config');
 
 // TODO: Needs reviewing
@@ -23,13 +22,9 @@ jest.mock('#utils/queries', () => ({
         getLastStopTimestamp: jest.fn(),
         setLastStopTimestamp: jest.fn(),
         recordTransaction: jest.fn(),
-        saveInvoiceId: jest.fn(),
     },
 }));
 
-jest.mock('#services/odoo', () => ({
-    createOdooTxnInvoice: jest.fn(),
-}));
 
 jest.mock('#utils/datetime_format', () => ({
     fmt: jest.fn(),
@@ -96,7 +91,6 @@ describe('Steve Transactions Service', () => {
 
     describe('runIncremental', () => {
         it('should fetch and process new transactions since last high-water mark', async () => {
-            // Mock getLastStopTimestamp to return a timestamp
             db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
 
             // Mock fetching new transactions
@@ -107,10 +101,6 @@ describe('Steve Transactions Service', () => {
 
             // Mock processing of transaction
             db.recordTransaction.mockResolvedValue(sampleDbTransaction);
-
-            // Mock invoice creation
-            const mockInvoiceId = 5678;
-            createOdooTxnInvoice.mockResolvedValue(mockInvoiceId);
 
             const result = await runIncremental();
 
@@ -128,7 +118,6 @@ describe('Steve Transactions Service', () => {
                     },
                 },
             );
-
             expect(steveAxios.get).toHaveBeenCalledWith(
                 STEVE_CONFIG.TRANSACTIONS_URI,
                 {
@@ -144,19 +133,13 @@ describe('Steve Transactions Service', () => {
             // Verify recordTransaction was called with the transaction data
             expect(db.recordTransaction).toHaveBeenCalledWith(sampleTransaction);
 
-            // Verify createOdooTxnInvoice was called for transactions with user_id
-            expect(createOdooTxnInvoice).toHaveBeenCalledWith(sampleDbTransaction);
-
-            // Verify saveInvoiceId was called with correct parameters
-            expect(db.saveInvoiceId).toHaveBeenCalledWith(sampleDbTransaction, mockInvoiceId);
-
             // Verify setLastStopTimestamp was called with new high-water mark
             expect(db.setLastStopTimestamp).toHaveBeenCalled();
 
-            // Verify returned result matches expected format
             expect(result).toEqual({
-                fetched: 1,
-                billed: 1,
+                completedTxnCount: 2,
+                fetchedTxnCount: 2, // active and stopped for some txn
+                processedTxnCount: 1,
                 high_water_mark: expect.any(DateTime),
             });
         });
@@ -202,13 +185,14 @@ describe('Steve Transactions Service', () => {
 
             // Verify returned result matches expected format for no transactions
             expect(result).toEqual({
-                fetched: 0,
-                billed: 0,
+                completedTxnCount: 0,
+                fetchedTxnCount: 0,
+                processedTxnCount: 0,
                 high_water_mark: expect.any(DateTime),
             });
         });
 
-        it('should handle transactions without user_id (not create invoice)', async () => {
+        it('should handle transactions without user_id', async () => {
             // Mock getLastStopTimestamp to return a timestamp
             db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
 
@@ -233,43 +217,9 @@ describe('Steve Transactions Service', () => {
             // Verify recordTransaction was called with the transaction data
             expect(db.recordTransaction).toHaveBeenCalledWith(sampleTransaction);
 
-            // Verify createOdooTxnInvoice was NOT called because there's no user_id
-            expect(createOdooTxnInvoice).not.toHaveBeenCalled();
-
-            // Verify saveInvoiceId was NOT called
-            expect(db.saveInvoiceId).not.toHaveBeenCalled();
 
             // Verify setLastStopTimestamp was called
             expect(db.setLastStopTimestamp).toHaveBeenCalled();
-        });
-
-        it('should handle transactions with existing invoice (not create duplicate)', async () => {
-            // Mock getLastStopTimestamp to return a timestamp
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
-
-            // Mock fetching new transactions
-            steveAxios.get.mockResolvedValue({
-                status: 200,
-                data: [sampleTransaction],
-            });
-
-            // Mock processing of transaction - return a transaction WITH existing invoice_ref
-            const transactionWithInvoice = {
-                ...sampleDbTransaction,
-                invoice_ref: 9999, // Already has invoice
-            };
-            db.recordTransaction.mockResolvedValue(transactionWithInvoice);
-
-            const result = await runIncremental();
-
-            // Verify recordTransaction was called with the transaction data
-            expect(db.recordTransaction).toHaveBeenCalledWith(sampleTransaction);
-
-            // Verify createOdooTxnInvoice was NOT called because there's already an invoice
-            expect(createOdooTxnInvoice).not.toHaveBeenCalled();
-
-            // Verify saveInvoiceId was NOT called
-            expect(db.saveInvoiceId).not.toHaveBeenCalled();
         });
 
         it('should handle duplicate transactions (ensure unique processing)', async () => {
@@ -290,10 +240,6 @@ describe('Steve Transactions Service', () => {
                 return sampleDbTransaction;
             });
 
-            // Mock invoice creation
-            const mockInvoiceId = 5678;
-            createOdooTxnInvoice.mockResolvedValue(mockInvoiceId);
-
             const result = await runIncremental();
 
             // Verify only unique IDs were processed
@@ -304,14 +250,8 @@ describe('Steve Transactions Service', () => {
             expect(db.recordTransaction).toHaveBeenCalledTimes(1);
             expect(db.recordTransaction).toHaveBeenCalledWith(sampleTransaction);
 
-            // Verify createOdooTxnInvoice was called once
-            expect(createOdooTxnInvoice).toHaveBeenCalledTimes(1);
-
-            // Verify saveInvoiceId was called once
-            expect(db.saveInvoiceId).toHaveBeenCalledTimes(1);
-
-            // Verify result shows only 1 transaction processed despite 2 in input
-            expect(result.fetched).toBe(1);
+            expect(result.processedTxnCount).toBe(1);
+            expect(result.fetchedTxnCount).toBe(4); // 2 active + 2 stopped (duplicates counted in fetched)
         });
 
         it('should count all unique transactions (no duplicates)', async () => {
@@ -322,17 +262,18 @@ describe('Steve Transactions Service', () => {
                 data: [sampleTransaction, tx2],
             });
             db.recordTransaction.mockResolvedValue(sampleDbTransaction);
-            createOdooTxnInvoice.mockResolvedValue(5678);
             const result = await runIncremental();
             expect(db.recordTransaction).toHaveBeenCalledTimes(2);
-            expect(result.fetched).toBe(2);
+            expect(result.processedTxnCount).toBe(2);
+            expect(result.fetchedTxnCount).toBe(4);
         });
 
         it('should return 0 fetched if no transactions', async () => {
             db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
             steveAxios.get.mockResolvedValue({status: 200, data: []});
             const result = await runIncremental();
-            expect(result.fetched).toBe(0);
+            expect(result.fetchedTxnCount).toBe(0);
+            expect(result.processedTxnCount).toBe(0);
         });
 
         it('should throw error if transaction format is invalid', async () => {
@@ -363,7 +304,8 @@ describe('Steve Transactions Service', () => {
             expect(db.setLastStopTimestamp).toHaveBeenCalled();
 
             // Verify result shows 0 transactions
-            expect(result.fetched).toBe(0);
+            expect(result.fetchedTxnCount).toBe(0);
+            expect(result.processedTxnCount).toBe(0);
         });
     });
 });

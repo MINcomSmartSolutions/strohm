@@ -11,7 +11,7 @@ const pool = require('#services/db_conn');
 const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
-const {dbTransactionSchema} = require('#utils/joi');
+const {qualifiedTransactionSchema} = require('#utils/joi');
 
 /**
  * Normalizes RFID tags to uppercase for consistent storage and comparison.
@@ -98,10 +98,6 @@ const createUser = async (oauth_id, name, email, rfid) => {
  * @param {Object} options - Additional query options (limit, offset, orderBy, etc.)
  * @returns {Promise<Array>} - The matching users
  * @throws {DatabaseError} - If the database operation fails
- * @example
- * getUsers({ first_name: 'John' }) - Get all users named John
- * getUsers({ active: true }, { limit: 10, offset: 20 }) - Get 10 active users, skipping first 20
- * getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users ordered by creation date descending
  */
 const getUsers = async (filters = {}, options = {}) => {
 
@@ -545,6 +541,7 @@ async function recordSteveTxn(steve_txn) {
 
     const client = await pool.connect();
     try {
+        logger.info(`Recording transaction from Steve ID: ${steve_txn.id}`);
         await client.query('BEGIN');
 
         // First check if transaction already exists in our database
@@ -737,7 +734,7 @@ async function getLastStopTimestamp() {
  * @throws {DatabaseError|ValidationError} On query error.
  */
 async function saveInvoiceId(txn, invoice_id) {
-    const {error} = dbTransactionSchema.validate(txn);
+    const {error} = qualifiedTransactionSchema.validate(txn);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error);
     }
@@ -1147,8 +1144,8 @@ async function getUnbilledTransactions(options = {}) {
         query += ` AND stop_timestamp < NOW() - INTERVAL '${olderThanHours} hours'`;
     }
 
-    // Order by stop timestamp (oldest first for fair processing)
-    query += ` ORDER BY stop_timestamp ASC`;
+    // Newest transactions first
+    query += ` ORDER BY id DESC`;
 
     // Add limit if specified
     if (limit && Number.isSafeInteger(limit) && limit > 0) {
@@ -1178,11 +1175,6 @@ async function getUnbilledTransactions(options = {}) {
  * @throws {DatabaseError|ValidationError} On query error
  */
 async function tryAssociateUserToTransaction(db_txn) {
-    const {error} = dbTransactionSchema.validate(db_txn);
-    if (error) {
-        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format`, error);
-    }
-
     // If transaction already has a user, nothing to do
     if (db_txn.user_id) {
         logger.debug(`Transaction ${db_txn.id} already has user_id ${db_txn.user_id}`);

@@ -57,7 +57,7 @@ PG_CONTAINER="strohm_db"
 ODOO_CONTAINER="strohm_odoo"
 DB_NAME="odoo"
 DB_USER="postgres"
-
+ENV=""
 TEMP_DIR="/tmp/odoo-backup"
 # Create timestamped backup directory
 BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
@@ -78,6 +78,7 @@ while [[ $# -gt 0 ]]; do
         -o|--odoo-container) ODOO_CONTAINER="$2"; shift 2 ;;
         -u|--user) DB_USER="$2"; shift 2 ;;
         -d|--database) DB_NAME="$2"; shift 2 ;;
+        --environment) ENV="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) error "Unknown option: $1"; usage ;;
     esac
@@ -105,27 +106,36 @@ echo "3) Production"
 
 read -r -p "Enter your choice (1-3): " choice
 
-case $choice in
-    1)
-        ENV="development"
-        ;;
-    2)
-        ENV="staging"
-        ;;
-    3)
-        ENV="production"
-        ;;
+# Prompt for environment if not provided via argument
+if [ -z "$ENV" ]; then
+    echo "Please select the environment you want backup to be saved:"
+    echo "1) Development"
+    echo "2) Staging"
+    echo "3) Production"
 
-    *)
-        echo "Invalid choice. Exiting..."
-        exit 1
-        ;;
-esac
+    read -r -p "Enter your choice (1-3): " choice
+
+    case $choice in
+        1)
+            ENV="development"
+            ;;
+        2)
+            ENV="staging"
+            ;;
+        3)
+            ENV="production"
+            ;;
+        *)
+            error "Invalid choice. Exiting..."
+            exit 1
+            ;;
+    esac
+fi
 echo "Selected environment: $ENV"
 
 # Ask user for restic repository password if not found in the environment
 if [ -z "$RESTIC_PASSWORD" ]; then
-  read -r -s -p "Enter restic repository password: " RESTIC_PASSWORD
+  read -r -s -p "Enter restic repository password: " RESTIC_PASSWORD < /dev/tty
   export RESTIC_PASSWORD
   echo
 fi
@@ -225,6 +235,8 @@ if restic -r "$RESTIC_CONN_STRING" backup "$BACKUP_DIR" \
     --tag "db:${DB_NAME}" \
     --tag "date:${BACKUP_DATE}" 2>&1; then
 
+    echo "Recent backups:"
+    RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "$RESTIC_CONN_STRING" snapshots --latest 3
     success "Restic backup completed successfully"
 else
     error "Restic backup failed"

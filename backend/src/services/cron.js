@@ -1,16 +1,19 @@
 /**
- * @file Cron job service for periodic transaction fetching.
+ * @file Cron job service for periodic transaction fetching and billing reconciliation.
  *
- * - Schedules a job to run every 20 second.
+ * - Schedules a job to run every configured interval for transaction fetching.
+ * - Schedules billing reconciliation to run every hour.
  * - Calls runIncremental to fetch new transactions.
  * - Logs the result after each execution.
  * - Monitors SteVe health and automatically stops/starts cron job based on availability.
  *
  * @exports transactionFetchLoop: The configured CronJob instance.
+ * @exports billingReconciliationJob: The configured CronJob for billing reconciliation.
  * @module services/cron
  */
 const {CronJob} = require('cron');
 const {runIncremental} = require('./steve_transactions');
+const {runBillingReconciliation, getUnbilledTransactionStats} = require('./billing_reconciliation');
 const {checkSteveHealth, getSteveHealth} = require('./network');
 const logger = require('./logger');
 
@@ -21,23 +24,71 @@ const cronExpression = `*/${intervalSeconds} * * * * *`; // Every 'intervalSecon
 const healthCheckInterval = 5 * 60 * 1000;
 let healthCheckTimer = null;
 let cronRunning = false;
+let billingCronRunning = false;
+
 
 const transactionFetchLoop = new CronJob(cronExpression, async () => {
-    const healthStatus = getSteveHealth();
+        const healthStatus = getSteveHealth();
+        if (!healthStatus.isHealthy) {
+            logger.warn('Skipping transaction fetch - SteVe is unhealthy');
+            return;
+        }
 
-    if (!healthStatus.isHealthy) {
-        logger.warn('Skipping transaction fetch - SteVe is unhealthy');
-        return;
-    }
+        try {
+            const result = await runIncremental();
 
-    try {
-        await runIncremental();
-    } catch (error) {
-        logger.error('Error during transaction fetch loop: ' + error.message);
-        // Check health after error
-        await checkSteveHealth();
-    }
-});
+            // If new transactions were fetched, immediately run billing reconciliation
+            // to attempt billing for transactions with associated users
+            if (result.completedTxnCount > 0) {
+                const billingResult = await runBillingReconciliation({
+                    olderThanHours: 0, // Don't wait, process immediately
+                    limit: result.completedTxnCount, // Process only the number of qualified transactions
+                });
+
+                if (billingResult.processed > 0) {
+                    logger.info(`Immediate billing: ${billingResult.invoices_created} invoices created, ${billingResult.failed} failed`);
+                }
+            }
+        } catch (error) {
+            logger.error('Error during transaction fetch loop: ' + error.message);
+            // Check health after error
+            await checkSteveHealth();
+        }
+    },
+    null, // onComplete
+    false, // don't start immediately
+    'UTC' // timezone
+);
+
+/**
+ * Billing reconciliation job - runs every hour at minute 5
+ * Attempts to:
+ * 1. Associate users with previously unbilled transactions
+ * 2. Create invoices for transactions that now have associated users
+ */
+const billingReconciliationJob = new CronJob(
+    `30 22 * * *`, // Every hour at minute 5
+    async () => {
+        logger.info('Running scheduled billing reconciliation...');
+        try {
+            // Get stats first
+            const stats = await getUnbilledTransactionStats();
+            logger.info(`Unbilled transactions: ${stats.total_unbilled} total (${stats.unbilled_with_user} with user, ${stats.unbilled_without_user} without user)`);
+
+            if (stats.total_unbilled > 0) {
+                // Process up to 100 transactions that are at least 1 hour old
+                await runBillingReconciliation();
+            } else {
+                logger.verbose('No unbilled transactions to process');
+            }
+        } catch (error) {
+            logger.error('Error in scheduled billing reconciliation:', error);
+        }
+    },
+    null, // onComplete
+    true, // start immediately
+    'UTC' // timezone
+);
 
 /**
  * Start the transaction fetch cron job with health monitoring
@@ -46,7 +97,14 @@ function startCronWithHealthCheck() {
     if (!cronRunning) {
         transactionFetchLoop.start();
         cronRunning = true;
-        logger.info('Transaction fetch cron job started');
+        logger.info('Transaction fetch cron job started and will be run every ' + intervalSeconds + ' seconds');
+    }
+
+    // Start billing reconciliation job
+    if (!billingCronRunning) {
+        billingReconciliationJob.start();
+        billingCronRunning = true;
+        logger.info('Billing reconciliation cron job started and will run at 22:30 UTC daily');
     }
 
     // Start periodic health checks
@@ -79,6 +137,12 @@ function stopCronWithHealthCheck() {
         logger.info('Transaction fetch cron job stopped');
     }
 
+    if (billingCronRunning) {
+        billingReconciliationJob.stop();
+        billingCronRunning = false;
+        logger.info('Billing reconciliation cron job stopped');
+    }
+
     if (healthCheckTimer) {
         clearInterval(healthCheckTimer);
         healthCheckTimer = null;
@@ -88,18 +152,22 @@ function stopCronWithHealthCheck() {
 
 /**
  * Get cron job status
- * @returns {{running: boolean, steveHealth: object}}
+ * @returns {{running: boolean, billingReconciliationRunning: boolean, steveHealth: object}}
  */
 function getCronStatus() {
     return {
         running: cronRunning,
+        billingReconciliationRunning: billingCronRunning,
         steveHealth: getSteveHealth(),
     };
 }
 
 module.exports = {
     transactionFetchLoop,
+    billingReconciliationJob,
     startCronWithHealthCheck,
     stopCronWithHealthCheck,
     getCronStatus,
+    runBillingReconciliation, // Export for manual triggering
+    getUnbilledTransactionStats, // Export for manual queries
 };

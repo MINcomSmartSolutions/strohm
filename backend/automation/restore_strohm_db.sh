@@ -30,7 +30,7 @@ DB_PASSWORD=""
 BACKUP_TAG="strohm_db_backup"
 SNAPSHOT_ID=""
 CLEAN_RESTORE=false
-
+ENV=""
 
 # Ensure restic is installed
 if ! command -v restic &> /dev/null; then
@@ -76,6 +76,10 @@ while [[ $# -gt 0 ]]; do
             CLEAN_RESTORE=true
             shift 1
             ;;
+        --environment)
+            ENV="$2"
+            shift 2
+            ;;
         -s|--snapshot)
             SNAPSHOT_ID="$2"
             shift 2
@@ -88,30 +92,30 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-echo "Please select the environment to restore from:"
-echo "1) Development"
-echo "2) Staging"
-echo "3) Production"
+if [ -z "$ENV" ]; then
+  echo "Please select the environment to restore from:"
+  echo "1) Development"
+  echo "2) Staging"
+  echo "3) Production"
 
+  read -r -p "Enter your choice (1-3): " choice
 
-read -r -p "Enter your choice (1-3): " choice
-
-case $choice in
-    1)
-        ENV="development"
-        ;;
-    2)
-        ENV="staging"
-        ;;
-    3)
-        ENV="production"
-        ;;
-    *)
-        error "Invalid choice. Exiting..."
-        exit 1
-        ;;
-esac
-
+  case $choice in
+      1)
+          ENV="development"
+          ;;
+      2)
+          ENV="staging"
+          ;;
+      3)
+          ENV="production"
+          ;;
+      *)
+          error "Invalid choice. Exiting..."
+          exit 1
+          ;;
+  esac
+fi
 echo "Selected environment: $ENV"
 RESTIC_REPOSITORY="/home/resticuser/backups-strohm/${ENV}/db"
 
@@ -157,13 +161,18 @@ if [ -z "$SNAPSHOT_ID" ]; then
     RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots --tag "$BACKUP_TAG"
     echo ""
 
-    read -r -p "Enter snapshot ID to restore" SNAPSHOT_INPUT
-    SNAPSHOT_ID="$SNAPSHOT_INPUT"
-
+    read -r -p "Enter snapshot ID to restore or 'latest' for the most recent: " SNAPSHOT_INPUT < /dev/tty
+    if [[ "$SNAPSHOT_INPUT" == "latest" ]]; then
+        SNAPSHOT_ID=latest
+        info "Using latest snapshot"
+    else
+        SNAPSHOT_ID="$SNAPSHOT_INPUT"
+        info "Using snapshot: $SNAPSHOT_ID"
+    fi
 fi
 
 # Verify snapshot exists
-if ! RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots "$SNAPSHOT_ID" &> /dev/null; then
+if ! RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" ls $SNAPSHOT_ID  &> /dev/null; then
     error "Snapshot '$SNAPSHOT_ID' not found in repository"
     exit 1
 fi
@@ -176,7 +185,7 @@ fi
 warning "==================================================================="
 echo ""
 
-read -r -p "Are you sure you want to continue? (y/n): " confirmation
+read -r -p "Are you sure you want to continue? (y/n): " confirmation < /dev/tty
 
 if [ "$confirmation" != "y" ]; then
     echo "Restore cancelled."

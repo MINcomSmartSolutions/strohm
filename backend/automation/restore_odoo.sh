@@ -77,7 +77,7 @@ DB_NAME="odoo"
 DB_USER="postgres"
 SNAPSHOT_ID=""
 KEEP_TEMP=false
-
+ENV=""
 TEMP_DIR="/tmp/odoo-restore"
 RESTORE_DATE=$(date +%Y%m%d_%H%M%S)
 RESTORE_DIR="${TEMP_DIR}/${DB_NAME}_${RESTORE_DATE}"
@@ -91,6 +91,7 @@ while [[ $# -gt 0 ]]; do
         -d|--database) DB_NAME="$2"; shift 2 ;;
         -s|--snapshot) SNAPSHOT_ID="$2"; shift 2 ;;
         -k|--keep-temp) KEEP_TEMP=true; shift ;;
+        --environment) ENV="$2"; shift 2 ;;
         -h|--help) usage ;;
         *) error "Unknown option: $1"; usage ;;
     esac
@@ -110,29 +111,30 @@ for container in "$PG_CONTAINER" "$ODOO_CONTAINER"; do
         { error "Container '$container' is not running"; exit 1; }
 done
 
-success "Starting Odoo restore..."
-echo "Please select the environment to restore from:"
-echo "1) Development"
-echo "2) Staging"
-echo "3) Production"
+if [ -z "$ENV" ]; then
+  echo "Please select the environment to restore from:"
+  echo "1) Development"
+  echo "2) Staging"
+  echo "3) Production"
 
-read -r -p "Enter your choice (1-3): " choice
+  read -r -p "Enter your choice (1-3): " choice
 
-case $choice in
-    1)
-        ENV="development"
-        ;;
-    2)
-        ENV="staging"
-        ;;
-    3)
-        ENV="production"
-        ;;
-    *)
-        error "Invalid choice. Exiting..."
-        exit 1
-        ;;
-esac
+  case $choice in
+      1)
+          ENV="development"
+          ;;
+      2)
+          ENV="staging"
+          ;;
+      3)
+          ENV="production"
+          ;;
+      *)
+          error "Invalid choice. Exiting..."
+          exit 1
+          ;;
+  esac
+fi
 echo "Selected environment: $ENV"
 
 # Ask user for restic repository password if not found in the environment
@@ -175,10 +177,10 @@ if [[ -z "$SNAPSHOT_ID" ]]; then
     restic -r "$RESTIC_CONN_STRING" snapshots --tag odoo-backup --tag "db:${DB_NAME}"
 
     echo ""
-    read -r -p "Enter snapshot ID to restore (or 'latest' for most recent): " SNAPSHOT_INPUT
+    read -r -p "Enter snapshot ID to restore (or 'latest' for most recent): " SNAPSHOT_INPUT < /dev/tty
 
     if [[ "$SNAPSHOT_INPUT" == "latest" ]]; then
-        SNAPSHOT_ID="latest"
+        SNAPSHOT_ID=latest
         info "Using latest snapshot"
     else
         SNAPSHOT_ID="$SNAPSHOT_INPUT"
@@ -190,20 +192,8 @@ fi
 echo ""
 info "Restoring snapshot from restic repository..."
 
-if [[ "$SNAPSHOT_ID" == "latest" ]]; then
-    # Get the latest snapshot ID
-    SNAPSHOT_ID=$(restic -r "$RESTIC_CONN_STRING" snapshots --tag odoo-backup --tag "db:${DB_NAME}" --json | \
-        jq -r 'sort_by(.time) | last | .short_id')
-
-    if [[ -z "$SNAPSHOT_ID" ]]; then
-        error "Could not determine latest snapshot ID"
-        exit 1
-    fi
-    info "Latest snapshot ID: $SNAPSHOT_ID"
-fi
-
 # Restore the snapshot
-if restic -r "$RESTIC_CONN_STRING" restore "$SNAPSHOT_ID" --target "$TEMP_DIR" 2>&1; then
+if restic -r "$RESTIC_CONN_STRING" restore $SNAPSHOT_ID --target "$TEMP_DIR" 2>&1; then
     success "Snapshot restored to temporary directory"
 else
     error "Failed to restore snapshot from restic"
@@ -252,9 +242,9 @@ fi
 # Confirmation prompt
 echo ""
 warning "WARNING: This will REPLACE the current database '$DB_NAME'"
-read -r -p "Are you sure you want to continue? (yes/no): " CONFIRM
+read -r -p "Are you sure you want to continue? (y/n): " CONFIRM < /dev/tty
 
-if [[ "$CONFIRM" != "yes" ]]; then
+if [[ "$CONFIRM" != "y" ]]; then
     error "Restore cancelled by user"
     exit 1
 fi
