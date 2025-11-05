@@ -12,7 +12,21 @@ NC='\033[0m' # No Color
 # Configuration
 COMPOSE_FILE="prod-docker-compose.yml"
 ENV_FILE=".env.prod"
-BACKUP_DIR="./backups/$(date +%Y%m%d_%H%M%S)"
+TEST_MODE=false
+
+# Parse global flags
+for arg in "$@"; do
+    if [[ "$arg" == "--test" ]]; then
+        TEST_MODE=true
+        break
+    fi
+done
+
+if [ "$TEST_MODE" = true ]; then
+    echo -e "${YELLOW}=== TEST MODE ENABLED ===${NC}"
+    echo -e "${YELLOW}Running in test mode - using development environment${NC}"
+    echo ""
+fi
 
 echo -e "${GREEN}Ladeabrechnung Production Deployment${NC}"
 echo "=================================="
@@ -249,69 +263,73 @@ initialize_fresh_deployment() {
     echo -e "${GREEN}Fresh deployment initialization completed${NC}"
 }
 
-# Function to handle updates
-handle_odoo_update_deployment() {
-    echo -e "${BLUE}Handling update deployment...${NC}"
 
-    # Update Odoo modules if needed
-#    echo "Updating Odoo modules..."
-#    docker compose -f "$COMPOSE_FILE" run --rm odoo odoo -d "$ODOO_DB" -u all --stop-after-init
-#FIXME: Might brake the system
-    echo -e "${GREEN}Update deployment completed${NC}"
-}
-
-# Function to create backup
+# Function to create backup using proper backup wrapper
 create_backup() {
-    echo -e "${BLUE}Creating backup...${NC}"
-    mkdir -p "$BACKUP_DIR"
-    
-    local backup_failed=0
+    echo -e "${BLUE}Creating backup using restic...${NC}"
 
-    # Backup database
-    if docker compose -f "$COMPOSE_FILE" ps db | grep -q "Up"; then
-        echo "Backing up PostgreSQL databases..."
-
-        if ! docker compose -f "$COMPOSE_FILE" exec -T db pg_dump -U "$POSTGRES_USER" postgres > "$BACKUP_DIR/postgres_backup.sql"; then
-            echo -e "${RED}Failed to backup postgres database${NC}"
-            backup_failed=1
-        fi
-
-        if ! PGPASSWORD="$STROHM_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db pg_dump -U "$STROHM_DB_USER" "$STROHM_DB" > "$BACKUP_DIR/strohm_backup.sql"; then
-            echo -e "${RED}Failed to backup strohm database${NC}"
-            backup_failed=1
-        fi
-
-        if ! PGPASSWORD="$ODOO_DB_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db pg_dump -U "$ODOO_DB_USER" "$ODOO_DB" > "$BACKUP_DIR/odoo_backup.sql"; then
-            echo -e "${RED}Failed to backup odoo database${NC}"
-            backup_failed=1
-        fi
-
-        # Verify backup files are not empty
-        for backup_file in "$BACKUP_DIR"/*.sql; do
-            if [ ! -s "$backup_file" ]; then
-                echo -e "${RED}Warning: Backup file $backup_file is empty${NC}"
-                backup_failed=1
-            fi
-        done
-    else
-        echo -e "${YELLOW}Database container is not running, skipping database backup${NC}"
+    # Check if backup wrapper exists
+    if [ ! -f "./backend/automation/backup_wrapper.sh" ]; then
+        echo -e "${RED}Error: Backup wrapper script not found at ./backend/automation/backup_wrapper.sh${NC}"
+        return 1
     fi
     
-    echo "Backing up Docker volumes..."
-    if docker volume inspect odoo-prod-web-data >/dev/null 2>&1; then
-        if ! docker run --rm -v odoo-prod-web-data:/data -v "$PWD/$BACKUP_DIR":/backup alpine tar czf /backup/odoo-web-data.tar.gz -C /data .; then
-            echo -e "${RED}Failed to backup odoo volume${NC}"
-            backup_failed=1
-        fi
-    else
-        echo -e "${YELLOW}Volume odoo-prod-web-data does not exist, skipping volume backup${NC}"
+    # Determine environment based on test mode
+    local backup_env="production"
+    if [ "$TEST_MODE" = true ]; then
+        backup_env="development"
+        echo -e "${YELLOW}Test mode: Using development environment for backup${NC}"
     fi
 
-    if [ $backup_failed -eq 0 ]; then
-        echo -e "${GREEN}Backup created successfully in $BACKUP_DIR${NC}"
+    # Call the backup wrapper script with appropriate environment
+    if bash ./backend/automation/backup_wrapper.sh \
+        -c "$COMPOSE_FILE" \
+        --env-file "$ENV_FILE" \
+        --environment "$backup_env"; then
+        echo -e "${GREEN}Backup created successfully${NC}"
         return 0
     else
-        echo -e "${YELLOW}Backup completed with warnings in $BACKUP_DIR${NC}"
+        echo -e "${RED}Backup failed${NC}"
+        return 1
+    fi
+}
+
+# Function to restore from backup using proper restore wrapper
+restore_backup() {
+    echo -e "${BLUE}Restoring from backup using restic...${NC}"
+    echo -e "${YELLOW}Please select the backups for db and odoo created at the same time. Data discrepancies will cause errors.${NC}"
+
+    # Check if restore wrapper exists
+    if [ ! -f "./backend/automation/restore_wrapper.sh" ]; then
+        echo -e "${RED}Error: Restore wrapper script not found at ./backend/automation/restore_wrapper.sh${NC}"
+        return 1
+    fi
+
+    # Determine environment based on test mode
+    local restore_env="production"
+    if [ "$TEST_MODE" = true ]; then
+        restore_env="development"
+        echo -e "${YELLOW}Test mode: Using development environment for restore${NC}"
+    fi
+
+    # Build arguments
+    local restore_args=(
+        "--compose-file" "$COMPOSE_FILE"
+        "--env-file" "$ENV_FILE"
+        "--environment" "$restore_env"
+    )
+
+    # Add snapshot ID if provided
+    if [ -n "${1:-}" ]; then
+        restore_args+=("--snapshot" "$1")
+    fi
+
+    # Call the restore wrapper script with appropriate environment
+    if bash ./backend/automation/restore_wrapper.sh "${restore_args[@]}"; then
+        echo -e "${GREEN}Restore completed successfully${NC}"
+        return 0
+    else
+        echo -e "${RED}Restore failed${NC}"
         return 1
     fi
 }
@@ -369,13 +387,6 @@ deploy() {
         wait_for_database
         wait_for_service_health "server"
         wait_for_service_health "odoo"
-
-        # Handle update deployment
-        if ! handle_odoo_update_deployment; then
-            echo -e "${RED}Update deployment failed${NC}"
-            echo -e "${YELLOW}Backup is available at: $BACKUP_DIR${NC}"
-            return 1
-        fi
     fi
 
     # Check service health
@@ -402,7 +413,7 @@ check_health() {
 # Function to show logs
 show_logs() {
     echo -e "${BLUE} Recent logs:${NC}"
-    docker compose -f "$COMPOSE_FILE" logs --tail=75
+    docker compose -f "$COMPOSE_FILE" logs --tail=75 -f
 }
 
 # Function to cleanup old images
@@ -414,6 +425,12 @@ cleanup() {
 }
 
 # Main menu
+# Handle --test flag and shift arguments
+if [ "$TEST_MODE" = true ]; then
+    # Remove --test from arguments
+    shift
+fi
+
 case "${1:-deploy}" in
     "deploy")
         echo -e "${YELLOW}This will deploy production environment in this machine. Continue? (y/N)${NC}"
@@ -429,6 +446,16 @@ case "${1:-deploy}" in
     "backup")
         create_backup
         ;;
+    "restore")
+        echo -e "${YELLOW}This will restore databases from restic backup. Continue? (y/N)${NC}"
+        read -p "> " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            restore_backup "${2:-}"
+        else
+            echo "Restore cancelled."
+        fi
+        ;;
     "health")
         check_health
         ;;
@@ -440,17 +467,17 @@ case "${1:-deploy}" in
         ;;
     "stop")
         echo "Stopping all services..."
-        docker compose -f "$COMPOSE_FILE" stop
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" stop
         echo -e "${GREEN} All services stopped${NC}"
         ;;
     "down")
         echo "Downing all services..."
-        docker compose -f "$COMPOSE_FILE" down
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
         echo -e "${GREEN} All services downed${NC}"
         ;;
     "restart")
         echo "Restarting all services..."
-        docker compose -f "$COMPOSE_FILE" restart
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart
         echo -e "${GREEN} All services restarted${NC}"
         ;;
     "update")
@@ -459,8 +486,9 @@ case "${1:-deploy}" in
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             create_backup
-            docker compose -f "$COMPOSE_FILE" pull
-            docker compose -f "$COMPOSE_FILE" up -d
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
             check_health
             echo -e "${GREEN} Update completed successfully!${NC}"
         fi
@@ -471,15 +499,20 @@ case "${1:-deploy}" in
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             docker compose -f "$COMPOSE_FILE" down -v
+            cleanup
             echo -e "${GREEN} All services stopped and volumes cleaned${NC}"
         fi
         ;;
     *)
-        echo "Usage: $0 {deploy|backup|health|logs|cleanup|stop|down|restart|update|delete}"
+        echo "Usage: $0 [--test] {deploy|backup|restore|health|logs|cleanup|stop|down|restart|update|delete}"
+        echo ""
+        echo "Flags:"
+        echo "  --test  - Run in test mode (uses development environment for backups/restores)"
         echo ""
         echo "Commands:"
         echo "  deploy  - Full deployment with backup"
-        echo "  backup  - Create backup only"
+        echo "  backup  - Create backup using restic"
+        echo "  restore - Restore from restic backup (optional: snapshot ID)"
         echo "  health  - Check service health"
         echo "  logs    - Show recent logs"
         echo "  cleanup - Clean up Docker images and volumes"
@@ -488,6 +521,12 @@ case "${1:-deploy}" in
         echo "  restart - Restart all services"
         echo "  update  - Update and restart services"
         echo "  delete  - Delete the volumes and stop all services and remove containers, networks..."
+        echo ""
+        echo "Examples:"
+        echo "  $0 backup              # Production backup"
+        echo "  $0 --test backup       # Test backup (development environment)"
+        echo "  $0 restore abc123      # Restore specific snapshot from production"
+        echo "  $0 --test restore      # Restore latest from development"
         exit 1
         ;;
 esac
