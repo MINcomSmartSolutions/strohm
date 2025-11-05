@@ -137,6 +137,7 @@ describe('Steve Transactions Service', () => {
             expect(db.setLastStopTimestamp).toHaveBeenCalled();
 
             expect(result).toEqual({
+                completedTxnCount: 2,
                 fetchedTxnCount: 2, // active and stopped for some txn
                 processedTxnCount: 1,
                 high_water_mark: expect.any(DateTime),
@@ -184,6 +185,7 @@ describe('Steve Transactions Service', () => {
 
             // Verify returned result matches expected format for no transactions
             expect(result).toEqual({
+                completedTxnCount: 0,
                 fetchedTxnCount: 0,
                 processedTxnCount: 0,
                 high_water_mark: expect.any(DateTime),
