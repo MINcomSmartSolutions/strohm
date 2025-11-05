@@ -157,7 +157,7 @@ if [ -z "$SNAPSHOT_ID" ]; then
     RESTIC_PASSWORD="${RESTIC_PASSWORD}" restic -r "sftp:restic-backup-host:${RESTIC_REPOSITORY}" snapshots --tag "$BACKUP_TAG"
     echo ""
 
-    read -r -p "Enter snapshot ID to restore" SNAPSHOT_INPUT
+    read -r -p "Enter snapshot ID to restore: " SNAPSHOT_INPUT
     SNAPSHOT_ID="$SNAPSHOT_INPUT"
 
 fi

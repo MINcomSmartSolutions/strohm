@@ -67,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             BACKUP_TAG="$2"
             shift 2
             ;;
+        -env|--environment)
+            ENV="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             ;;
@@ -78,29 +82,32 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-echo "Please select the environment you want backup to be saved:"
-echo "1) Development"
-echo "2) Staging"
-echo "3) Production"
+# Prompt for environment if not provided via argument
+if [ -z "$ENV" ]; then
+    echo "Please select the environment you want backup to be saved:"
+    echo "1) Development"
+    echo "2) Staging"
+    echo "3) Production"
 
-read -r -p "Enter your choice (1-3): " choice
+    read -r -p "Enter your choice (1-3): " choice
 
-case $choice in
-    1)
-        ENV="development"
-        ;;
-    2)
-        ENV="staging"
-        ;;
-    3)
-        ENV="production"
-        ;;
+    case $choice in
+        1)
+            ENV="development"
+            ;;
+        2)
+            ENV="staging"
+            ;;
+        3)
+            ENV="production"
+            ;;
+        *)
+            error "Invalid choice. Exiting..."
+            exit 1
+            ;;
+    esac
+fi
 
-    *)
-        error "Invalid choice. Exiting..."
-        exit 1
-        ;;
-esac
 
 echo "Selected environment: $ENV"
 RESTIC_REPOSITORY="/home/resticuser/backups-strohm/${ENV}/db"
