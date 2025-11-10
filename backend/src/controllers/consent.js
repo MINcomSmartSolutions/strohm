@@ -131,26 +131,26 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
         htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
 
         // Generate links section if URLs are provided (validate URLs)
-        let linksSection = '';
-        if (activeConsent.privacy_policy_url || activeConsent.terms_url) {
-            linksSection = '<div class="links">';
-            if (activeConsent.privacy_policy_url) {
-                // Validate URL is safe (starts with http/https)
-                const privacyUrl = activeConsent.privacy_policy_url;
-                if (privacyUrl.startsWith('http://') || privacyUrl.startsWith('https://')) {
-                    linksSection += `<a href="${escapeHtml(privacyUrl)}" target="_blank" rel="noopener noreferrer">Datenschutzbestimmungen</a>`;
-                }
-            }
-            if (activeConsent.terms_url) {
-                // Validate URL is safe (starts with http/https)
-                const termsUrl = activeConsent.terms_url;
-                if (termsUrl.startsWith('http://') || termsUrl.startsWith('https://')) {
-                    linksSection += `<a href="${escapeHtml(termsUrl)}" target="_blank" rel="noopener noreferrer">Bedingungen der Dienstleistung</a>`;
-                }
-            }
-            linksSection += '</div>';
-        }
-        htmlTemplate = htmlTemplate.replace(/{{LINKS_SECTION}}/g, linksSection);
+        // let linksSection = '';
+        // if (activeConsent.privacy_policy_url || activeConsent.terms_url) {
+        //     linksSection = '<div class="links">';
+        //     if (activeConsent.privacy_policy_url) {
+        //         // Validate URL is safe (starts with http/https)
+        //         const privacyUrl = activeConsent.privacy_policy_url;
+        //         if (privacyUrl.startsWith('http://') || privacyUrl.startsWith('https://')) {
+        //             linksSection += `<a href="${escapeHtml(privacyUrl)}" target="_blank" rel="noopener noreferrer">Datenschutzbestimmungen</a>`;
+        //         }
+        //     }
+        //     if (activeConsent.terms_url) {
+        //         // Validate URL is safe (starts with http/https)
+        //         const termsUrl = activeConsent.terms_url;
+        //         if (termsUrl.startsWith('http://') || termsUrl.startsWith('https://')) {
+        //             linksSection += `<a href="${escapeHtml(termsUrl)}" target="_blank" rel="noopener noreferrer">Bedingungen der Dienstleistung</a>`;
+        //         }
+        //     }
+        //     linksSection += '</div>';
+        // }
+        // htmlTemplate = htmlTemplate.replace(/{{LINKS_SECTION}}/g, linksSection);
 
         // Send the processed HTML
         res.send(htmlTemplate);

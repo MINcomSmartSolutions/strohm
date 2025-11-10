@@ -97,11 +97,11 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for inline scripts
-            styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for inline styles
-            imgSrc: ["'self'", "data:", "https:"], // Allow images from same origin, data URIs, and HTTPS
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // unsafe-inline needed for inline scripts
+            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // unsafe-inline needed for inline styles
+            imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
             connectSrc: ["'self'"], // Allow AJAX/fetch to same origin
-            fontSrc: ["'self'"], // Allow fonts from same origin
+            fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin
             objectSrc: ["'none'"], // Block plugins (Flash, etc.)
             mediaSrc: ["'self'"], // Allow media from same origin
             frameSrc: ["'self'"], // Allow iframes from same origin
@@ -156,6 +156,14 @@ app.get('/welcome', async (req, res) => {
         }
         // Serve the modern welcome page
         return res.sendFile('welcome.html', {root: 'public'});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+});
+
+app.get('/faq', async (req, res) => {
+    try {
+        return res.sendFile('faq.html', {root: 'public'});
     } catch (error) {
         appErrorHandler(error, res);
     }
