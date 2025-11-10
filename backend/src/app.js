@@ -102,7 +102,7 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
             styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
-            connectSrc: ["'self'"],
+            connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
             fontSrc: ["'self'", "https://assets.hm.edu", "https://sso.hm.edu"], // Allow fonts from same origin and external domains
             objectSrc: ["'none'"], // Block plugins (Flash, etc.)
             mediaSrc: ["'self'"], // Allow media from same origin
