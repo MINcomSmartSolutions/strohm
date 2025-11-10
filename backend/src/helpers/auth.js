@@ -138,9 +138,42 @@ async function getOidcDiscovery() {
     }
 }
 
+/**
+ * Validates that the OIDC user has the required employee@hm.edu affiliation.
+ * In short, if user is considered an employee.
+ *
+ * @param {Object} oidcUser - OIDC user object
+ * @param {Array<string>} [oidcUser.eduPersonScopedAffiliation] - Array of affiliations
+ * @returns {boolean} - True if user has employee@hm.edu affiliation, false otherwise
+ */
+function hasEmployeeAffiliation(oidcUser) {
+    if (!oidcUser) {
+        logger.warn('OIDC user object is missing in affiliation check');
+        return false;
+    }
+
+    const affiliations = oidcUser.eduPersonScopedAffiliation;
+
+    if (!Array.isArray(affiliations)) {
+        logger.debug(`User ${oidcUser.sub} has no eduPersonScopedAffiliation array`);
+        return false;
+    }
+
+    const hasEmployeeAffiliation = affiliations.includes('employee@hm.edu');
+
+    if (hasEmployeeAffiliation) {
+        logger.debug(`User ${oidcUser.sub} has employee@hm.edu affiliation`);
+    } else {
+        logger.debug(`User ${oidcUser.sub} does not have employee@hm.edu affiliation. Affiliations: ${affiliations.join(', ')}`);
+    }
+
+    return hasEmployeeAffiliation;
+}
+
 module.exports = {
     generateOdooHash,
     generateSalt,
     validateOIDCProperties,
     getOidcDiscovery,
+    hasEmployeeAffiliation,
 };

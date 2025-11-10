@@ -14,6 +14,7 @@ const {AuthError, ErrorCodes} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {GLOBAL_CONFIG} = require("#config");
 const {getRFIDFromFile} = require("#helpers/user");
+const {hasEmployeeAffiliation} = require("#helpers/auth");
 
 /**
  * Handles user creation and linking with external systems.
@@ -35,6 +36,14 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     const {error} = oidcUserSchema.validate(oidc_user);
     if (error) {
         throw new AuthError(ErrorCodes.AUTH.USER_INVALID, error.message, error);
+    }
+
+    if (!hasEmployeeAffiliation(oidc_user)) {
+        logger.warn(`User ${oidc_user.sub} (${oidc_user.email}) does not have required employee@hm.edu affiliation`);
+        throw new AuthError(
+            ErrorCodes.AUTH.USER_NOT_AUTHORIZED,
+            'Sie müssen Mitarbeiter sein, um Ladestationen nutzen zu können. Wenn Sie Mitarbeiter sind, aber diese Meldung erhalten, kontaktieren Sie bitte den Support.'
+        );
     }
 
     let user = await db.getUserUnique({oauth_id: oidc_user.sub});
@@ -76,7 +85,7 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     } else if (user.deactivated_at !== null) {
         throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
     } else {
-        //TODO: needs testing!!!
+        //TODO: Deactivated because of workarounds in beta phase - re-enable once RFID issue is resolved
 
         // Check if OIDC data has changed (normalize RFIDs for comparison)
         // const needsUpdate =

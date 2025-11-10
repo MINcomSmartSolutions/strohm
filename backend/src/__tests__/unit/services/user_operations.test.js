@@ -8,6 +8,7 @@ const {createSteveUser, blockSteveUser} = require('#services/steve_user');
 const logger = require('#services/logger');
 const {AuthError, ValidationError, SystemError, ErrorCodes} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
+const {hasEmployeeAffiliation} = require("#helpers/auth");
 
 // Mock dependencies
 jest.mock('#services/odoo', () => ({
@@ -47,7 +48,14 @@ jest.mock('#config', () => ({
             IS_DEVELOPMENT: true,
             IS_TEST: false,
         },
+        OIDC: {
+            DISCOVERY_CACHE_TTL: 24 * 60 * 60 * 1000,
+        }
     },
+}));
+
+jest.mock('#helpers/auth', () => ({
+    hasEmployeeAffiliation: jest.fn(),
 }));
 
 describe('User Operations Service', () => {
@@ -96,6 +104,8 @@ describe('User Operations Service', () => {
         ...mockFullyQualifiedUser,
         deactivated_at: '2025-01-15T00:00:00Z',
     };
+
+    hasEmployeeAffiliation.mockReturnValue(true);
 
     beforeEach(() => {
         jest.clearAllMocks();

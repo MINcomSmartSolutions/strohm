@@ -22,6 +22,7 @@ const oidcUserSchema = Joi.object({
     name: Joi.string().required(),
     email: Joi.string().email().required(),
     hmMifareSerial: Joi.string().allow(null, ''),
+    eduPersonScopedAffiliation: Joi.array().items(Joi.string()).allow(null),
 }).unknown(true); // Allow additional fields
 
 
