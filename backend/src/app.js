@@ -97,11 +97,13 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // unsafe-inline needed for inline scripts
-            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // unsafe-inline needed for inline styles
+            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
+            scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
+            styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline for inline styles
+            styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
-            connectSrc: ["'self'"], // Allow AJAX/fetch to same origin
-            fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'", "https://assets.hm.edu", "https://sso.hm.edu"], // Allow fonts from same origin and external domains
             objectSrc: ["'none'"], // Block plugins (Flash, etc.)
             mediaSrc: ["'self'"], // Allow media from same origin
             frameSrc: ["'self'"], // Allow iframes from same origin
