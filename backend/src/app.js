@@ -99,7 +99,7 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
             scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
-            styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline for inline styles
+            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
             styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
             connectSrc: ["'self'"],
