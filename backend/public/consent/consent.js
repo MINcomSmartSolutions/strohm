@@ -23,15 +23,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 submitBtn.textContent = `Akzeptieren und fortfahren`;
             });
-
-            // Add focus indicator for accessibility
-            checkbox.addEventListener('focus', function () {
-                this.parentElement.classList.add('focused');
-            });
-
-            checkbox.addEventListener('blur', function () {
-                this.parentElement.classList.remove('focused');
-            });
         } else {
             console.error('Required consent form elements not found!');
         }
@@ -71,19 +62,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Wird verarbeitet...';
 
-                // Add loading indicator
-                submitBtn.classList.add('loading');
-
                 console.log('Submitting consent for version:', consentVersion);
             });
         }
 
-        // Add version info to page title for debugging
-        if (consentVersion !== 'unknown') {
-            document.title = `${document.title} (v${consentVersion})`;
-        }
-
-        // Check for version changes (in case user left page open while version was updated)
+        // Check for version changes
         let originalVersion = consentVersion;
         setInterval(() => {
             const currentVersionInput = document.querySelector('input[name="consent_version"]');
@@ -92,7 +75,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (currentVersion !== originalVersion && currentVersion !== 'unknown') {
                 console.warn('Consent version changed from', originalVersion, 'to', currentVersion);
 
-                // Show notification to user
                 if (confirm(
                     'Die Einverständniserklärung wurde aktualisiert. ' +
                     'Möchten Sie die Seite neu laden, um die neueste Version anzuzeigen?'
@@ -100,12 +82,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     window.location.reload();
                 }
             }
-        }, 30000); // Check every 30 seconds
+        }, 30000);
 
     } catch (error) {
         console.error('JavaScript error in consent form:', error);
 
-        // Fallback error handling
         const errorDiv = document.getElementById('error');
         if (errorDiv) {
             errorDiv.textContent = 'Es ist ein Fehler aufgetreten. Bitte laden Sie die Seite neu.';
