@@ -101,7 +101,7 @@ const steveCompletedTransactionSchema = Joi.object({
     // The timestamp at which the transaction started
     startTimestamp: Joi.date().required(),
     // The timestamp at which the transaction ended
-    stopTimestamp: Joi.date(),
+    stopTimestamp: Joi.date().required(),
     // The meter value reading at the start of the transaction
     startValue: Joi.number().required(),
     // The meter value reading at the end of the transaction

@@ -20,7 +20,10 @@ const {DateTime} = require('luxon');
 const {steveAxios} = require('./network');
 const {fmt} = require('#utils/datetime_format');
 const {STEVE_CONFIG} = require('#config');
-const {steveTransactionSchema, qualifiedTransactionSchema, steveCompletedTransactionSchema} = require('#utils/joi');
+const {
+    steveTransactionSchema,
+    steveCompletedTransactionSchema,
+} = require('#utils/joi');
 const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const {db} = require('#utils/queries');
 const logger = require('#services/logger');
@@ -166,11 +169,11 @@ async function processTxns(txns) {
         txns.reduce((map, txn) => {
             logger.verbose('Processing transaction Steve ID: ' + txn.id);
             // Validate transaction against schema
-            const {error} = steveTransactionSchema.validate(txn);
-            if (error) {
-                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format from steve`, error);
+            const {error: txnError} = steveTransactionSchema.validate(txn);
+            if (txnError) {
+                throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT, `Invalid transaction format from steve`, txnError);
             }
-            const {completedCheckError} = steveCompletedTransactionSchema.validate(txn);
+            const {error: completedCheckError} = steveCompletedTransactionSchema.validate(txn); // If throws error, txn is not yet completed
             if (!completedCheckError) {
                 completedCount += 1;
             }
