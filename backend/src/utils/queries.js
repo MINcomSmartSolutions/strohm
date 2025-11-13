@@ -587,8 +587,10 @@ async function recordSteveTxn(steve_txn) {
                     stop_value       = $2::numeric,
                     stop_reason      = $3::varchar,
                     stop_event_actor = $4::varchar,
-                    user_id          = $5
-                WHERE txn_steve_id = $6::integer
+                    chargebox_pk     = $5::integer,
+                    connector_id     = $6,
+                    user_id          = $7
+                WHERE txn_steve_id = $8::integer
                 RETURNING *
             `;
 
@@ -597,6 +599,8 @@ async function recordSteveTxn(steve_txn) {
                 steve_txn.stopValue,
                 steve_txn.stopReason,
                 steve_txn.stopEventActor,
+                steve_txn.chargeBoxPk,
+                steve_txn.connectorId,
                 resolved_user_id,
                 steve_txn.id,
             ];
@@ -612,9 +616,28 @@ async function recordSteveTxn(steve_txn) {
         const user_id = await userCrossCheckForTxn(client, steve_txn.ocppTagPk, steve_txn.ocppIdTag, steve_txn.id);
 
         const insertQuery = `INSERT INTO charging_transactions
-                             (txn_steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
-                              stop_reason, stop_event_actor, user_id)
-                             VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar, $8::varchar, $9)
+                             (txn_steve_id,
+                              ocpp_id_tag,
+                              start_timestamp,
+                              stop_timestamp,
+                              start_value,
+                              stop_value,
+                              stop_reason,
+                              stop_event_actor,
+                              chargebox_pk,
+                              connector_id,
+                              user_id)
+                             VALUES ($1::integer,
+                                     $2,
+                                     $3,
+                                     $4,
+                                     $5::numeric,
+                                     $6::numeric,
+                                     $7::varchar,
+                                     $8::varchar,
+                                     $9::integer,
+                                     $10,
+                                     $11::integer)
                              RETURNING *`;
 
         const values = [
@@ -626,6 +649,8 @@ async function recordSteveTxn(steve_txn) {
             steve_txn.stopValue,
             steve_txn.stopReason,
             steve_txn.stopEventActor,
+            steve_txn.chargeBoxPk,
+            steve_txn.connectorId,
             user_id,
         ];
 
