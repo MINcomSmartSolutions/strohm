@@ -48,11 +48,6 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-# Check if required database files exist
-if [ ! -f "./backend/database/db-structure-strohm.sql" ]; then
-    echo -e "${RED}Error: ./backend/database/db-structure-strohm.sql not found!${NC}"
-    exit 1
-fi
 
 # Function to check if a command exists
 command_exists() {
@@ -210,16 +205,6 @@ initialize_fresh_deployment() {
         return 1
     fi
 
-    # Apply database structure for strohm
-    echo "Applying Strohm database structure..."
-    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < ./backend/database/db-structure-strohm.sql; then
-        echo -e "${RED}Failed to apply database structure${NC}"
-        return 1
-    fi
-
-    # Grant privileges to strohm user
-    PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE \"$STROHM_DB\" TO \"$STROHM_DB_USER\";" || true
-
     # Create Odoo user
     echo "Creating Odoo user..."
     if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres <<-EOSQL
@@ -230,16 +215,6 @@ initialize_fresh_deployment() {
         echo -e "${RED}Failed to create Odoo user${NC}"
         return 1
     fi
-
-
-    echo "Granting schema permissions..."
-    PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$STROHM_DB" <<-EOSQL
-		GRANT ALL ON SCHEMA public TO "$STROHM_DB_USER";
-		GRANT ALL ON ALL TABLES IN SCHEMA public TO "$STROHM_DB_USER";
-		GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "$STROHM_DB_USER";
-		ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$STROHM_DB_USER";
-		ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$STROHM_DB_USER";
-	EOSQL
 
     # Wait for Odoo service to be ready
     wait_for_service_health "odoo"

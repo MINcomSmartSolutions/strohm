@@ -188,13 +188,6 @@ initialize_fresh_deployment() {
         return 1
     fi
 
-    # Apply database structure for strohm
-    echo "Applying Strohm database structure..."
-    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < ./backend/database/db-structure-strohm.sql; then
-        echo -e "${RED}Failed to apply database structure${NC}"
-        return 1
-    fi
-
     # Grant privileges to strohm user
     PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE \"$STROHM_DB\" TO \"$STROHM_DB_USER\";" || true
 

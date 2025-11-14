@@ -84,6 +84,10 @@ const runMigrations = async () => {
         const migrationsDirectory = path.join(__dirname, '../../migrations');
         const connectionUrl = buildConnectionUrl();
 
+        if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
+            await createDatabaseIfNotExists()
+        }
+
         logger.info('Starting database migrations...');
 
         const migrationsRan = await runner({
