@@ -1,17 +1,12 @@
 /**
  * Helper script to run migrations for test database
  * Can be used standalone or called from other scripts
- * Usage: node src/__tests__/helpers/migrate-test-db.js
  * or: npm run test:db:migrate
  */
 
 const path = require('path');
-const dotenv = require('dotenv');
 const {runner} = require('node-pg-migrate');
 const logger = require("#services/logger");
-
-// Load environment variables from .env.test
-dotenv.config({path: path.join(__dirname, '../../.env.test')});
 
 const migrateTestDatabase = async () => {
     const {

@@ -6,13 +6,9 @@
  */
 
 const path = require('path');
-const dotenv = require('dotenv');
 const {Pool} = require('pg');
 const {runner} = require('node-pg-migrate');
 const logger = require("#services/logger");
-
-// Load environment variables from .env.test
-dotenv.config({path: path.join(__dirname, '../../.env.test')});
 
 const resetTestDatabase = async () => {
     const {
