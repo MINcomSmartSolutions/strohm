@@ -62,18 +62,20 @@ jobs:
           STROHM_DB_PASSWORD=testpassword
           STEVE_HOST=mock
           STEVE_PORT=8080
-          STEVE_AUTH_USERNAME=mockuser
-          STEVE_API_PASSWORD=mockpass
-          ODOO_HOST=mock
+          STEVE_BASE_URL=http://mock:8180/steve
+          STEVE_AUTH_USERNAME=testadmin
+          STEVE_API_PASSWORD=testpassword
+          ODOO_HOST=localhost
           ODOO_PORT=8069
-          ODOO_EXTERNAL_BASE_URL=http://mock:8069
-          ODOO_API_SECRET=mock_secret
-          ODOO_ADMIN_API_KEY=mock_api_key
+          ODOO_EXTERNAL_BASE_URL=http://localhost:8069
+          ODOO_API_SECRET=test-odoo-secret-long
           SERVER_OIDC_SECRET=mock_oidc_secret
           SERVER_OIDC_BASE_URL=http://localhost:3000
           SERVER_OIDC_CLIENT_ID=mock_client_id
           SERVER_OIDC_CLIENT_SECRET=mock_client_secret
           SERVER_OIDC_ISSUER_BASE_URL=http://localhost:9000
+          SERVER_PORT=3000
+          SESSION_SECRET=test-secret-key-very-long12301982391238
           EOF
           cat .env.test
 
@@ -90,20 +92,15 @@ jobs:
 
       - name: Run unit tests
         working-directory: ./backend
-        env:
-          NODE_ENV: test
-          LOG_LEVEL: error
-        run: NODE_ENV=test npx jest --config=jest.config.js src/__tests__/unit --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
+        run: node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js src/__tests__/unit --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
 
       - name: Run integration tests
         working-directory: ./backend
-        run: |
-          npx jest --config=jest.config.js src/__tests__/integration --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
+        run: node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js src/__tests__/integration --testPathIgnorePatterns=src/__tests__/helpers/ --verbose
 
       - name: Run all tests with coverage
         working-directory: ./backend
-        run: |
-          npx jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --coverage --coverageReporters=text --coverageReporters=lcov
+        run: node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js src/__tests__/ --testPathIgnorePatterns=src/__tests__/helpers/ --coverage --coverageReporters=text --coverageReporters=lcov
 
       - name: Archive coverage and logs
         uses: actions/upload-artifact@v4
