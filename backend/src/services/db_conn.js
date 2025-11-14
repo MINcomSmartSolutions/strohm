@@ -1,14 +1,13 @@
 /*
  * Database connection module using pg (node-postgres)
  * This module sets up a connection pool to a PostgreSQL database using environment variables for configuration.
- * It also includes a function to test the database connection upon initialization.
+ * Connection test is deferred until after database migrations to ensure tables exist.
  *
  * Warning: Do not use transactions with the pool.query method!
 */
 
 
 const {Pool} = require('pg');
-const {DatabaseError, ErrorCodes} = require('#utils/errors');
 const logger = require('./logger');
 
 
@@ -32,11 +31,6 @@ const testConnection = async () => {
     }
 };
 
-// Test the connection when this module is imported only if not in test environment
-if (process.env.NODE_ENV !== 'test') {
-    testConnection().catch((error) => {
-        throw new DatabaseError(ErrorCodes.DATABASE.CONNECTION_ERROR, error);
-    });
-}
-
+// Export testConnection so it can be called after migrations
 module.exports = pool;
+module.exports.testConnection = testConnection;

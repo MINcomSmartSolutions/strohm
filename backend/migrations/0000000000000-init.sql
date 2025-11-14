@@ -8,7 +8,6 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -16,35 +15,6 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
-DROP DATABASE strohm;
---
--- Name: strohm; Type: DATABASE; Schema: -; Owner: -
---
-
-CREATE DATABASE strohm WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = icu ICU_LOCALE = 'de_DE';
-
-\connect strohm
-
---
--- Name: DATABASE strohm; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON DATABASE strohm IS 'Database for stroHM project. All datetime''s are in UTC timezone';
-
-
---
--- Name: update_timestamp(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.update_timestamp() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$;
 
 
 SET default_tablespace = '';
