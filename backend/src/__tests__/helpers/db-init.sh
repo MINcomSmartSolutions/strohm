@@ -1,29 +1,40 @@
 #!/bin/bash
 # Script to initialize the test database with the schema
+# For local development - starts Docker container and runs migrations
+# In CI, the database service is already running
 
-# Start the test database container if it's not already running
-echo "Starting test database container..."
-docker run --rm --name db-test -e POSTGRES_USER=testuser -e POSTGRES_PASSWORD=testpassword -e POSTGRES_DB=testdb -p 5433:5432 -d postgres:16.6
+# Check if we need to start Docker container (local dev only)
+if ! pg_isready -h "${STROHM_DB_HOST:-localhost}" -p "${STROHM_DB_PORT:-5433}" -U "${STROHM_DB_USER:-testuser}" > /dev/null 2>&1; then
+    echo "Starting test database container..."
+    docker run --rm --name db-test \
+        -e POSTGRES_USER="${STROHM_DB_USER:-testuser}" \
+        -e POSTGRES_PASSWORD="${STROHM_DB_PASSWORD:-testpassword}" \
+        -e POSTGRES_DB="${STROHM_DB_NAME:-testdb}" \
+        -p "${STROHM_DB_PORT:-5433}":5432 \
+        -d postgres:16.6
 
-# Wait for database to be ready
-echo "Waiting for database to be ready..."
-attempt=0
-max_attempts=10
-until PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -c "SELECT 1" > /dev/null 2>&1; do
-  attempt=$((attempt+1))
-  if [ $attempt -eq $max_attempts ]; then
-    echo "Could not connect to database after $max_attempts attempts. Exiting."
-    exit 1
-  fi
-  echo "Waiting for database to be ready... (attempt $attempt/$max_attempts)"
-  sleep 2
-done
+    # Wait for database to be ready
+    echo "Waiting for database to be ready..."
+    attempt=0
+    max_attempts=10
+    until pg_isready -h "${STROHM_DB_HOST:-localhost}" -p "${STROHM_DB_PORT:-5433}" -U "${STROHM_DB_USER:-testuser}" > /dev/null 2>&1; do
+      attempt=$((attempt+1))
+      if [ $attempt -eq $max_attempts ]; then
+        echo "Could not connect to database after $max_attempts attempts. Exiting."
+        exit 1
+      fi
+      echo "Waiting for database to be ready... (attempt $attempt/$max_attempts)"
+      sleep 2
+    done
+else
+    echo "Database is already running."
+fi
 
 echo "Database is ready."
 
-# First, apply global objects (roles, etc.) from db-etc.sql
+# Apply global database objects (roles, etc.)
 echo "Applying global database objects from db-etc.sql..."
-PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -f ./database/db-etc.sql
+PGPASSWORD=${STROHM_DB_PASSWORD:-testpassword} psql -h "${STROHM_DB_HOST:-localhost}" -p "${STROHM_DB_PORT:-5433}" -U "${STROHM_DB_USER:-testuser}" -d "${STROHM_DB_NAME:-testdb}" -f ./database/db-etc.sql
 if [ $? -ne 0 ]; then
   echo "Failed to create database roles. Exiting."
   exit 1
@@ -31,22 +42,25 @@ fi
 
 echo "Database roles created successfully."
 
-echo "Restoring database schema with psql..."
-# Check if db-structure-strohm.sql exists
-if [ ! -f ./database/db-structure-strohm.sql ]; then
-  echo "Error: ./database/db-structure.sql not found."
+# Run migrations
+echo "Running database migrations..."
+export STROHM_DB_USER=${STROHM_DB_USER:-testuser}
+export STROHM_DB_PASSWORD=${STROHM_DB_PASSWORD:-testpassword}
+export STROHM_DB_HOST=${STROHM_DB_HOST:-localhost}
+export STROHM_DB_PORT=${STROHM_DB_PORT:-5433}
+export STROHM_DB_NAME=${STROHM_DB_NAME:-testdb}
+
+node ./src/__tests__/helpers/migrate-test-db.js
+migrate_status=$?
+
+if [ $migrate_status -ne 0 ]; then
+  echo "Error: database migrations failed with status $migrate_status"
   exit 1
 fi
 
-PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -f ./database/db-structure-strohm.sql
-restore_status=$?
-
-if [ $restore_status -ne 0 ]; then
-  echo "Error: psql restore failed with status $restore_status"
-fi
 # Grant ownership of tables to strohm_admin
 echo "Setting ownership of database objects to strohm_admin..."
-PGPASSWORD=testpassword psql -h localhost -p 5433 -U testuser -d testdb -c "
+PGPASSWORD=${STROHM_DB_PASSWORD:-testpassword} psql -h "${STROHM_DB_HOST:-localhost}" -p "${STROHM_DB_PORT:-5433}" -U "${STROHM_DB_USER:-testuser}" -d "${STROHM_DB_NAME:-testdb}" -c "
   DO
   \$\$
   DECLARE

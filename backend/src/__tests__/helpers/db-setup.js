@@ -6,6 +6,7 @@ const {execSync} = require('child_process');
 
 /**
  * Initialize a clean test database for integration tests
+ * Starts a Docker container and runs database migrations
  */
 const setupTestDatabase = async () => {
 

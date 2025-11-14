@@ -52,27 +52,29 @@ jobs:
       - name: Create .env.test file
         working-directory: ./backend
         run: |
-          echo "NODE_ENV=test" > .env.test
-          echo "LOG_LEVEL=error" >> .env.test
-          echo "STROHM_DB_HOST=localhost" >> .env.test
-          echo "STROHM_DB_PORT=5433" >> .env.test
-          echo "STROHM_DB_NAME=strohm" >> .env.test
-          echo "STROHM_DB_USER=testuser" >> .env.test
-          echo "STROHM_DB_PASSWORD=testpassword" >> .env.test
-          echo "STEVE_HOST=mock" >> .env.test
-          echo "STEVE_PORT=8080" >> .env.test
-          echo "STEVE_AUTH_USERNAME=mockuser" >> .env.test
-          echo "STEVE_API_PASSWORD=mockpass" >> .env.test
-          echo "ODOO_HOST=mock" >> .env.test
-          echo "ODOO_PORT=8069" >> .env.test
-          echo "ODOO_EXTERNAL_BASE_URL=http://mock:8069" >> .env.test
-          echo "ODOO_API_SECRET=mock_secret" >> .env.test
-          echo "ODOO_ADMIN_API_KEY=mock_api_key" >> .env.test
-          echo "SERVER_OIDC_SECRET=mock_oidc_secret" >> .env.test
-          echo "SERVER_OIDC_BASE_URL=http://localhost:3000" >> .env.test
-          echo "SERVER_OIDC_CLIENT_ID=mock_client_id" >> .env.test
-          echo "SERVER_OIDC_CLIENT_SECRET=mock_client_secret" >> .env.test
-          echo "SERVER_OIDC_ISSUER_BASE_URL=http://localhost:9000" >> .env.test
+          cat > .env.test << 'EOF'
+          NODE_ENV=test
+          LOG_LEVEL=error
+          STROHM_DB_HOST=localhost
+          STROHM_DB_PORT=5433
+          STROHM_DB_NAME=testdb
+          STROHM_DB_USER=testuser
+          STROHM_DB_PASSWORD=testpassword
+          STEVE_HOST=mock
+          STEVE_PORT=8080
+          STEVE_AUTH_USERNAME=mockuser
+          STEVE_API_PASSWORD=mockpass
+          ODOO_HOST=mock
+          ODOO_PORT=8069
+          ODOO_EXTERNAL_BASE_URL=http://mock:8069
+          ODOO_API_SECRET=mock_secret
+          ODOO_ADMIN_API_KEY=mock_api_key
+          SERVER_OIDC_SECRET=mock_oidc_secret
+          SERVER_OIDC_BASE_URL=http://localhost:3000
+          SERVER_OIDC_CLIENT_ID=mock_client_id
+          SERVER_OIDC_CLIENT_SECRET=mock_client_secret
+          SERVER_OIDC_ISSUER_BASE_URL=http://localhost:9000
+          EOF
           cat .env.test
 
       - name: Wait for PostgreSQL
@@ -82,18 +84,9 @@ jobs:
             sleep 2
           done
 
-      - name: Setup test database
+      - name: Apply database migrations
         working-directory: ./backend
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5433
-          DB_NAME: strohm
-          DB_USER: testuser
-          DB_PASSWORD: testpassword
-        run: |
-          # Make the database initialization script executable and run it
-          chmod +x ./src/__tests__/helpers/db-init.sh
-          ./src/__tests__/helpers/db-init.sh
+        run: npm run test:db:migrate
 
       - name: Run unit tests
         working-directory: ./backend
