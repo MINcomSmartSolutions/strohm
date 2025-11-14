@@ -34,11 +34,6 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-# Check if required database files exist
-if [ ! -f "./backend/database/db-structure-strohm.sql" ]; then
-    echo -e "${RED}Error: ./backend/database/db-structure-strohm.sql not found!${NC}"
-    exit 1
-fi
 
 # Function to check if a command exists
 command_exists() {
