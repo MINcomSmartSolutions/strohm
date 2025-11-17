@@ -1095,6 +1095,49 @@ async function activateUser(user) {
 }
 
 /**
+ * Checks if a user has an open (active) charging session.
+ * An open charging session is one where stop_timestamp is NULL.
+ *
+ * @async
+ * @param {number} user_id - The user's ID.
+ * @returns {Promise<db_txn|null>} The open charging transaction if exists, null otherwise.
+ * @throws {ValidationError} If user_id is invalid.
+ * @throws {DatabaseError} If database operation fails.
+ */
+async function getUserOpenChargingSession(user_id) {
+    if (!user_id || !Number.isSafeInteger(user_id)) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            'Valid user_id is required',
+        );
+    }
+
+    const query = `
+        SELECT *
+        FROM charging_transactions
+        WHERE user_id = $1::integer
+          AND stop_timestamp IS NULL
+        ORDER BY start_timestamp DESC
+        LIMIT 1
+    `;
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query, [user_id]);
+
+        if (result.rows.length === 0) {
+            return null;
+        }
+
+        return result.rows[0];
+    } catch (error) {
+        handleQueryError(error, 'getUserOpenChargingSession');
+    } finally {
+        client.release();
+    }
+}
+
+/**
  * Deletes a user from the database (hard delete).
  * WARNING: This permanently removes the user and all associated records.
  *
@@ -1280,6 +1323,7 @@ module.exports = {
         deleteUser,
         getUnbilledTransactions,
         tryAssociateUserToTransaction,
+        getUserOpenChargingSession,
     },
     normalizeRFID,
 };
