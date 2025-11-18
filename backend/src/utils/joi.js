@@ -4,7 +4,6 @@
  */
 const Joi = require('joi');
 const {ValidationError, ErrorCodes} = require("./errors");
-//TODO: Implement input sanitization. Validation is done by the JOI
 
 const userSchema = Joi.object({
     user_id: Joi.number().positive().required(),
@@ -26,20 +25,20 @@ const oidcUserSchema = Joi.object({
 
 
 const fullyQualifiedUserSchema = Joi.object({
-    user_id: Joi.number().positive().required(),
-    name: Joi.string().required(),
+    user_id: Joi.number().integer().required(),
+    name: Joi.string().max(255).required(),
     email: Joi.string().email().required(),
-    odoo_user_id: Joi.number().required(),
-    odoo_partner_id: Joi.number().required(),
+    odoo_user_id: Joi.number().integer().required(),
+    odoo_partner_id: Joi.number().integer().required(),
     oauth_id: Joi.string().required(),
     rfid: Joi.string().required(),
-    steve_id: Joi.number().required(),
+    steve_id: Joi.number().integer().required(),
 }).unknown(true); // Allow additional fields
 
 
 const steveUserSchema = Joi.object({
     //PK of the OCPP tag
-    ocppTagPk: Joi.number().positive().required(),
+    ocppTagPk: Joi.number().integer().required(),
     //The OCPP tag (for example, RFID)
     idTag: Joi.string().required(),
     //Has the OCPP tag active transactions (i.e. ongoing charging sessions)?
