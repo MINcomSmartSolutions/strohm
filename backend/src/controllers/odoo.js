@@ -81,7 +81,7 @@ odoo_controller.post('/internal/user/sync', verifyOdooApiKey, async (req, res) =
             try {
                 await db.deactivateUser(user);
                 await db.revokeUserOdooCredentials(user);
-                await blockSteveUser(user);
+                await blockSteveUser(user, "Deactivated on user data deletion request");
                 await db.recordActivityLog(user.user_id, 'DELETE USER', 'ODOO', user.rfid);
                 return res.status(200).json({success: true});
             } catch (deletionError) {
