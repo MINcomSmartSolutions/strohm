@@ -78,11 +78,13 @@ odoo_controller.post('/internal/user/sync', verifyOdooApiKey, async (req, res) =
         // Handle deletion events
         if (event === 'user_deleted' || event === 'partner_deleted') {
             logger.info(`Handling deletion for user ${user.user_id}`);
+            const deletion_type = data && data.old_data && data.old_data.deletion_type ? data.old_data.deletion_type : null;
+
             try {
+                await db.recordActivityLog(user.user_id, 'DELETE USER', 'ODOO', user.rfid, deletion_type);
                 await db.deactivateUser(user);
                 await db.revokeUserOdooCredentials(user);
                 await blockSteveUser(user, "Deactivated on user data deletion request");
-                await db.recordActivityLog(user.user_id, 'DELETE USER', 'ODOO', user.rfid);
                 return res.status(200).json({success: true});
             } catch (deletionError) {
                 logger.error(`Failed to handle deletion for user ${user.user_id}`, {error: deletionError.message});

@@ -844,7 +844,6 @@ async function deactivateUser(user) {
     if (!user || !user.user_id) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`,
         );
     }
 
@@ -852,7 +851,6 @@ async function deactivateUser(user) {
         UPDATE users
         SET deactivated_at = now()
         WHERE user_id = $1::integer
-          AND deactivated_at IS NULL
     `;
 
     const client = await pool.connect();
@@ -890,10 +888,7 @@ async function revokeUserOdooCredentials(user) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const result = await client.query(query, [user.user_id]);
-        if (result.rowCount === 0) {
-            logger.warn('No Odoo credentials found to revoke for user', {user_id: user.user_id});
-        }
+        await client.query(query, [user.user_id]);
         await client.query('COMMIT');
         await recordActivityLog(user.user_id, 'REVOKE ODOO CREDENTIALS', 'DB', user.rfid || 'N/A');
     } catch (error) {
