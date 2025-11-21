@@ -26,6 +26,21 @@ function isIPInCIDR(ip, cidr) {
     return (ipNum & mask) === (rangeNum & mask);
 }
 
+// Helper: detect private/local IPv4 (RFC1918 + loopback) for development convenience
+function isPrivateDevIP(ip) {
+    if (!ip) return false;
+    // Normalize IPv6-mapped IPv4
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    if (ip === '127.0.0.1' || ip === 'localhost' || ip === '::1') return true;
+    const parts = ip.split('.');
+    if (parts.length !== 4) return false;
+    const [a, b] = parts.map(p => parseInt(p));
+    if (a === 10) return true; // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 (covers docker default 172.17.x.x)
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    return false;
+}
+
 /**
  * Middleware to ensure request comes from Tailscale network
  *
@@ -68,14 +83,10 @@ function ensureTailscaleAccess(req, res, next) {
         const allowedRanges = GLOBAL_CONFIG.TAILSCALE?.ALLOWED_RANGES || [];
         const allowedIPs = GLOBAL_CONFIG.TAILSCALE?.ALLOWED_IPS || [];
 
-        // In development without Tailscale config, allow localhost
+        // Development mode convenience: allow localhost & private RFC1918 ranges
         if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            const isLocalhost = clientIP === '127.0.0.1' ||
-                clientIP === 'localhost' ||
-                clientIP === '::1';
-
-            if (isLocalhost) {
-                logger.debug('Allowing localhost access in development mode');
+            if (isPrivateDevIP(clientIP)) {
+                logger.debug('Allowing private/local network access in development mode');
                 return next();
             }
         }
@@ -113,4 +124,3 @@ module.exports = {
     ensureTailscaleAccess,
     isIPInCIDR
 };
-

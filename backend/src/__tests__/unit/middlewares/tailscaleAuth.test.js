@@ -182,6 +182,20 @@ describe('Tailscale Authentication Middleware', () => {
             expect(next).toHaveBeenCalled();
             expect(res.status).not.toHaveBeenCalled();
         });
+
+        it('should allow private Docker network IP in development mode when no Tailscale config', () => {
+            const originalEnv = GLOBAL_CONFIG.ENV.IS_PRODUCTION;
+            GLOBAL_CONFIG.ENV.IS_PRODUCTION = false;
+            GLOBAL_CONFIG.TAILSCALE = {ALLOWED_RANGES: [], ALLOWED_IPS: []};
+
+            req.headers['x-real-ip'] = '172.17.0.2'; // typical docker bridge IP
+
+            ensureTailscaleAccess(req, res, next);
+
+            expect(next).toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalled();
+
+            GLOBAL_CONFIG.ENV.IS_PRODUCTION = originalEnv;
+        });
     });
 });
-
