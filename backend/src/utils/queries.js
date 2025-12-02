@@ -12,6 +12,8 @@ const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
 const {qualifiedTransactionSchema} = require('#utils/joi');
+const {isValidNumber} = require("#helpers/validators");
+const {GLOBAL_CONFIG} = require("#config");
 
 /**
  * Normalizes RFID tags to uppercase for consistent storage and comparison.
@@ -792,9 +794,9 @@ async function saveInvoiceId(txn, invoice_id) {
  *
  * @async
  * @param {DateTime|null} specified_datetime - Optional luxon datetime object to check the price at a specific time.
- * @returns {Promise<number>|null} If `specified_datetime` provided, that datetime's if not, the current electricity price in cents per kWh.
+ * @returns {Promise<{price_ct_kwh: Number, valid_from: DateTime, valid_till: DateTime}|null>}
  */
-async function getCurrentElectricityPrice(specified_datetime = null) {
+async function getElectricityPrice(specified_datetime = null) {
     if (specified_datetime && !specified_datetime.isValid) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
@@ -807,7 +809,7 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
 
     if (specified_datetime) {
         query = `
-            SELECT price
+            SELECT price, valid_from, valid_till
             FROM electricity_prices
             WHERE valid_from <= $1::timestamptz
               AND (valid_till IS NULL OR valid_till > $1::timestamptz)
@@ -816,7 +818,7 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
         params = [specified_datetime];
     } else {
         query = `
-            SELECT price
+            SELECT price, valid_from, valid_till
             FROM electricity_prices
             WHERE valid_from <= NOW()
               AND (valid_till IS NULL OR valid_till > NOW())
@@ -831,12 +833,52 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
         if (result.rows.length === 0) {
             return null;
         }
-        return result.rows[0].price;
+        return {
+            for_timestamp: specified_datetime ?? DateTime.now().toUTC(),
+            price_ct_kwh: result.rows[0].price,
+            valid_from: result.rows[0].valid_from,
+            valid_till: result.rows[0].valid_till,
+        };
     } catch (error) {
-        handleQueryError(error, 'getCurrentElectricityPrice');
+        handleQueryError(error, 'getElectricityPrice');
     } finally {
         client.release();
     }
+}
+
+/**
+ * Retrieves the current electricity price or falls back to a default price if none is found.
+ *
+ * This function attempts to fetch the electricity price for a specified datetime
+ * or the current time if no datetime is provided. If no price is found or the price
+ * is invalid, it falls back to a default price defined in the global configuration.
+ *
+ * @async
+ * @function getElectricityPriceOrDefault
+ * @param {DateTime|null} [specified_datetime=null] - Optional Luxon DateTime object to check the price at a specific time.
+ * @returns {Promise<{price_ct_kwh: Number, valid_from: DateTime, valid_till: DateTime}>} - The electricity price in cents per kWh.
+ *
+ * @throws {ValidationError} - If the specified datetime is invalid.
+ * @throws {DatabaseError} - If there is an error during the database query.
+ */
+async function getElectricityPriceOrDefault(specified_datetime = null) {
+    const priceData = await getElectricityPrice(specified_datetime);
+
+    let for_timestamp, price_ct_kwh, valid_from, valid_till;
+
+    if (priceData) {
+        ({for_timestamp, price_ct_kwh, valid_from, valid_till} = priceData);
+    }
+
+    if (!isValidNumber(price_ct_kwh)) {
+        const default_price = GLOBAL_CONFIG.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH;
+        logger.warn(`No price could be found for ${specified_datetime ?? DateTime.now().toISO()}, falling back to default price ${default_price}`);
+        price = default_price;
+        valid_from = null;
+        valid_till = null;
+    }
+
+    return {for_timestamp, price_ct_kwh, valid_from, valid_till};
 }
 
 
@@ -1309,7 +1351,8 @@ module.exports = {
         setLastStopTimestamp,
         getLastStopTimestamp,
         saveInvoiceId,
-        getCurrentElectricityPrice,
+        getElectricityPrice,
+        getElectricityPriceOrDefault,
         deactivateUser,
         revokeUserOdooCredentials,
         getUsersCount,

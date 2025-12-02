@@ -321,11 +321,13 @@ describe('Joi Validation Schemas', () => {
 
     describe('qualifiedTransactionSchema', () => {
         it('should validate a valid db transaction', () => {
+            const now = new Date();
+            const later = new Date(now.getTime() + 3600000); // 1 hour later
             const validDbTransaction = {
                 id: 1,
-                created_at: new Date().toISOString(),
-                start_timestamp: new Date().toISOString(),
-                stop_timestamp: new Date().toISOString(),
+                created_at: now.toISOString(),
+                start_timestamp: now.toISOString(),
+                stop_timestamp: later.toISOString(),
                 start_value: 0,
                 stop_value: 10,
                 delivered_energy_wh: 10000,
@@ -337,11 +339,13 @@ describe('Joi Validation Schemas', () => {
         });
 
         it('should reject negative energy values', () => {
+            const now = new Date();
+            const later = new Date(now.getTime() + 3600000); // 1 hour later
             const invalidDbTransaction = {
                 id: 1,
-                created_at: new Date().toISOString(),
-                start_timestamp: new Date().toISOString(),
-                stop_timestamp: new Date().toISOString(),
+                created_at: now.toISOString(),
+                start_timestamp: now.toISOString(),
+                stop_timestamp: later.toISOString(),
                 start_value: 0,
                 stop_value: 10,
                 delivered_energy_wh: -100, // Negative value
@@ -365,6 +369,18 @@ describe('Joi Validation Schemas', () => {
             const {error} = qualifiedTransactionSchema.validate(invalidDbTxn);
             expect(error).toBeDefined();
             expect(error.message).toContain('start_value');
+        });
+
+        it('should reject stop_timestamp earlier than start_timestamp', () => {
+            const now = new Date();
+            const earlier = new Date(now.getTime() - 3600000); // 1 hour earlier
+            const invalidDbTxn = buildQualifiedTransaction({
+                start_timestamp: now.toISOString(),
+                stop_timestamp: earlier.toISOString(),
+            });
+            const {error} = qualifiedTransactionSchema.validate(invalidDbTxn);
+            expect(error).toBeDefined();
+            expect(error.message).toContain('stop_timestamp');
         });
 
         it('should allow unknown extra fields', () => {
