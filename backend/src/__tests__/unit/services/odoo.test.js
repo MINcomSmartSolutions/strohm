@@ -33,7 +33,8 @@ jest.mock('#utils/queries', () => ({
         getUserOdooCredentials: jest.fn(),
         rotateOdooUserKey: jest.fn(),
         recordActivityLog: jest.fn(),
-        getCurrentElectricityPrice: jest.fn(),
+        getElectricityPrice: jest.fn(),
+        getElectricityPriceOrDefault: jest.fn(),
         getUserUnique: jest.fn(),
     },
 }));
@@ -53,6 +54,7 @@ jest.mock('#config', () => ({
         API_SECRET: 'test_secret',
         EXTERNAL_BASE_URL: 'https://domain.com',
     },
+
 }));
 
 jest.mock('#services/logger', () => ({
@@ -519,7 +521,9 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getCurrentElectricityPrice.mockResolvedValue(35);
+            db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -583,7 +587,8 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getCurrentElectricityPrice.mockResolvedValue(0);
+            db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 0});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 0});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -647,7 +652,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getCurrentElectricityPrice.mockResolvedValue(35);
+            db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 35});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -679,7 +684,8 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price fetch returning null as no price is available
-            db.getCurrentElectricityPrice.mockResolvedValue(null);
+            db.getElectricityPrice.mockResolvedValue(null);
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35}); // Default price 0.35
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');

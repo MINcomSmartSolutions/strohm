@@ -26,6 +26,7 @@ const odoo_controller = require('./controllers/odoo');
 const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
 const charging_controller = require('./controllers/charging');
+const electricity_price_controller = require("#controllers/electricity_price");
 const {ensureAuthenticated} = require('./middlewares/ensureAuthenticated');
 const {requireConsent} = require('./middlewares/consent');
 const {ensureTailscaleAccess} = require('./middlewares/tailscaleAuth');
@@ -181,6 +182,8 @@ app.use(odoo_controller);
 app.use(scim_controller);
 
 app.use(charging_controller);
+
+app.use(electricity_price_controller)
 
 // Admin Panel - Protected by Tailscale network access
 // Enable with TAILSCALE_ENABLE_ADMIN=true environment variable

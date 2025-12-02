@@ -66,17 +66,21 @@ const buildSteveCompletedTransaction = (overrides = {}) => ({
     ...overrides,
 });
 
-const buildQualifiedTransaction = (overrides = {}) => ({
-    id: 1,
-    created_at: nowIso(),
-    start_timestamp: nowIso(),
-    stop_timestamp: nowIso(),
-    start_value: 0,
-    stop_value: 10,
-    delivered_energy_wh: 10000,
-    ocpp_id_tag: 'rfid123',
-    ...overrides,
-});
+const buildQualifiedTransaction = (overrides = {}) => {
+    const startTime = new Date();
+    const stopTime = new Date(startTime.getTime() + 3600000); // 1 hour later
+    return {
+        id: 1,
+        created_at: startTime.toISOString(),
+        start_timestamp: startTime.toISOString(),
+        stop_timestamp: stopTime.toISOString(),
+        start_value: 0,
+        stop_value: 10,
+        delivered_energy_wh: 10000,
+        ocpp_id_tag: 'rfid123',
+        ...overrides,
+    };
+};
 
 module.exports = {
     buildUser,

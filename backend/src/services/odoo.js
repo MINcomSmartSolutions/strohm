@@ -15,7 +15,6 @@ const {fmt} = require('#utils/datetime_format');
 const {ODOO_CONFIG} = require('#config');
 const {qualifiedTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('#utils/joi');
 const logger = require('#services/logger');
-const {isValidNumber} = require("#helpers/validators");
 
 
 /**
@@ -276,20 +275,14 @@ async function createOdooTxnInvoice(db_txn) {
     }
 
     // The price of electricity at the time of transaction started
-    let txn_started_with_electricity_price;
-    txn_started_with_electricity_price = await db.getCurrentElectricityPrice(DateTime.fromJSDate(db_txn.start_timestamp));
-    if (!isValidNumber(txn_started_with_electricity_price)) {
-        const default_price = 35; //in cents/kwh
-        logger.warn(`No price could be found for ${db_txn.start_timestamp.toISOString()}, falling back to default price ${default_price}`);
-        txn_started_with_electricity_price = default_price;
-    }
+    const txn_started_with_electricity_price = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
 
     const lines_data = [
         {
             'sku': 'standard_charging',
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
-            'price_unit': txn_started_with_electricity_price / 100,
+            'price_unit': txn_started_with_electricity_price.price_ct_kwh / 100, // convert cts to €
             'quantity': db_txn.delivered_energy_wh / 1000, // convert Wh to kWh
         },
     ];

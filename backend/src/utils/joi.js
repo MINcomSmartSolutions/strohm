@@ -116,7 +116,7 @@ const qualifiedTransactionSchema = Joi.object({
     id: Joi.number().integer().positive().required(),
     created_at: Joi.date().required(),
     start_timestamp: Joi.date().required(),
-    stop_timestamp: Joi.date().required(),
+    stop_timestamp: Joi.date().greater(Joi.ref('start_timestamp')).required(),
     start_value: Joi.number().min(0).required(),
     stop_value: Joi.number().min(Joi.ref('start_value')).required(),
     delivered_energy_wh: Joi.number().min(0).required(),

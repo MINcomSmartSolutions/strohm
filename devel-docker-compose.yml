@@ -110,8 +110,8 @@ services:
       - --limit-time-real-cron=9999999
       - --limit-time-real=9999999
       - --workers=0
-      - --dev=reload,qweb,werkzeug,xml
-      - -i strohm_addon
+      - --dev=reload,qweb,werkzeug,xml,po,pot
+      - -i strohm_addon --i18n-overwrite
 
   steve-db:
     container_name: steve_sim_db

@@ -35,7 +35,6 @@ charging_controller.get('/api/charging/session/active/:user_id/:partner_id', ver
     try {
         const {user_id: req_odoo_userid, partner_id: req_odoo_partnerid} = req.params;
 
-        // Validate URL parameters
         try {
             Joi.assert(req_odoo_userid, Joi.number().integer().positive().required());
             Joi.assert(req_odoo_partnerid, Joi.number().integer().positive().required());
