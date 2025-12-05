@@ -84,7 +84,7 @@ services:
       BACKEND_EXTERNAL_URL: http://localhost:${NODE_PORT:-3000}
       WEBHOOK_API_KEY: "webhook_key_here"
     volumes:
-      - odoo-user-test-web-data:/var/lib/odoo:z
+      - odoo-user-test-web-data:/var/lib/odoo
     tty: true
     ports:
       - "127.0.0.1:${ODOO_EXTERNAL_PORT:-18069}:8069"
@@ -93,11 +93,11 @@ services:
         condition: service_healthy
     command:
       - odoo
-      - --database=odoo
-      - --db-filter=^odoo$
-      - --init=base,strohm_addon
-      - --load-language=de_DE
-
+      - --limit-memory-soft=0
+      - --limit-time-real-cron=9999999
+      - --limit-time-real=9999999
+      - --workers=0
+      - -i strohm_addon --i18n-overwrite
 
   steve-db:
     image: mariadb:10.4.30
