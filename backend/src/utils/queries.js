@@ -873,7 +873,7 @@ async function getElectricityPriceOrDefault(specified_datetime = null) {
     if (!isValidNumber(price_ct_kwh)) {
         const default_price = GLOBAL_CONFIG.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH;
         logger.warn(`No price could be found for ${specified_datetime ?? DateTime.now().toISO()}, falling back to default price ${default_price}`);
-        price = default_price;
+        price_ct_kwh = default_price;
         valid_from = null;
         valid_till = null;
     }
