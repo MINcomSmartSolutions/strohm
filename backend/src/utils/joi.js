@@ -123,6 +123,27 @@ const qualifiedTransactionSchema = Joi.object({
     ocpp_id_tag: Joi.string().required(),
 }).unknown(true);
 
+
+const invoiceCreationResponseSchema = Joi.object({
+    details: Joi.object({
+        sale_order: Joi.object({
+            id: Joi.number().integer().positive().required(),
+            name: Joi.string(),
+            confirmed: Joi.boolean(),
+            total_amount: Joi.number().min(0),
+            qty: Joi.number().min(0),
+            line_count: Joi.number().integer().min(0),
+        }).required(),
+        invoice: Joi.object({
+            id: Joi.number().integer().positive(),
+            name: Joi.any(),
+            state: Joi.string(),
+            total_amount: Joi.number(),
+        }),
+    }).required(),
+}).unknown(true);
+
+
 const validateUser = (user) => {
     const {error} = fullyQualifiedUserSchema.validate(user);
     if (error) {
@@ -138,5 +159,6 @@ module.exports = {
     steveTransactionSchema,
     qualifiedTransactionSchema,
     steveCompletedTransactionSchema,
+    invoiceCreationResponseSchema,
     validateUser,
 };

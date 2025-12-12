@@ -15,6 +15,7 @@ const {generateOdooHash, generateSalt} = require('#helpers/auth');
 const {ODOO_CONFIG} = require('#config');
 const {qualifiedTransactionSchema} = require('#utils/joi');
 const {isValidNumber} = require("#helpers/validators");
+const {createSteveUser} = require("#services/steve_user");
 
 // Mock dependencies
 jest.mock('#services/network', () => ({
@@ -36,6 +37,9 @@ jest.mock('#utils/queries', () => ({
         getElectricityPrice: jest.fn(),
         getElectricityPriceOrDefault: jest.fn(),
         getUserUnique: jest.fn(),
+        upsertTxnOdooOrder: jest.fn(),
+        upsertTxnOdooInvoice: jest.fn(),
+        linkOrderToInvoice: jest.fn(),
     },
 }));
 
@@ -524,7 +528,6 @@ describe('Odoo Service', () => {
             db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 35});
             db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
 
-
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
 
@@ -532,13 +535,42 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('request_hash')     // First call - for request
                 .mockReturnValueOnce('response_hash');   // Second call - for response verification
 
-            // Mock successful Odoo response
+            // Mock successful Odoo response with new structure
             odooPlainAxios.post.mockResolvedValue({
                 status: 201,
                 data: {
-                    bill_id: 12345,
+                    details: {
+                        sale_order: {
+                            id: 12345,
+                            name: 'SO001',
+                            confirmed: true,
+                            total_amount: 3.50,
+                            qty: 10,
+                            line_count: 1,
+                        },
+                        invoice: {
+                            id: 67890,
+                            name: 'INV001',
+                            state: 'posted',
+                            total_amount: 3.50,
+                        },
+                    },
                 },
             });
+
+            // Mock database operations
+            db.upsertTxnOdooOrder.mockResolvedValue({
+                id: 1,
+                txn_id: testTransaction.id,
+                odoo_saleorder_id: 12345,
+            });
+
+            db.upsertTxnOdooInvoice.mockResolvedValue({
+                id: 2,
+                odoo_invoice_id: 67890,
+            });
+
+            db.linkOrderToInvoice.mockResolvedValue(true);
 
             const result = await createOdooTxnInvoice(testTransaction);
 
@@ -559,21 +591,43 @@ describe('Odoo Service', () => {
                         }),
                     ]),
                     salt: 'test_salt',
-                    session_start: expect.toBeDateString(),
-                    session_end: expect.toBeDateString(),
                 }),
             );
 
-            // Verify activity log
-            expect(db.recordActivityLog).toHaveBeenCalledWith(
-                fullQualifiedUser.user_id,
-                'CREATE INVOICE',
-                'ODOO',
-                fullQualifiedUser.rfid,
+            // Verify order creation
+            expect(db.upsertTxnOdooOrder).toHaveBeenCalledWith(
+                testTransaction.id,
+                expect.objectContaining({
+                    odoo_saleorder_id: 12345,
+                    odoo_saleorder_name: 'SO001',
+                    confirmed: true,
+                    qty: 10,
+                    unit_price: 0.35,
+                    total_amount: 3.50,
+                    billed: false,
+                }),
             );
 
-            // Verify returned bill ID
-            expect(result).toBe(12345);
+            // Verify invoice creation
+            expect(db.upsertTxnOdooInvoice).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    odoo_invoice_id: 67890,
+                    odoo_invoice_name: 'INV001',
+                    total_amount: 3.50,
+                    paid: false,
+                }),
+            );
+
+            // Verify order-invoice link
+            expect(db.linkOrderToInvoice).toHaveBeenCalledWith(1, 2);
+
+            // Verify returned result
+            expect(result).toEqual({
+                order_id: 1,
+                odoo_order_id: 12345,
+                invoice_id: 2,
+                odoo_invoice_id: 67890,
+            });
         });
 
         it('should create invoice successfully when the price is "0"', async () => {
@@ -597,13 +651,42 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('request_hash')     // First call - for request
                 .mockReturnValueOnce('response_hash');   // Second call - for response verification
 
-            // Mock successful Odoo response
+            // Mock successful Odoo response with new structure
             odooPlainAxios.post.mockResolvedValue({
                 status: 201,
                 data: {
-                    bill_id: 123425,
+                    details: {
+                        sale_order: {
+                            id: 123425,
+                            name: 'SO002',
+                            confirmed: true,
+                            total_amount: 0,
+                            qty: 10,
+                            line_count: 1,
+                        },
+                        invoice: {
+                            id: 789012,
+                            name: 'INV002',
+                            state: 'posted',
+                            total_amount: 0,
+                        },
+                    },
                 },
             });
+
+            // Mock database operations
+            db.upsertTxnOdooOrder.mockResolvedValue({
+                id: 3,
+                txn_id: testTransaction.id,
+                odoo_saleorder_id: 123425,
+            });
+
+            db.upsertTxnOdooInvoice.mockResolvedValue({
+                id: 4,
+                odoo_invoice_id: 789012,
+            });
+
+            db.linkOrderToInvoice.mockResolvedValue(true);
 
             const result = await createOdooTxnInvoice(testTransaction);
 
@@ -624,21 +707,16 @@ describe('Odoo Service', () => {
                         }),
                     ]),
                     salt: 'test_salt',
-                    session_start: expect.toBeDateString(),
-                    session_end: expect.toBeDateString(),
                 }),
             );
 
-            // Verify activity log
-            expect(db.recordActivityLog).toHaveBeenCalledWith(
-                fullQualifiedUser.user_id,
-                'CREATE INVOICE',
-                'ODOO',
-                fullQualifiedUser.rfid,
-            );
-
-            // Verify returned bill ID
-            expect(result).toBe(123425);
+            // Verify returned result
+            expect(result).toEqual({
+                order_id: 3,
+                odoo_order_id: 123425,
+                invoice_id: 4,
+                odoo_invoice_id: 789012,
+            });
         });
 
         it('should throw error if Odoo returns non-success status', async () => {
@@ -694,13 +772,42 @@ describe('Odoo Service', () => {
                 .mockReturnValueOnce('request_hash')     // For request
                 .mockReturnValueOnce('response_hash');   // For response verification
 
-            // Mock successful Odoo response
+            // Mock successful Odoo response with new structure
             odooPlainAxios.post.mockResolvedValue({
                 status: 201,
                 data: {
-                    bill_id: 12345,
+                    details: {
+                        sale_order: {
+                            id: 12345,
+                            name: 'SO003',
+                            confirmed: true,
+                            total_amount: 3.50,
+                            qty: 10,
+                            line_count: 1,
+                        },
+                        invoice: {
+                            id: 67891,
+                            name: 'INV003',
+                            state: 'posted',
+                            total_amount: 3.50,
+                        },
+                    },
                 },
             });
+
+            // Mock database operations
+            db.upsertTxnOdooOrder.mockResolvedValue({
+                id: 5,
+                txn_id: testTransaction.id,
+                odoo_saleorder_id: 12345,
+            });
+
+            db.upsertTxnOdooInvoice.mockResolvedValue({
+                id: 6,
+                odoo_invoice_id: 67891,
+            });
+
+            db.linkOrderToInvoice.mockResolvedValue(true);
 
             await createOdooTxnInvoice(testTransaction);
 
@@ -718,6 +825,68 @@ describe('Odoo Service', () => {
             );
         });
 
+        it('should create only order when invoice is not created by Odoo', async () => {
+            // Mock user credentials
+            db.getUserOdooCredentials.mockResolvedValue({
+                key: 'test_key',
+                key_salt: 'test_key_salt',
+            });
+
+            // Mock user retrieval
+            db.getUserUnique.mockResolvedValue(fullQualifiedUser);
+
+            // Mock electricity price
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+
+            // Mock salt and hash
+            generateSalt.mockReturnValue('test_salt');
+            generateOdooHash.mockReturnValue('request_hash');
+
+            // Mock Odoo response with only sale order, no invoice
+            odooPlainAxios.post.mockResolvedValue({
+                status: 201,
+                data: {
+                    details: {
+                        sale_order: {
+                            id: 99999,
+                            name: 'SO004',
+                            confirmed: true,
+                            total_amount: 3.50,
+                            qty: 10,
+                            line_count: 1,
+                        },
+                        // No invoice field
+                    },
+                },
+            });
+
+            // Mock database operations
+            db.upsertTxnOdooOrder.mockResolvedValue({
+                id: 7,
+                txn_id: testTransaction.id,
+                odoo_saleorder_id: 99999,
+            });
+
+            const result = await createOdooTxnInvoice(testTransaction);
+
+            // Verify order was created
+            expect(db.upsertTxnOdooOrder).toHaveBeenCalled();
+
+            // Verify invoice was NOT created
+            expect(db.upsertTxnOdooInvoice).not.toHaveBeenCalled();
+
+            // Verify no link was created
+            expect(db.linkOrderToInvoice).not.toHaveBeenCalled();
+
+            // Verify returned result has no invoice
+            expect(result).toEqual({
+                order_id: 7,
+                odoo_order_id: 99999,
+                invoice_id: null,
+                odoo_invoice_id: null,
+            });
+        });
+
         it('should handle invalid user data', async () => {
             // Mock user credentials
             db.getUserOdooCredentials.mockResolvedValue({
@@ -730,167 +899,66 @@ describe('Odoo Service', () => {
 
             await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(ValidationError);
         });
-    });
 
-    // describe('checkValidPaymentMethod', () => {
-    //
-    //     it('should throw error if user validation fails', async () => {
-    //         const invalidUser = {user_id: 'not_a_number'};
-    //
-    //         await expect(checkValidPaymentMethod(invalidUser)).rejects.toThrow(ValidationError);
-    //     });
-    //
-    //     it('should return true when payment method is valid', async () => {
-    //         // Mock user credentials
-    //         db.getUserOdooCredentials.mockResolvedValue({
-    //             key: 'test_key',
-    //             key_salt: 'test_key_salt',
-    //         });
-    //
-    //         // Mock salt and hash
-    //         generateSalt.mockReturnValue('test_salt');
-    //
-    //         // Fix: Use mockReturnValueOnce for different consecutive calls
-    //         generateOdooHash
-    //             .mockReturnValueOnce('request_hash')     // First call - for request
-    //             .mockReturnValueOnce('response_hash');   // Second call - for response verification
-    //
-    //         // Mock successful Odoo response with valid payment method
-    //         odooAuthedAxios.post.mockResolvedValue({
-    //             status: 200,
-    //             data: {
-    //                 timestamp: '2025-06-12T12:00:00',
-    //                 result: 1, // 1 means valid
-    //                 salt: 'response_salt',
-    //                 hash: 'response_hash',
-    //             },
-    //         });
-    //
-    //         const result = await checkValidPaymentMethod(fullQualifiedUser);
-    //
-    //         // Verify API call
-    //         expect(odooAuthedAxios.post).toHaveBeenCalledWith(
-    //             ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI,
-    //             expect.objectContaining({
-    //                 timestamp: expect.toBeDateString(),
-    //                 user_id: fullQualifiedUser.odoo_user_id,
-    //                 partner_id: fullQualifiedUser.odoo_partner_id,
-    //                 key: 'test_key',
-    //                 key_salt: 'test_key_salt',
-    //                 salt: 'test_salt',
-    //                 hash: 'request_hash',
-    //             }),
-    //         );
-    //
-    //         // Verify result
-    //         expect(result).toBe(true);
-    //     });
-    //
-    //     it('should return false when payment method is invalid', async () => {
-    //         // Mock user credentials
-    //         db.getUserOdooCredentials.mockResolvedValue({
-    //             key: 'test_key',
-    //             key_salt: 'test_key_salt',
-    //         });
-    //
-    //         // Mock salt and hash
-    //         generateSalt.mockReturnValue('test_salt');
-    //         // Ensure hash verification passes
-    //         generateOdooHash
-    //             .mockReturnValue('request_hash')     // For request
-    //             .mockReturnValue('response_hash');   // For response verification
-    //
-    //         // Mock Odoo response with invalid payment method
-    //         odooAuthedAxios.post.mockResolvedValue({
-    //             status: 200,
-    //             data: {
-    //                 timestamp: '2025-06-12T12:00:00',
-    //                 result: 0, // 0 means invalid
-    //                 salt: 'response_salt',
-    //                 hash: 'response_hash',
-    //             },
-    //         });
-    //
-    //         const result = await checkValidPaymentMethod(fullQualifiedUser);
-    //
-    //         // Verify result
-    //         expect(result).toBe(false);
-    //     });
-    //
-    //     it('should throw error if hash verification fails', async () => {
-    //         // Mock user credentials
-    //         db.getUserOdooCredentials.mockResolvedValue({
-    //             key: 'test_key',
-    //             key_salt: 'test_key_salt',
-    //         });
-    //
-    //         // Mock salt and hash
-    //         generateSalt.mockReturnValue('test_salt');
-    //         generateOdooHash.mockReturnValueOnce('request_hash'); // For request
-    //         generateOdooHash.mockReturnValueOnce('expected_hash'); // Should not match response
-    //
-    //         // Mock Odoo response with wrong hash
-    //         odooAuthedAxios.post.mockResolvedValue({
-    //             status: 200,
-    //             data: {
-    //                 timestamp: '2025-06-12T12:00:00',
-    //                 result: 1,
-    //                 salt: 'response_salt',
-    //                 hash: 'wrong_hash', // Different from expected_hash
-    //             },
-    //         });
-    //
-    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
-    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
-    //     });
-    //
-    //     it('should throw error if Odoo returns invalid response format', async () => {
-    //         // Mock user credentials
-    //         db.getUserOdooCredentials.mockResolvedValue({
-    //             key: 'test_key',
-    //             key_salt: 'test_key_salt',
-    //         });
-    //
-    //         // Mock salt and hash
-    //         generateSalt.mockReturnValue('test_salt');
-    //         generateOdooHash.mockReturnValue('request_hash');
-    //
-    //         // Mock Odoo response with missing fields
-    //         odooAuthedAxios.post.mockResolvedValue({
-    //             status: 200,
-    //             data: {
-    //                 // Missing timestamp
-    //                 result: 1,
-    //                 // Missing salt
-    //                 hash: 'some_hash',
-    //             },
-    //         });
-    //
-    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
-    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.INVALID_RESPONSE);
-    //     });
-    //
-    //     it('should throw error on payment method check failure', async () => {
-    //         // Mock user credentials
-    //         db.getUserOdooCredentials.mockResolvedValue({
-    //             key: 'test_key',
-    //             key_salt: 'test_key_salt',
-    //         });
-    //
-    //         // Mock salt and hash
-    //         generateSalt.mockReturnValue('test_salt');
-    //         generateOdooHash.mockReturnValue('request_hash');
-    //
-    //         // Mock Odoo error response
-    //         odooAuthedAxios.post.mockResolvedValue({
-    //             status: 500,
-    //             data: {
-    //                 error: 'Internal server error',
-    //             },
-    //         });
-    //
-    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow();
-    //         await expect(checkValidPaymentMethod(fullQualifiedUser)).rejects.toThrow(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
-    //     });
-    // });
+        it('should throw error if response is missing details', async () => {
+            // Mock user credentials
+            db.getUserOdooCredentials.mockResolvedValue({
+                key: 'test_key',
+                key_salt: 'test_key_salt',
+            });
+
+            // Mock user retrieval
+            db.getUserUnique.mockResolvedValue(fullQualifiedUser);
+
+            // Mock electricity price
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+
+            // Mock salt and hash
+            generateSalt.mockReturnValue('test_salt');
+            generateOdooHash.mockReturnValue('request_hash');
+
+            // Mock Odoo response without details
+            odooPlainAxios.post.mockResolvedValue({
+                status: 201,
+                data: {
+                    // Missing details field
+                },
+            });
+
+            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(SystemError);
+        });
+
+        it('should throw error if response details are invalid', async () => {
+            // Mock user credentials
+            db.getUserOdooCredentials.mockResolvedValue({
+                key: 'test_key',
+                key_salt: 'test_key_salt',
+            });
+
+            // Mock user retrieval
+            db.getUserUnique.mockResolvedValue(fullQualifiedUser);
+
+            // Mock electricity price
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+
+            // Mock salt and hash
+            generateSalt.mockReturnValue('test_salt');
+            generateOdooHash.mockReturnValue('request_hash');
+
+            // Mock Odoo response with invalid details structure (missing required sale_order)
+            odooPlainAxios.post.mockResolvedValue({
+                status: 201,
+                data: {
+                    details: {
+                        // Missing required sale_order field
+                    },
+                },
+            });
+
+            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(SystemError);
+            await createOdooTxnInvoice(testTransaction).catch(err => {
+                expect(err.toString()).toContain("Invalid invoice creation details");
+            });
+        });
+    });
 });
