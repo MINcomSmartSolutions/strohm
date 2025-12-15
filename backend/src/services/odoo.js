@@ -5,15 +5,19 @@
  *
  * @module services/odoo
  */
+const {DateTime} = require('luxon');
+const {ODOO_CONFIG} = require('#config');
+
 const {ValidationError, ErrorCodes, SystemError, ResponseError} = require('#utils/errors');
 const {db} = require('#utils/queries');
-
 const {generateOdooHash, generateSalt} = require('#helpers/auth');
 const {odooAuthedAxios, odooPlainAxios} = require('./network');
-const {DateTime} = require('luxon');
-const {fmt} = require('#utils/datetime_format');
-const {ODOO_CONFIG} = require('#config');
-const {qualifiedTransactionSchema, fullyQualifiedUserSchema, validateUser} = require('#utils/joi');
+const {
+    qualifiedTransactionSchema,
+    fullyQualifiedUserSchema,
+    validateUser,
+    invoiceCreationResponseSchema
+} = require('#utils/joi');
 const logger = require('#services/logger');
 
 
@@ -39,7 +43,7 @@ async function createOdooUser(user) {
     }
 
     const data = {
-        timestamp: fmt(DateTime.utc()),
+        timestamp: DateTime.utc().toISO(),
         name: user.name,
         email: user.email,
         salt: generateSalt(),
@@ -119,12 +123,12 @@ async function getOdooPortalLogin(user) {
     const {key, key_salt} = odoo_credentials;
     const _salt = generateSalt();
 
-    // Construct the Odoo portal login INTERNAL_BASE_URL
-    // Used INTERNAL_BASE_URL constructor to ensure proper encoding instead of String concatenation
-    // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials
+    // Construct the Odoo portal login
+    // Used URL constructor to ensure proper encoding instead of String concatenation
+    // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials externally
     const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.EXTERNAL_BASE_URL);
 
-    let timestamp = fmt(DateTime.now());
+    let timestamp = DateTime.utc().toISO();
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
     const _hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
@@ -166,7 +170,7 @@ async function rotateOdooUserAuth(user) {
 
     // Prepare request data using the *current* key and key_salt
     const request_salt = generateSalt();
-    const request_timestamp = fmt(DateTime.now());
+    const request_timestamp = DateTime.utc().toISO();
 
     // Create a dedicated request object with old credentials
     const requestData = {
@@ -222,11 +226,9 @@ async function rotateOdooUserAuth(user) {
 
 
 /**
- * Creates a bill/invoice in Odoo for a given transaction.
+ * Creates a sale order (and optionally invoice) in Odoo for a given transaction.
  *
  * Request payload to Odoo:
- *   session_start (datetime): Session start datetime in UTC.
- *   session_end (datetime): Session end datetime in UTC.
  *   partner_id (int): ID of the sale/customer (`res.partner`).
  *   lines_data (list[dict]): Invoice line data dict with the following fields:
  *     - name (str): Product name.
@@ -235,17 +237,21 @@ async function rotateOdooUserAuth(user) {
  *     - base_price (float): Standard list price for product (e.g., 0.35).
  *     - custom_rate (float): Actual invoice price (e.g., 0.38).
  *     - quantity (float): Consumed quantity (e.g., 150, in kWh).
+ *     - session_start (datetime): Session start datetime in ISO.
+ *     - session_end (datetime): Session end datetime in ISO.
+ *     - session_backend_ref (int): Backend db ID for the transaction.
  *     // TODO: Add more fields if needed. e.g. payment terms, bill_date etc.
  *
  * - Validates the transaction object.
  * - Fetches Odoo credentials for the user.
  * - Prepares invoice line data.
- * - Sends a POST request to Odoo to create the invoice.
- * - Throws if creation fails.
+ * - Sends a POST request to Odoo to create the order/invoice.
+ * - Stores order and invoice (if created) in local database.
+ * - Links them via junction table for consolidated billing support.
  *
  * @async
  * @param {Object<db_txn>} db_txn - Transaction object from the database.
- * @returns {Promise<Number>} The created bill ID.
+ * @returns {Promise<Object>} Object containing {order_id, odoo_order_id, invoice_id, odoo_invoice_id}
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function createOdooTxnInvoice(db_txn) {
@@ -276,32 +282,34 @@ async function createOdooTxnInvoice(db_txn) {
 
     // The price of electricity at the time of transaction started
     const txn_started_with_electricity_price = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
+    const unit_price_eur = txn_started_with_electricity_price.price_ct_kwh / 100; // convert cts to €
 
     const lines_data = [
         {
             'sku': 'standard_charging',
+            'session_start': DateTime.fromJSDate(db_txn.start_timestamp).toISO(),
+            'session_end': DateTime.fromJSDate(db_txn.stop_timestamp).toISO(),
+            'session_backend_ref': db_txn.id,
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
-            'price_unit': txn_started_with_electricity_price.price_ct_kwh / 100, // convert cts to €
+            'price_unit': unit_price_eur, // convert cts to €
             'quantity': db_txn.delivered_energy_wh / 1000, // convert Wh to kWh
         },
     ];
 
     const data = {
-        timestamp: fmt(DateTime.utc()),
+        timestamp: DateTime.utc().toISO(),
         user_id: user.odoo_user_id,
         partner_id: user.odoo_partner_id,
+        lines_data: lines_data,
         key: key,
         key_salt: key_salt,
-        session_start: fmt(DateTime.fromJSDate(db_txn.start_timestamp)),
-        session_end: fmt(DateTime.fromJSDate(db_txn.stop_timestamp)),
-        lines_data: lines_data,
     };
 
     const salt = generateSalt();
     data.salt = salt;
 
-    const message = `${data.timestamp}${user.odoo_user_id}${user.odoo_partner_id}${data.session_start}${data.session_end}${data.key}${data.key_salt}${salt}`;
+    const message = `${data.timestamp}${user.odoo_user_id}${user.odoo_partner_id}${data.key}${data.key_salt}${salt}`;
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
     const response = await odooPlainAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
@@ -311,16 +319,61 @@ async function createOdooTxnInvoice(db_txn) {
         throw new SystemError(ErrorCodes.ODOO.INVOICE_CREATE_FAILED, errorMSG);
     }
 
-    let bill_id = response_data['bill_id'] ? parseInt(response_data['bill_id']) : null;
-    if (!bill_id) {
-        throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE, 'Missing or corrupted bill_id in response.' +
-            ' Probably the bill is created in Odoo but needs manual entry for the invoice id', {
+    let details = response_data['details'];
+    if (!details) {
+        throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE, {
             response_data: response_data,
         });
     }
+    const {error: validationError} = invoiceCreationResponseSchema.validate(response_data);
+    if (validationError) {
+        throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE,
+            `Invalid invoice creation details: ${validationError.message}`, {
+                response_data: response_data,
+            });
+    }
 
-    await db.recordActivityLog(user.user_id, 'CREATE INVOICE', 'ODOO', user.rfid);
-    return bill_id;
+    const order = details.sale_order;
+    const invoice = details.invoice || null;
+
+    // TODO: Check if `unit_price` from Odoo matches sent `unit_price_eur`
+    // TODO: Check if `qty` from Odoo matches sent `quantity`
+
+    // Create order record
+    const db_created_order = await db.upsertTxnOdooOrder(db_txn.id, {
+        odoo_saleorder_id: order.id,
+        odoo_saleorder_name: order.name,
+        confirmed: order.confirmed || true,
+        qty: order.qty || null,
+        unit_price: unit_price_eur,
+        total_amount: order.total_amount || null,
+        billed: order.invoice || false,
+    });
+
+    let db_created_invoice = null;
+
+    // Create invoice record if invoice was created by Odoo
+    if (invoice && invoice.id) {
+        db_created_invoice = await db.upsertTxnOdooInvoice({
+            odoo_invoice_id: invoice.id,
+            odoo_invoice_name: invoice.name || null,
+            total_amount: invoice.total_amount || null,
+            paid: invoice.paid || false,
+        });
+
+        // Link order to invoice
+        await db.linkOrderToInvoice(db_created_order.id, db_created_invoice.id);
+    }
+
+    logger.verbose(`Created Odoo order ${order.id} for transaction ${db_txn.id}` +
+        (invoice ? ` with invoice ${invoice.id}` : ''));
+
+    return {
+        order_id: db_created_order.id,
+        odoo_order_id: order.id,
+        invoice_id: db_created_invoice?.id || null,
+        odoo_invoice_id: invoice?.id || null,
+    };
 }
 
 
@@ -349,7 +402,7 @@ async function checkValidPaymentMethod(user) {
     }
 
     const data = {
-        timestamp: fmt(DateTime.now()),
+        timestamp: DateTime.now().toISO(),
         user_id: user.odoo_user_id,
         partner_id: user.odoo_partner_id,
         key: odoo_credentials.key,

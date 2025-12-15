@@ -10,7 +10,6 @@ SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
@@ -48,40 +47,6 @@ COMMENT ON TABLE public.activity_log IS 'Record interactions';
 --
 
 COMMENT ON COLUMN public.activity_log.rfid IS 'Even tough we have a user foreign key, we need to hold rfid history';
-
-
---
--- Name: bills; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.bills (
-    amount integer,
-    currency character varying DEFAULT 'EUR'::character varying NOT NULL,
-    transaction_id integer NOT NULL,
-    id integer NOT NULL,
-    user_id integer NOT NULL
-);
-
-
---
--- Name: bills_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.bills_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: bills_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.bills_id_seq OWNED BY public.bills.id;
-
 
 --
 -- Name: charging_transactions; Type: TABLE; Schema: public; Owner: -
@@ -497,13 +462,6 @@ ALTER TABLE ONLY public.activity_log ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
--- Name: bills id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bills ALTER COLUMN id SET DEFAULT nextval('public.bills_id_seq'::regclass);
-
-
---
 -- Name: charging_transactions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -558,14 +516,6 @@ ALTER TABLE ONLY public.watermark ALTER COLUMN id SET DEFAULT nextval('public.wa
 
 ALTER TABLE ONLY public.activity_log
     ADD CONSTRAINT activity_log_pk PRIMARY KEY (id);
-
-
---
--- Name: bills bills_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bills
-    ADD CONSTRAINT bills_pk PRIMARY KEY (id);
 
 
 --
@@ -691,23 +641,6 @@ CREATE UNIQUE INDEX users_odoo_user_id_uindex ON public.users USING btree (odoo_
 
 ALTER TABLE ONLY public.activity_log
     ADD CONSTRAINT activity_log_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE SET NULL;
-
-
---
--- Name: bills bills_charging_transactions_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bills
-    ADD CONSTRAINT bills_charging_transactions_id_fk FOREIGN KEY (transaction_id) REFERENCES public.charging_transactions(id);
-
-
---
--- Name: bills bills_users_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.bills
-    ADD CONSTRAINT bills_users_user_id_fk FOREIGN KEY (user_id) REFERENCES public.users(user_id);
-
 
 --
 -- Name: charging_transactions charging_transactions_uers_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
