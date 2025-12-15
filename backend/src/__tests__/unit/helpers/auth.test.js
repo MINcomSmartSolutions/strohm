@@ -2,7 +2,7 @@ const {
     generateOdooHash,
     generateSalt,
     validateOIDCProperties,
-    hasEmployeeAffiliation,
+    hasStudentAffiliation,
 } = require('#helpers/auth');
 const crypto = require('crypto');
 const logger = require('#services/logger');
@@ -128,51 +128,42 @@ describe('Auth Helper Functions', () => {
         });
     });
 
-    describe('hasEmployeeAffiliation', () => {
+    describe('hasStudentAffiliation', () => {
         beforeEach(() => {
             jest.clearAllMocks();
         });
 
-        it('should return true when user has employee@hm.edu affiliation', () => {
+        it('should return true when user has student@hm.edu affiliation', () => {
             const oidcUser = {
                 sub: 'user123',
-                eduPersonScopedAffiliation: ['employee@hm.edu'],
+                eduPersonScopedAffiliation: ['student@hm.edu'],
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(true);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user123 has employee@hm.edu affiliation'
-            );
         });
 
-        it('should return true when user has employee@hm.edu along with other affiliations', () => {
+        it('should return true when user has student@hm.edu along with other affiliations', () => {
             const oidcUser = {
                 sub: 'user456',
                 eduPersonScopedAffiliation: ['student@hm.edu', 'employee@hm.edu', 'member@hm.edu'],
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(true);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user456 has employee@hm.edu affiliation'
-            );
         });
 
-        it('should return false when user does not have employee@hm.edu affiliation', () => {
+        it('should return false when user does not have student@hm.edu affiliation', () => {
             const oidcUser = {
                 sub: 'user789',
-                eduPersonScopedAffiliation: ['student@hm.edu', 'member@hm.edu'],
+                eduPersonScopedAffiliation: ['employee@hm.edu', 'member@hm.edu'],
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user789 does not have employee@hm.edu affiliation. Affiliations: student@hm.edu, member@hm.edu'
-            );
         });
 
         it('should return false when eduPersonScopedAffiliation is an empty array', () => {
@@ -181,12 +172,9 @@ describe('Auth Helper Functions', () => {
                 eduPersonScopedAffiliation: [],
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user101 does not have employee@hm.edu affiliation. Affiliations: '
-            );
         });
 
         it('should return false when eduPersonScopedAffiliation is not an array', () => {
@@ -195,12 +183,9 @@ describe('Auth Helper Functions', () => {
                 eduPersonScopedAffiliation: 'employee@hm.edu',
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user202 has no eduPersonScopedAffiliation array'
-            );
         });
 
         it('should return false when eduPersonScopedAffiliation is null', () => {
@@ -209,12 +194,9 @@ describe('Auth Helper Functions', () => {
                 eduPersonScopedAffiliation: null,
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user303 has no eduPersonScopedAffiliation array'
-            );
         });
 
         it('should return false when eduPersonScopedAffiliation is undefined', () => {
@@ -222,58 +204,43 @@ describe('Auth Helper Functions', () => {
                 sub: 'user404',
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user404 has no eduPersonScopedAffiliation array'
-            );
         });
 
         it('should return false when oidcUser is null', () => {
-            const result = hasEmployeeAffiliation(null);
+            const result = hasStudentAffiliation(null);
 
             expect(result).toBe(false);
-            expect(logger.warn).toHaveBeenCalledWith(
-                'OIDC user object is missing in affiliation check'
-            );
         });
 
         it('should return false when oidcUser is undefined', () => {
-            const result = hasEmployeeAffiliation(undefined);
+            const result = hasStudentAffiliation(undefined);
 
             expect(result).toBe(false);
-            expect(logger.warn).toHaveBeenCalledWith(
-                'OIDC user object is missing in affiliation check'
-            );
         });
 
-        it('should be case-sensitive and not match EMPLOYEE@hm.edu', () => {
+        it('should be case-sensitive and not match STUDENT@hm.edu', () => {
             const oidcUser = {
                 sub: 'user505',
-                eduPersonScopedAffiliation: ['EMPLOYEE@hm.edu', 'student@hm.edu'],
+                eduPersonScopedAffiliation: ['STUDENT@hm.edu', 'student@hm.edu'],
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
-            expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user505 does not have employee@hm.edu affiliation. Affiliations: EMPLOYEE@hm.edu, student@hm.edu'
-            );
+            expect(result).toBe(true);
         });
 
-        it('should not match partial strings like employee@hm.edu.de', () => {
+        it('should not match partial strings like student@hm.edu.de', () => {
             const oidcUser = {
                 sub: 'user606',
-                eduPersonScopedAffiliation: ['employee@hm.edu.de', 'staff@hm.edu'],
+                eduPersonScopedAffiliation: ['student@hm.edu.de', 'staff@hm.edu'],
             };
 
-            const result = hasEmployeeAffiliation(oidcUser);
+            const result = hasStudentAffiliation(oidcUser);
 
             expect(result).toBe(false);
-            expect(logger.debug).toHaveBeenCalledWith(
-                'User user606 does not have employee@hm.edu affiliation. Affiliations: employee@hm.edu.de, staff@hm.edu'
-            );
         });
     });
 

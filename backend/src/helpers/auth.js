@@ -139,14 +139,13 @@ async function getOidcDiscovery() {
 }
 
 /**
- * Validates that the OIDC user has the required employee@hm.edu affiliation.
- * In short, if user is considered an employee.
+ * Validates that whether the OIDC user is student.
  *
  * @param {Object} oidcUser - OIDC user object
  * @param {Array<string>} [oidcUser.eduPersonScopedAffiliation] - Array of affiliations
- * @returns {boolean} - True if user has employee@hm.edu affiliation, false otherwise
+ * @returns {boolean} - True if user has student@hm.edu affiliation, false otherwise
  */
-function hasEmployeeAffiliation(oidcUser) {
+function hasStudentAffiliation(oidcUser) {
     if (!oidcUser) {
         logger.warn('OIDC user object is missing in affiliation check');
         return false;
@@ -159,15 +158,13 @@ function hasEmployeeAffiliation(oidcUser) {
         return false;
     }
 
-    const hasEmployeeAffiliation = affiliations.includes('employee@hm.edu');
+    const hasStudentAffiliation = affiliations.includes('student@hm.edu');
 
-    if (hasEmployeeAffiliation) {
-        logger.debug(`User ${oidcUser.sub} has employee@hm.edu affiliation`);
-    } else {
-        logger.debug(`User ${oidcUser.sub} does not have employee@hm.edu affiliation. Affiliations: ${affiliations.join(', ')}`);
+    if (hasStudentAffiliation) {
+        logger.debug(`User ${oidcUser.sub} have student@hm.edu affiliation. Affiliations: ${affiliations.join(', ')}`);
     }
 
-    return hasEmployeeAffiliation;
+    return hasStudentAffiliation;
 }
 
 module.exports = {
@@ -175,5 +172,5 @@ module.exports = {
     generateSalt,
     validateOIDCProperties,
     getOidcDiscovery,
-    hasEmployeeAffiliation,
+    hasStudentAffiliation,
 };

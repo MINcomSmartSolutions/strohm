@@ -14,7 +14,7 @@ const {AuthError, ErrorCodes} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {GLOBAL_CONFIG} = require("#config");
 const {getRFIDFromFile} = require("#helpers/user");
-const {hasEmployeeAffiliation} = require("#helpers/auth");
+const {hasStudentAffiliation} = require("#helpers/auth");
 
 /**
  * Handles user creation and linking with external systems.
@@ -38,8 +38,8 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
         throw new AuthError(ErrorCodes.AUTH.USER_INVALID, error.message, error);
     }
 
-    if (!hasEmployeeAffiliation(oidc_user)) {
-        logger.warn(`User ${oidc_user.sub} (${oidc_user.email}) does not have required employee@hm.edu affiliation`);
+    if (hasStudentAffiliation(oidc_user)) {
+        logger.warn(`User ${oidc_user.sub} (${oidc_user.email}) is student`);
         throw new AuthError(
             ErrorCodes.AUTH.USER_NOT_AUTHORIZED,
             'Sie müssen Mitarbeiter sein, um Ladestationen nutzen zu können. Wenn Sie Mitarbeiter sind, aber diese Meldung erhalten, kontaktieren Sie bitte den Support.'
