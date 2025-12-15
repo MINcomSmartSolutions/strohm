@@ -53,8 +53,7 @@ jest.mock('#config', () => ({
         USER_CREATION_URI: '/api/create_user',
         PORTAL_LOGIN_URI: '/web/login',
         ROTATE_APIKEY_URI: '/api/rotate_key',
-        INVOICE_CREATION_URI: '/api/create_invoice',
-        CHECK_PAYMENT_METHOD_URI: '/api/check_payment',
+        TXN_PROCESS_URI: '/api/create_invoice',
         API_SECRET: 'test_secret',
         EXTERNAL_BASE_URL: 'https://domain.com',
     },
@@ -576,7 +575,7 @@ describe('Odoo Service', () => {
 
             // Verify Odoo API call
             expect(odooPlainAxios.post).toHaveBeenCalledWith(
-                ODOO_CONFIG.INVOICE_CREATION_URI,
+                ODOO_CONFIG.TXN_PROCESS_URI,
                 expect.objectContaining({
                     timestamp: expect.toBeDateString(),
                     user_id: fullQualifiedUser.odoo_user_id,
@@ -692,7 +691,7 @@ describe('Odoo Service', () => {
 
             // Verify Odoo API call
             expect(odooPlainAxios.post).toHaveBeenCalledWith(
-                ODOO_CONFIG.INVOICE_CREATION_URI,
+                ODOO_CONFIG.TXN_PROCESS_URI,
                 expect.objectContaining({
                     timestamp: expect.toBeDateString(),
                     user_id: fullQualifiedUser.odoo_user_id,
@@ -814,7 +813,7 @@ describe('Odoo Service', () => {
 
             // Verify Odoo API call with default price
             expect(odooPlainAxios.post).toHaveBeenCalledWith(
-                ODOO_CONFIG.INVOICE_CREATION_URI,
+                ODOO_CONFIG.TXN_PROCESS_URI,
                 expect.objectContaining({
                     lines_data: expect.arrayContaining([
                         expect.objectContaining({

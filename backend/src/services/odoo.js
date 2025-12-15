@@ -125,10 +125,11 @@ async function getOdooPortalLogin(user) {
 
     // Construct the Odoo portal login
     // Used URL constructor to ensure proper encoding instead of String concatenation
-    // We don't use `axiosOdoo` instance here because we only redirect the user to the Odoo with credentials externally
+    // We don't use `axiosOdoo` instance here because we redirect the user to the Odoo with credentials externally
     const loginUrl = new URL(ODOO_CONFIG.PORTAL_LOGIN_URI, ODOO_CONFIG.EXTERNAL_BASE_URL);
 
     let timestamp = DateTime.utc().toISO();
+    // One thing to note here: user.odoo_user_id is not sent or received in parameters. Without it hash would fail and login would be rejected.
     const message = `${timestamp}${user.odoo_user_id}${key}${key_salt}${_salt}`;
     const _hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
@@ -299,8 +300,6 @@ async function createOdooTxnInvoice(db_txn) {
 
     const data = {
         timestamp: DateTime.utc().toISO(),
-        user_id: user.odoo_user_id,
-        partner_id: user.odoo_partner_id,
         lines_data: lines_data,
         key: key,
         key_salt: key_salt,
@@ -312,7 +311,7 @@ async function createOdooTxnInvoice(db_txn) {
     const message = `${data.timestamp}${user.odoo_user_id}${user.odoo_partner_id}${data.key}${data.key_salt}${salt}`;
     data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
 
-    const response = await odooPlainAxios.post(ODOO_CONFIG.INVOICE_CREATION_URI, data);
+    const response = await odooPlainAxios.post(ODOO_CONFIG.TXN_PROCESS_URI, data);
     const response_data = response.data;
     if (response.status !== 201) {
         const errorMSG = response_data['error'];
@@ -377,77 +376,9 @@ async function createOdooTxnInvoice(db_txn) {
 }
 
 
-/**
- * Checks if the given user has a valid payment method in Odoo.
- *
- * - Validates the user object.
- * - Fetches Odoo credentials for the user.
- * - Constructs and signs a request to Odoo to check payment method validity.
- * - Verifies the response hash for integrity.
- * - Returns true if the payment method is valid, false otherwise.
- *
- * @async
- * @deprecated
- * @param {Object<User>} user - User object with odoo_user_id, odoo_partner_id, and user_id.
- * @returns {Promise<boolean>} True if payment method is valid, false otherwise.
- * @throws {ValidationError|SystemError} On validation or Odoo errors.
- */
-async function checkValidPaymentMethod(user) {
-    validateUser(user); // throws if invalid
-
-    const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
-    const credentials_valid = odoo_credentials && odoo_credentials.key && odoo_credentials.key_salt;
-    if (!credentials_valid) {
-        throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
-    }
-
-    const data = {
-        timestamp: DateTime.now().toISO(),
-        user_id: user.odoo_user_id,
-        partner_id: user.odoo_partner_id,
-        key: odoo_credentials.key,
-        key_salt: odoo_credentials.key_salt,
-        salt: generateSalt(),
-    };
-    const message = `${data.timestamp}${data.user_id}${data.partner_id}${data.key}${data.key_salt}${data.salt}`;
-    data.hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
-
-    try {
-        const response = await odooAuthedAxios.post(ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI, data);
-        if (response.status === 200) {
-            const response_data = response.data;
-            const timestamp = response_data['timestamp'];
-            const result = response_data['result']; // 1 for valid, 0 for invalid
-            const salt = response_data['salt'];
-            const hash = response_data['hash'];
-
-            if (!timestamp || !salt || !hash || result === undefined || result === null) {
-                throw new ResponseError(ErrorCodes.ODOO.INVALID_RESPONSE);
-            }
-
-            // Verify hash
-            const message = `${timestamp}${result}${salt}`;
-            const expected_hash = generateOdooHash(message, ODOO_CONFIG.API_SECRET);
-            if (expected_hash !== hash) {
-                throw new ResponseError(ErrorCodes.ODOO.HASH_VERIFICATION_FAILED);
-            }
-
-            return (result === 1);
-        } else {
-            logger.error(`Error checking payment method: ${response.status}, json: ${JSON.stringify(response.data)}`);
-            throw new SystemError(ErrorCodes.ODOO.PAYMENT_METHOD_VALIDITY_CHECK_FAILED);
-        }
-    } catch (error) {
-        logger.error(`Failed to check payment method: ${error.message}`);
-        throw new SystemError(ErrorCodes.SYSTEM.PAYMENT_METHOD_VALIDITY_CHECK_FAILED, error.message || 'Unknown error', error);
-    }
-}
-
-
 module.exports = {
     createOdooUser,
     getOdooPortalLogin,
     rotateOdooUserAuth,
     createOdooTxnInvoice,
-    checkValidPaymentMethod,
 };
