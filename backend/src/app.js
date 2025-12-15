@@ -25,6 +25,8 @@ const auth_controller = require('./controllers/auth');
 const odoo_controller = require('./controllers/odoo');
 const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
+const charging_controller = require('./controllers/charging');
+const electricity_price_controller = require("#controllers/electricity_price");
 const {ensureAuthenticated} = require('./middlewares/ensureAuthenticated');
 const {requireConsent} = require('./middlewares/consent');
 const {ensureTailscaleAccess} = require('./middlewares/tailscaleAuth');
@@ -97,11 +99,13 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // unsafe-inline needed for inline scripts
-            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // unsafe-inline needed for inline styles
+            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
+            scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
+            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
+            styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
-            connectSrc: ["'self'"], // Allow AJAX/fetch to same origin
-            fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin
+            connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
+            fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin and external domains
             objectSrc: ["'none'"], // Block plugins (Flash, etc.)
             mediaSrc: ["'self'"], // Allow media from same origin
             frameSrc: ["'self'"], // Allow iframes from same origin
@@ -176,6 +180,10 @@ app.use(consent_controller);
 app.use(odoo_controller);
 
 app.use(scim_controller);
+
+app.use(charging_controller);
+
+app.use(electricity_price_controller)
 
 // Admin Panel - Protected by Tailscale network access
 // Enable with TAILSCALE_ENABLE_ADMIN=true environment variable

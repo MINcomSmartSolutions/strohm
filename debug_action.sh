@@ -34,11 +34,6 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-# Check if required database files exist
-if [ ! -f "./backend/database/db-structure-strohm.sql" ]; then
-    echo -e "${RED}Error: ./backend/database/db-structure-strohm.sql not found!${NC}"
-    exit 1
-fi
 
 # Function to check if a command exists
 command_exists() {
@@ -185,13 +180,6 @@ initialize_fresh_deployment() {
 	EOSQL
     then
         echo -e "${RED}Failed to create Strohm user${NC}"
-        return 1
-    fi
-
-    # Apply database structure for strohm
-    echo "Applying Strohm database structure..."
-    if ! PGPASSWORD="$POSTGRES_PASSWORD" docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < ./backend/database/db-structure-strohm.sql; then
-        echo -e "${RED}Failed to apply database structure${NC}"
         return 1
     fi
 

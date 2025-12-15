@@ -55,9 +55,8 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     if (!user) {
         // New user
         let rfid = null;
-        // Primary check: read from RFID file
         if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            const file_rfid = await getRFIDFromFile(oidc_user.email);
+            const file_rfid = await getRFIDFromFile(oidc_user.email); // Primary check: read from RFID file
             if (file_rfid) {
                 rfid = file_rfid;
             } else if (oidc_user.hmMifareSerial) {
@@ -122,6 +121,7 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
 
 
 const checkANDcreateUserInExternalSystems = async (user) => {
+    logger.info(`Checking external system links for user ID: ${user.user_id}`);
     if (!user.odoo_user_id) {
         await createOdooUser(user);
     }

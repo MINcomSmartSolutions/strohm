@@ -4,7 +4,6 @@
  */
 const Joi = require('joi');
 const {ValidationError, ErrorCodes} = require("./errors");
-//TODO: Implement input sanitization. Validation is done by the JOI
 
 const userSchema = Joi.object({
     user_id: Joi.number().positive().required(),
@@ -27,20 +26,20 @@ const oidcUserSchema = Joi.object({
 
 
 const fullyQualifiedUserSchema = Joi.object({
-    user_id: Joi.number().positive().required(),
-    name: Joi.string().required(),
+    user_id: Joi.number().integer().required(),
+    name: Joi.string().max(255).required(),
     email: Joi.string().email().required(),
-    odoo_user_id: Joi.number().required(),
-    odoo_partner_id: Joi.number().required(),
+    odoo_user_id: Joi.number().integer().required(),
+    odoo_partner_id: Joi.number().integer().required(),
     oauth_id: Joi.string().required(),
     rfid: Joi.string().required(),
-    steve_id: Joi.number().required(),
+    steve_id: Joi.number().integer().required(),
 }).unknown(true); // Allow additional fields
 
 
 const steveUserSchema = Joi.object({
     //PK of the OCPP tag
-    ocppTagPk: Joi.number().positive().required(),
+    ocppTagPk: Joi.number().integer().required(),
     //The OCPP tag (for example, RFID)
     idTag: Joi.string().required(),
     //Has the OCPP tag active transactions (i.e. ongoing charging sessions)?
@@ -102,7 +101,7 @@ const steveCompletedTransactionSchema = Joi.object({
     // The timestamp at which the transaction started
     startTimestamp: Joi.date().required(),
     // The timestamp at which the transaction ended
-    stopTimestamp: Joi.date(),
+    stopTimestamp: Joi.date().required(),
     // The meter value reading at the start of the transaction
     startValue: Joi.number().required(),
     // The meter value reading at the end of the transaction
@@ -118,7 +117,7 @@ const qualifiedTransactionSchema = Joi.object({
     id: Joi.number().integer().positive().required(),
     created_at: Joi.date().required(),
     start_timestamp: Joi.date().required(),
-    stop_timestamp: Joi.date().required(),
+    stop_timestamp: Joi.date().greater(Joi.ref('start_timestamp')).required(),
     start_value: Joi.number().min(0).required(),
     stop_value: Joi.number().min(Joi.ref('start_value')).required(),
     delivered_energy_wh: Joi.number().min(0).required(),

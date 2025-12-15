@@ -48,8 +48,7 @@ If no default is provided below, the variable is required to be set.
 #### Database (PostgreSQL 16.6)
 
 - STROHM_DB_HOST
-- STROHM_DB_NAME: (default: "strohm") if you change DB_NAME to something else make sure also change the database names
-  in db-structure-strohm.sql file
+- STROHM_DB_NAME: (default: "strohm")
 - STROHM_DB_USER: (default: "strohm_admin")
 - STROHM_DB_PASSWORD
 - STROHM_DB_PORT: (default: 5432)

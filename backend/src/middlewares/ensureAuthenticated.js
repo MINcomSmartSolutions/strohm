@@ -13,7 +13,6 @@
  * @exports ensureAuthenticated
  */
 
-const {validateOIDCProperties} = require('#helpers/auth');
 const {db} = require('#utils/queries');
 const {clearSession} = require('#utils/session');
 const logger = require('#services/logger');
@@ -74,16 +73,8 @@ const ensureAuthenticated = async (req, res, next) => {
             return res.redirect('/welcome');
         }
 
-        // Step 1: Validate OIDC authentication
-        // if (!await validateOIDCProperties(req)) {
-        //     log.warn('OIDC validation failed in ensureAuthenticated');
-        //     await clearSession(req);
-        //     return res.redirect('/welcome');
-        // }
-
-        // Step 2: Get OIDC user info
         const oidcUser = req.oidc.user;
-        log.debug(`Authenticating user with oauth_id: ${oidcUser.sub}, email: ${oidcUser.email}`);
+        log.debug(`Authenticating user with oauth_id: ${oidcUser.sub}`);
 
         // Step 3: Query database for user
         const user = await db.getUserUnique({oauth_id: oidcUser.sub});
@@ -100,8 +91,8 @@ const ensureAuthenticated = async (req, res, next) => {
             const sessionUser = req.session.user;
             if (!sessionUser || sessionUser.user_id !== user.user_id) {
                 log.debug(`Synchronizing session for user ${user.user_id}`);
+                delete req.session.user; // Clear stale session data
                 req.session.user = user;
-
                 await saveSession(req);
             }
 
@@ -110,7 +101,7 @@ const ensureAuthenticated = async (req, res, next) => {
             // User doesn't exist in database yet
             // This is OK - they might be on their way to /consent
             // We don't set req.user, so downstream middleware knows they're new
-            log.debug(`New user (oauth_id: ${oidcUser.email}) - not yet in database`);
+            log.debug(`New user (oauth_id: ${oidcUser.sub}) - not yet in database`);
 
             // Clear any stale session data if it exists for a different user
             if (req.appSession.user && req.appSession.user.oauth_id && req.appSession.user.oauth_id !== oidcUser.sub) {

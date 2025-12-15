@@ -69,6 +69,7 @@ const GLOBAL_CONFIG = {
             : [],
     },
     MAX_RFID_LENGTH: 36,
+    DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH: process.env.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH || 35,
 }
 
 module.exports = {

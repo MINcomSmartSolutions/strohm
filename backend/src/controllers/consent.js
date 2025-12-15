@@ -221,14 +221,10 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
             return res.redirect('/logout?reason=consent_declined');
         }
 
-        // Get user info from OIDC session (already validated by ensureAuthenticated)
-        const oidcUser = req.oidc.user;
         const userInfo = req.appSession.user || await req.oidc.fetchUserInfo();
         if (!userInfo) {
             throw new SystemError(ErrorCodes.SYSTEM.INVALID_SESSION, 'User info missing in session during consent processing');
         }
-
-        log.info(`Creating user and external system accounts for oauth_id: ${oidcUser.sub}`);
 
         // Now we can create (or get if this is n-th consent given for the) user
         // This also creates Odoo and Steve users if they don't exist
@@ -349,6 +345,78 @@ consent_controller.post('/consent/withdraw', ensureAuthenticated, async (req, re
         }
     } catch (error) {
         logger.error('Error withdrawing consent:', error);
+        appErrorHandler(error, res);
+    }
+});
+
+/**
+ * GET /agb - Display consent/terms for viewing only (publicly accessible)
+ *
+ * This route handler displays the active consent content in a read-only view
+ * accessible to anyone without authentication. It serves the Terms and Conditions
+ * (AGB - Allgemeine Geschäftsbedingungen) for users to read.
+ *
+ * @async
+ * @function
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ *
+ * @throws {SystemError} When no active consent revision is available
+ *
+ * @returns {void} Sends HTML response with read-only consent content
+ *
+ * @description
+ * Flow:
+ * 1. Retrieves active consent revision using consent service
+ * 2. If no active consent exists, initializes consent and retries
+ * 3. Renders consent content in a view-only template
+ * 4. Replaces template placeholders with actual consent data
+ * 5. Sends the processed HTML to the client
+ *
+ * @see {@link module:services/consent.getActiveConsentRevision} For consent retrieval
+ */
+consent_controller.get('/agb', async (req, res) => {
+    try {
+        let activeConsent = await getActiveConsentRevision();
+        if (!activeConsent) {
+            logger.error('No active consent revision found');
+            await initializeConsent();
+            activeConsent = await getActiveConsentRevision();
+            if (!activeConsent) {
+                return res.status(503).send('Consent system temporarily unavailable');
+            }
+        }
+
+        // Read the HTML template file
+        const templatePath = path.join(__dirname, '../../public/consent/consent.html');
+        let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
+
+        // Escape content to prevent XSS in consent content
+        const escapeHtml = (text) => {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        // Replace placeholders with dynamic content (escaped)
+        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
+        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, activeConsent.content.replace(/\n/g, '<br>'));
+        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
+        htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
+
+        // Remove the form and buttons - display only the content
+        htmlTemplate = htmlTemplate.replace(/<form[\s\S]*?<\/form>/i, '');
+
+        // Hide the FAQ button for view-only mode
+        htmlTemplate = htmlTemplate.replace(/<div style="position: fixed;[\s\S]*?<\/div>/i, '');
+
+        // Send the processed HTML
+        res.send(htmlTemplate);
+    } catch (error) {
+        logger.error('Error displaying AGB page:', error);
         appErrorHandler(error, res);
     }
 });

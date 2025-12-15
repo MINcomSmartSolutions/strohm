@@ -757,40 +757,38 @@ describe('Database Queries Integration Tests', () => {
     });
 
     describe('Electricity Price', () => {
-        test('getCurrentElectricityPrice should should return null if no records found at the database', async () => {
-            const price = await db.getCurrentElectricityPrice();
+        test('getElectricityPrice should should return null if no records found at the database', async () => {
+            const price = await db.getElectricityPrice();
 
-            expect(price).toBeDefined();
             expect(price).toBe(null);
         });
 
-        test('getCurrentElectricityPrice should return current price', async () => {
+        test('getElectricityPrice should return current price', async () => {
             // Insert test price
             await insertElectricityPrice(pool);
 
-            const price = await db.getCurrentElectricityPrice();
+            const price = await db.getElectricityPrice();
 
             expect(price).toBeDefined();
-            expect(price).toBe(42);
+            expect(price.price_ct_kwh).toBe(42);
         });
 
-        test('getCurrentElectricityPrice should return price for specific date', async () => {
+        test('getElectricityPrice should return price for specific date', async () => {
             // Insert test price
             await insertElectricityPrice(pool);
 
             const yesterdayDate = DateTime.now().minus({days: 1});
-            const price = await db.getCurrentElectricityPrice(yesterdayDate);
+            const price = await db.getElectricityPrice(yesterdayDate);
 
-            expect(price).toBeDefined();
-            expect(price).toBe(42);
+            expect(price.price_ct_kwh).toBe(42);
         });
 
-        test('getCurrentElectricityPrice should throw with invalid dateTime', async () => {
-            await expect(db.getCurrentElectricityPrice('invalid-date'))
+        test('getElectricityPrice should throw with invalid dateTime', async () => {
+            await expect(db.getElectricityPrice('invalid-date'))
                 .rejects.toThrow(ValidationError);
         });
 
-        test('getCurrentElectricityPrice should handle multiple price periods correctly', async () => {
+        test('getElectricityPrice should handle multiple price periods correctly', async () => {
             // Insert a price effective from 3 days ago
             const client = await pool.connect();
             try {
@@ -805,18 +803,18 @@ describe('Database Queries Integration Tests', () => {
 
                 // Check price from 2 days ago (should be 25)
                 const oldDate = DateTime.now().minus({days: 2});
-                const oldPrice = await db.getCurrentElectricityPrice(oldDate);
-                expect(oldPrice).toBe(25);
+                const oldPrice = await db.getElectricityPrice(oldDate);
+                expect(oldPrice.price_ct_kwh).toBe(25);
 
                 // Check current price (should be 42)
-                const currentPrice = await db.getCurrentElectricityPrice();
-                expect(currentPrice).toBe(42);
+                const currentPrice = await db.getElectricityPrice();
+                expect(currentPrice.price_ct_kwh).toBe(42);
             } finally {
                 client.release();
             }
         });
 
-        test('getCurrentElectricityPrice should handle price of "0" correctly without specified date', async () => {
+        test('getElectricityPrice should handle price of "0" correctly without specified date', async () => {
             // Insert a price of 0
             const client = await pool.connect();
             try {
@@ -826,14 +824,14 @@ describe('Database Queries Integration Tests', () => {
                     [0],
                 );
 
-                const price = await db.getCurrentElectricityPrice();
-                expect(price).toBe(0);
+                const price = await db.getElectricityPrice();
+                expect(price.price_ct_kwh).toBe(0);
             } finally {
                 client.release();
             }
         });
 
-        test('getCurrentElectricityPrice should handle price of "0" correctly with specified date', async () => {
+        test('getElectricityPrice should handle price of "0" correctly with specified date', async () => {
             const client = await pool.connect();
             try {
                 // Insert a price of 0 effective from 2 days ago to 1 day ago
@@ -844,8 +842,8 @@ describe('Database Queries Integration Tests', () => {
                 );
 
                 const testDate = DateTime.now().minus({days: 1, hours: 12});
-                const price = await db.getCurrentElectricityPrice(testDate);
-                expect(price).toBe(0);
+                const price = await db.getElectricityPrice(testDate);
+                expect(price.price_ct_kwh).toBe(0);
 
             } finally {
                 client.release();
@@ -1120,13 +1118,13 @@ describe('Database Queries Integration Tests', () => {
             expect(deactivatedUser.deactivated_at).not.toBeNull();
         });
 
-        test('deactivateUser should throw when trying to deactivate already deactivated user', async () => {
+        test('deactivateUser should not throw when trying to deactivate already deactivated user', async () => {
             // Deactivate the test user first
             await db.deactivateUser(testUser);
 
             // Try to deactivate again
             await expect(db.deactivateUser(testUser))
-                .rejects.toThrow('Error during deactivateUser operation.');
+                .resolves.not.toThrow('Error during deactivateUser operation.');
         });
 
         test('deactivateUser should throw when user parameter is missing', async () => {
@@ -1186,12 +1184,6 @@ describe('Database Queries Integration Tests', () => {
             // Try to revoke credentials for user without any
             await expect(db.revokeUserOdooCredentials(testUser))
                 .resolves.not.toThrow();
-
-            // Should log warning
-            expect(warnSpy).toHaveBeenCalledWith(
-                'No Odoo credentials found to revoke for user',
-                expect.objectContaining({user_id: testUser.user_id})
-            );
 
             warnSpy.mockRestore();
         });

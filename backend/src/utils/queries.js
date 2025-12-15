@@ -12,6 +12,8 @@ const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
 const {qualifiedTransactionSchema} = require('#utils/joi');
+const {isValidNumber} = require("#helpers/validators");
+const {GLOBAL_CONFIG} = require("#config");
 
 /**
  * Normalizes RFID tags to uppercase for consistent storage and comparison.
@@ -587,8 +589,10 @@ async function recordSteveTxn(steve_txn) {
                     stop_value       = $2::numeric,
                     stop_reason      = $3::varchar,
                     stop_event_actor = $4::varchar,
-                    user_id          = $5
-                WHERE txn_steve_id = $6::integer
+                    chargebox_pk     = $5::integer,
+                    connector_id     = $6,
+                    user_id          = $7
+                WHERE txn_steve_id = $8::integer
                 RETURNING *
             `;
 
@@ -597,6 +601,8 @@ async function recordSteveTxn(steve_txn) {
                 steve_txn.stopValue,
                 steve_txn.stopReason,
                 steve_txn.stopEventActor,
+                steve_txn.chargeBoxPk,
+                steve_txn.connectorId,
                 resolved_user_id,
                 steve_txn.id,
             ];
@@ -612,9 +618,28 @@ async function recordSteveTxn(steve_txn) {
         const user_id = await userCrossCheckForTxn(client, steve_txn.ocppTagPk, steve_txn.ocppIdTag, steve_txn.id);
 
         const insertQuery = `INSERT INTO charging_transactions
-                             (txn_steve_id, ocpp_id_tag, start_timestamp, stop_timestamp, start_value, stop_value,
-                              stop_reason, stop_event_actor, user_id)
-                             VALUES ($1::integer, $2, $3, $4, $5::numeric, $6::numeric, $7::varchar, $8::varchar, $9)
+                             (txn_steve_id,
+                              ocpp_id_tag,
+                              start_timestamp,
+                              stop_timestamp,
+                              start_value,
+                              stop_value,
+                              stop_reason,
+                              stop_event_actor,
+                              chargebox_pk,
+                              connector_id,
+                              user_id)
+                             VALUES ($1::integer,
+                                     $2,
+                                     $3,
+                                     $4,
+                                     $5::numeric,
+                                     $6::numeric,
+                                     $7::varchar,
+                                     $8::varchar,
+                                     $9::integer,
+                                     $10,
+                                     $11::integer)
                              RETURNING *`;
 
         const values = [
@@ -626,6 +651,8 @@ async function recordSteveTxn(steve_txn) {
             steve_txn.stopValue,
             steve_txn.stopReason,
             steve_txn.stopEventActor,
+            steve_txn.chargeBoxPk,
+            steve_txn.connectorId,
             user_id,
         ];
 
@@ -767,9 +794,9 @@ async function saveInvoiceId(txn, invoice_id) {
  *
  * @async
  * @param {DateTime|null} specified_datetime - Optional luxon datetime object to check the price at a specific time.
- * @returns {Promise<number>|null} If `specified_datetime` provided, that datetime's if not, the current electricity price in cents per kWh.
+ * @returns {Promise<{price_ct_kwh: Number, valid_from: DateTime, valid_till: DateTime}|null>}
  */
-async function getCurrentElectricityPrice(specified_datetime = null) {
+async function getElectricityPrice(specified_datetime = null) {
     if (specified_datetime && !specified_datetime.isValid) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS,
@@ -782,7 +809,7 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
 
     if (specified_datetime) {
         query = `
-            SELECT price
+            SELECT price, valid_from, valid_till
             FROM electricity_prices
             WHERE valid_from <= $1::timestamptz
               AND (valid_till IS NULL OR valid_till > $1::timestamptz)
@@ -791,7 +818,7 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
         params = [specified_datetime];
     } else {
         query = `
-            SELECT price
+            SELECT price, valid_from, valid_till
             FROM electricity_prices
             WHERE valid_from <= NOW()
               AND (valid_till IS NULL OR valid_till > NOW())
@@ -806,12 +833,52 @@ async function getCurrentElectricityPrice(specified_datetime = null) {
         if (result.rows.length === 0) {
             return null;
         }
-        return result.rows[0].price;
+        return {
+            for_timestamp: specified_datetime ?? DateTime.now().toUTC(),
+            price_ct_kwh: result.rows[0].price,
+            valid_from: result.rows[0].valid_from,
+            valid_till: result.rows[0].valid_till,
+        };
     } catch (error) {
-        handleQueryError(error, 'getCurrentElectricityPrice');
+        handleQueryError(error, 'getElectricityPrice');
     } finally {
         client.release();
     }
+}
+
+/**
+ * Retrieves the current electricity price or falls back to a default price if none is found.
+ *
+ * This function attempts to fetch the electricity price for a specified datetime
+ * or the current time if no datetime is provided. If no price is found or the price
+ * is invalid, it falls back to a default price defined in the global configuration.
+ *
+ * @async
+ * @function getElectricityPriceOrDefault
+ * @param {DateTime|null} [specified_datetime=null] - Optional Luxon DateTime object to check the price at a specific time.
+ * @returns {Promise<{price_ct_kwh: Number, valid_from: DateTime, valid_till: DateTime}>} - The electricity price in cents per kWh.
+ *
+ * @throws {ValidationError} - If the specified datetime is invalid.
+ * @throws {DatabaseError} - If there is an error during the database query.
+ */
+async function getElectricityPriceOrDefault(specified_datetime = null) {
+    const priceData = await getElectricityPrice(specified_datetime);
+
+    let for_timestamp, price_ct_kwh, valid_from, valid_till;
+
+    if (priceData) {
+        ({for_timestamp, price_ct_kwh, valid_from, valid_till} = priceData);
+    }
+
+    if (!isValidNumber(price_ct_kwh)) {
+        const default_price = GLOBAL_CONFIG.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH;
+        logger.warn(`No price could be found for ${specified_datetime ?? DateTime.now().toISO()}, falling back to default price ${default_price}`);
+        price_ct_kwh = default_price;
+        valid_from = null;
+        valid_till = null;
+    }
+
+    return {for_timestamp, price_ct_kwh, valid_from, valid_till};
 }
 
 
@@ -819,7 +886,6 @@ async function deactivateUser(user) {
     if (!user || !user.user_id) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Missing required parameters.`,
         );
     }
 
@@ -827,7 +893,6 @@ async function deactivateUser(user) {
         UPDATE users
         SET deactivated_at = now()
         WHERE user_id = $1::integer
-          AND deactivated_at IS NULL
     `;
 
     const client = await pool.connect();
@@ -865,10 +930,7 @@ async function revokeUserOdooCredentials(user) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const result = await client.query(query, [user.user_id]);
-        if (result.rowCount === 0) {
-            logger.warn('No Odoo credentials found to revoke for user', {user_id: user.user_id});
-        }
+        await client.query(query, [user.user_id]);
         await client.query('COMMIT');
         await recordActivityLog(user.user_id, 'REVOKE ODOO CREDENTIALS', 'DB', user.rfid || 'N/A');
     } catch (error) {
@@ -1070,6 +1132,49 @@ async function activateUser(user) {
 }
 
 /**
+ * Checks if a user has an open (active) charging session.
+ * An open charging session is one where stop_timestamp is NULL.
+ *
+ * @async
+ * @param {number} user_id - The user's ID.
+ * @returns {Promise<db_txn|null>} The open charging transaction if exists, null otherwise.
+ * @throws {ValidationError} If user_id is invalid.
+ * @throws {DatabaseError} If database operation fails.
+ */
+async function getUserOpenChargingSession(user_id) {
+    if (!user_id || !Number.isSafeInteger(user_id)) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            'Valid user_id is required',
+        );
+    }
+
+    const query = `
+        SELECT *
+        FROM charging_transactions
+        WHERE user_id = $1::integer
+          AND stop_timestamp IS NULL
+        ORDER BY start_timestamp DESC
+        LIMIT 1
+    `;
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query, [user_id]);
+
+        if (result.rows.length === 0) {
+            return null;
+        }
+
+        return result.rows[0];
+    } catch (error) {
+        handleQueryError(error, 'getUserOpenChargingSession');
+    } finally {
+        client.release();
+    }
+}
+
+/**
  * Deletes a user from the database (hard delete).
  * WARNING: This permanently removes the user and all associated records.
  *
@@ -1246,7 +1351,8 @@ module.exports = {
         setLastStopTimestamp,
         getLastStopTimestamp,
         saveInvoiceId,
-        getCurrentElectricityPrice,
+        getElectricityPrice,
+        getElectricityPriceOrDefault,
         deactivateUser,
         revokeUserOdooCredentials,
         getUsersCount,
@@ -1255,6 +1361,7 @@ module.exports = {
         deleteUser,
         getUnbilledTransactions,
         tryAssociateUserToTransaction,
+        getUserOpenChargingSession,
     },
     normalizeRFID,
 };

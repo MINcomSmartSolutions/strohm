@@ -177,7 +177,7 @@ steveAxios.get(STEVE_CONFIG.OCPP_TAGS_URI, {
         }
     })
     .catch(error => {
-        logger.error('Error connecting to SteVe:' + error);
+        logger.error('Error connecting to SteVe');
         updateSteveHealth(false, error.message);
     });
 
