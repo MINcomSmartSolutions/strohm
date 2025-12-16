@@ -32,7 +32,7 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Wie kann ich mich im Ladeportal anmelden?</h5>
-                    <p class="card-text">Sie können sich über den „Anmelden"-Button im Portal mit Ihrem HM-Account
+                    <p class="card-text">Sie können sich über den „Mit HM Konto anmelden"-Button im Portal mit Ihrem HM-Account
                         anmelden. Die Anmeldung erfolgt über das Single-Sign-On-System (OIDC) der Hochschule München.
                     </p>
                 </div>
@@ -43,15 +43,15 @@
                     <h5 class="card-title">Ich bin neu – wie registriere ich mich für das Ladesystem?</h5>
                     <p class="card-text">Bei der ersten Anmeldung werden Sie automatisch durch den
                         Registrierungsprozess geführt. Sie müssen der Datenübertragung an das Ladesystem zustimmen und
-                        Ihre persönliche RFID-Ladekarte zuordnen.
+                        Ihren persönlichen Dongle zuordnen.
                     </p>
                 </div>
             </div>
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Was ist eine RFID-Karte und wofür wird sie benötigt?</h5>
-                    <p class="card-text">Die RFID-Karte dient zur Authentifizierung an den Ladestationen. Sie wird
+                    <h5 class="card-title">Was ist ein Dongle und wozu dient er?</h5>
+                    <p class="card-text">Der Dongle dient zur Authentifizierung an Ladestationen. Er ist
                         Ihrem Benutzerkonto zugeordnet und ermöglicht das Starten und Beenden von Ladevorgängen.
                     </p>
                 </div>
@@ -59,7 +59,7 @@
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Ich habe meine RFID-Karte verloren. Was soll ich tun?</h5>
+                    <h5 class="card-title">Ich habe meinen Dongle verloren. Was soll ich tun?</h5>
                     <p class="card-text">Bitte melden Sie den Verlust umgehend an <a
                             href="mailto:info.laden@hm.edu">info.laden@hm.edu</a></p>
                 </div>
@@ -70,8 +70,20 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Wie starte ich einen Ladevorgang?</h5>
-                    <p class="card-text">Halten Sie Ihre registrierte RFID-Karte an den Kartenleser der Ladestation.
+                    <p class="card-text">Halten Sie Ihren registrierten Dongle an den Kartenleser der Ladestation.
                         Der Ladevorgang beginnt, sobald die Authentifizierung erfolgreich war.
+                        Hinweis: Halten Sie Ihren Dongle bitte nur einmal an die Ladestation und warten Sie, 
+                        bis die Ladung bestätigt wurde.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Kann ich zwei Ladevorgänge gleichzeitig starten?</h5>
+                    <p class="card-text">Nein, das System erlaubt jeweils nur einen Ladevorgang pro Dongle. 
+                        Wenn Sie zwei Fahrzeuge laden möchten, müssen Sie warten, bis der erste Ladevorgang 
+                        abgeschlossen ist, bevor Sie den zweiten starten können.
                     </p>
                 </div>
             </div>
@@ -85,7 +97,7 @@
                     </p>
                 </div>
             </div>
-
+            
             <div class="card mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Was passiert, wenn ich mein Fahrzeug nach dem Laden nicht entferne?</h5>
@@ -101,17 +113,33 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Wie erfolgt die Abrechnung der Ladevorgänge?</h5>
-                    <p class="card-text">Bis zum 31.12.2025 ist das Laden kostenlos. Ab dem 01.01.2026 erfolgt die
-                        Abrechnung automatisch über das Ladeabrechnungssystem.
+                    <p class="card-text">Das Laden ist bis zum 31. Dezember 2025 kostenlos. Ab dem 1. Januar 2026 
+                        werden die Ladevorgänge im System gespeichert. Die Abrechnung erfolgt vierteljährlich über das 
+                        Ladeabrechnungssystem.
                     </p>
                 </div>
             </div>
 
             <div class="card mb-3">
                 <div class="card-body">
+                    <h5 class="card-title">Warum sehe ich einen leeren oder sehr kurzen Ladevorgang in meiner Historie?</h5>
+                    <p class="card-text">In einigen Fällen halten Nutzer ihren Dongle mehrmals hintereinander an 
+                        die Ladestation, weil der Start des Ladevorgangs nicht sofort erkennbar ist. Bitte beachten Sie: 
+                        Nachdem Sie den Dongle zum ersten Mal gehalten haben, warten Sie bitte einige Sekunden, bis die 
+                        Ladestation den Ladevorgang bestätigt hat. 
+                        Wenn Sie den Dongle unmittelbar nach dem ersten Vorgang erneut halten, kann dies dazu führen, 
+                        dass der Ladevorgang sofort beendet wird. Dies führt zu leeren oder sehr kurzen Ladevorgängen, 
+                        die dennoch im System erfasst werden.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="card mb-3">
+                <div class="card-body">
                     <h5 class="card-title">Wann erhalte ich meine Rechnung?</h5>
-                    <p class="card-text">Nach jedem abgeschlossenen Ladevorgang wird automatisch eine Rechnung
-                        erstellt. Sie erhalten diese per E-Mail als PDF-Anhang.
+                    <p class="card-text">Ab dem 1. Januar 2026 werden alle Ladevorgänge im System gespeichert. Am Ende 
+                        jedes Quartals wird eine Rechnung erstellt, die alle Ladevorgänge dieses Quartals enthält.
+                        Sie erhalten diese per E-Mail als PDF-Anhang.
                     </p>
                 </div>
             </div>
@@ -119,8 +147,8 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <h5 class="card-title">Wie kann ich meine Rechnung bezahlen?</h5>
-                    <p class="card-text">Die Zahlung sollte per Überweisung erfolgen. Sie erhalten die IBAN-Daten und
-                        die Referenznummer, die für die Überweisung verwendet werden müssen.
+                    <p class="card-text">Die Zahlung sollte über ePayBayern erfolgen. Es gibt verschiedene Zahlungsmethoden. 
+                        Die Möglichkeiten werden zusammen mit der ersten Rechnung erläutert.
                     </p>
                 </div>
             </div>
@@ -131,7 +159,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Wo finde ich meine bisherigen Rechnungen?</h5>
                     <p class="card-text">Alle Rechnungen und Ladehistorien finden Sie im Ladeportal unter „Mein Konto
-                        → Rechnungen & Historie".
+                        → Ihre Rechnungen".
                     </p>
                 </div>
             </div>
@@ -150,8 +178,8 @@
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <h5 class="card-title">Der Ladevorgang startet nicht, obwohl ich meine RFID-Karte nutze.</h5>
-                    <p class="card-text">Möglicherweise besteht eine Störung an der Ladestation oder Ihre Karte ist
+                    <h5 class="card-title">Der Ladevorgang startet nicht, obwohl ich meinen Dongle verwende.</h5>
+                    <p class="card-text">Möglicherweise besteht eine Störung an der Ladestation oder Ihr Dongle ist
                         gesperrt. Bitte versuchen Sie eine andere Station oder melden Sie den Vorfall über das Portal
                         bzw. per E-Mail über <a href="mailto:info.laden@hm.edu">info.laden@hm.edu</a>
                     </p>
@@ -193,7 +221,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Welche Daten werden gespeichert?</h5>
                     <p class="card-text">Es werden ausschließlich Daten gespeichert, die für den Betrieb und die
-                        Abrechnung des Ladeservices erforderlich sind (z. B. Benutzer-ID, RFID-Karte, Ladevorgänge,
+                        Abrechnung des Ladeservices erforderlich sind (z. B. Benutzer-ID, Ladevorgänge,
                         Rechnungen).
                     </p>
                 </div>
