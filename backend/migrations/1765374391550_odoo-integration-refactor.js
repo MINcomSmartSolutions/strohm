@@ -26,6 +26,7 @@ export const up = (pgm) => {
         confirmed: {type: 'boolean', notNull: true, default: true},
         billed: {type: 'boolean', notNull: true, default: false},
         cancelled: {type: 'boolean', notNull: true, default: false},
+        deleted_at: {type: 'timestamp with time zone', comment: 'If set, indicates when the order was deleted in Odoo'},
         created_at: {type: 'timestamp with time zone', notNull: true, default: pgm.func('now()')},
     });
 
@@ -61,7 +62,7 @@ export const up = (pgm) => {
         foreignKeys: {
             columns: 'order_id',
             references: 'odoo_txn_orders(id)',
-            onDelete: 'CASCADE',
+            onDelete: 'RESTRICT',
         },
     });
 
@@ -69,11 +70,11 @@ export const up = (pgm) => {
         foreignKeys: {
             columns: 'invoice_id',
             references: 'odoo_invoices(id)',
-            onDelete: 'CASCADE',
+            onDelete: 'RESTRICT', // If we do CASCADE here there will be gaps
         },
     });
 
-    // Ensure an order can only be linked to one invoice (but invoice can have multiple orders)
+    // Ensure an order can only be linked to one invoice (but invoice can have multiple orders) many-to-one
     pgm.addConstraint('odoo_order_invoice_link', 'uq_odoo_order_invoice_link_order_id', {
         unique: ['order_id']
     });
@@ -93,6 +94,7 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
+    // The order is important here due to FK constraints
     pgm.dropTable('odoo_order_invoice_link', {ifExists: true, cascade: true});
     pgm.dropTable('odoo_invoices', {ifExists: true, cascade: true});
     pgm.dropTable('odoo_txn_orders', {ifExists: true, cascade: true});

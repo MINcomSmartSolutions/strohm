@@ -16,7 +16,7 @@ const {
     qualifiedTransactionSchema,
     fullyQualifiedUserSchema,
     validateUser,
-    invoiceCreationResponseSchema
+    odooTxnProcessResponseSchema
 } = require('#utils/joi');
 const logger = require('#services/logger');
 
@@ -240,7 +240,7 @@ async function rotateOdooUserAuth(user) {
  *     - quantity (float): Consumed quantity (e.g., 150, in kWh).
  *     - session_start (datetime): Session start datetime in ISO.
  *     - session_end (datetime): Session end datetime in ISO.
- *     - session_backend_ref (int): Backend db ID for the transaction.
+ *     - session_backend_ref (int): Steve txn ID for the transaction.
  *     // TODO: Add more fields if needed. e.g. payment terms, bill_date etc.
  *
  * - Validates the transaction object.
@@ -255,7 +255,7 @@ async function rotateOdooUserAuth(user) {
  * @returns {Promise<Object>} Object containing {order_id, odoo_order_id, invoice_id, odoo_invoice_id}
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
-async function createOdooTxnInvoice(db_txn) {
+async function sendTxnToOdooProcessing(db_txn) {
     const {error} = qualifiedTransactionSchema.validate(db_txn);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -290,7 +290,7 @@ async function createOdooTxnInvoice(db_txn) {
             'sku': 'standard_charging',
             'session_start': DateTime.fromJSDate(db_txn.start_timestamp).toISO(),
             'session_end': DateTime.fromJSDate(db_txn.stop_timestamp).toISO(),
-            'session_backend_ref': db_txn.id,
+            'session_backend_ref': db_txn.txn_steve_id,
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
             'price_unit': unit_price_eur, // convert cts to €
@@ -324,10 +324,10 @@ async function createOdooTxnInvoice(db_txn) {
             response_data: response_data,
         });
     }
-    const {error: validationError} = invoiceCreationResponseSchema.validate(response_data);
+    const {error: validationError} = odooTxnProcessResponseSchema.validate(response_data);
     if (validationError) {
         throw new SystemError(ErrorCodes.ODOO.INVALID_RESPONSE,
-            `Invalid invoice creation details: ${validationError.message}`, {
+            `Invalid invoice/sale order creation details: ${validationError.message}`, {
                 response_data: response_data,
             });
     }
@@ -380,5 +380,5 @@ module.exports = {
     createOdooUser,
     getOdooPortalLogin,
     rotateOdooUserAuth,
-    createOdooTxnInvoice,
+    sendTxnToOdooProcessing,
 };

@@ -16,9 +16,10 @@ const {runIncremental, runFull} = require("#services/steve_transactions");
 const {runBillingReconciliation, getUnbilledTransactionStats} = require('./billing_reconciliation');
 const {checkSteveHealth, getSteveHealth} = require('./network');
 const logger = require('./logger');
+const {GLOBAL_CONFIG} = require("#config");
 
 const intervalSeconds = process.env.STEVE_FETCH_INTERVAL || 120;
-const cronExpression = `*/${intervalSeconds} * * * * *`; // Every 'intervalSeconds' seconds
+const cronExpression = `*/10 * * * * *`; // Every 'intervalSeconds' seconds
 
 // Health check interval (check every 5 minutes)
 const healthCheckInterval = 5 * 60 * 1000;
@@ -42,11 +43,11 @@ const transactionFetchLoop = new CronJob(cronExpression, async () => {
             if (result.completedTxnCount > 0) {
                 const billingResult = await runBillingReconciliation({
                     olderThanHours: 0, // Don't wait, process immediately
-                    limit: result.completedTxnCount, // Process only the number of qualified transactions
+                    limit: GLOBAL_CONFIG.ENV.IS_DEVELOPMENT ? null : result.completedTxnCount, // Process only the number of qualified transactions
                 });
 
                 if (billingResult.processed > 0) {
-                    logger.info(`Immediate billing: ${billingResult.invoices_created} invoices created, ${billingResult.failed} failed`);
+                    logger.info(`Immediate sending for processing to odoo: ${billingResult.orders_created} orders created, ${billingResult.invoices_created} invoices created, ${billingResult.failed} failed`);
                 }
             }
         } catch (error) {

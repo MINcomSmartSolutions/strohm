@@ -124,7 +124,7 @@ const qualifiedTransactionSchema = Joi.object({
 }).unknown(true);
 
 
-const invoiceCreationResponseSchema = Joi.object({
+const odooTxnProcessResponseSchema = Joi.object({
     details: Joi.object({
         sale_order: Joi.object({
             id: Joi.number().integer().positive().required(),
@@ -144,6 +144,84 @@ const invoiceCreationResponseSchema = Joi.object({
 }).unknown(true);
 
 
+const invoiceStateChangeEventSchema = Joi.object({
+    invoice: Joi.object({
+        // PK of the invoice
+        id: Joi.number().integer().positive().required(),
+        // Invoice reference number
+        name: Joi.string().required(),
+        // Invoice state (e.g., draft, posted)
+        state: Joi.string().required(),
+        // Type of move (e.g., out_invoice, in_invoice)
+        move_type: Joi.string().required(),
+        // Partner/Customer ID
+        partner_id: Joi.number().integer().positive().required(),
+        // Partner/Customer name
+        partner_name: Joi.string(),
+        // Total amount including tax
+        amount_total: Joi.number().min(0).required(),
+        // Amount before tax
+        amount_untaxed: Joi.number().min(0).required(),
+        // Tax amount
+        amount_tax: Joi.number().min(0).required(),
+        // Remaining amount to pay
+        amount_residual: Joi.number().min(0).required(),
+        // Currency ID
+        currency_id: Joi.number().integer().positive().required(),
+        // Currency code/name
+        currency_name: Joi.string().required(),
+        // Invoice date
+        invoice_date: Joi.date(),
+        // Due date
+        invoice_date_due: Joi.date(),
+        // Payment state (e.g., not_paid, paid, partial)
+        payment_state: Joi.string().required(),
+        // Related sale order IDs
+        sale_order_ids: Joi.array().items(Joi.number().integer().positive()),
+        // Related sale order names/references
+        sale_order_names: Joi.array().items(Joi.string()),
+        // Session backend references
+        session_backend_refs: Joi.array().items(Joi.number().integer().positive()),
+    }).unknown(true)
+}).unknown(true); // Allow additional fields
+
+
+const saleOrderStateChangeEventSchema = Joi.object({
+    sale_order: Joi.object({
+        // PK of the sale order
+        id: Joi.number().integer().positive().required(),
+        // Sale order reference number
+        name: Joi.string().required(),
+        // Sale order state (e.g., draft, sale, done, cancel)
+        state: Joi.string().required(),
+        // Invoice status (e.g., to invoice, invoiced, upselling)
+        invoice_status: Joi.string().required(),
+        // Partner/Customer ID
+        partner_id: Joi.number().integer().positive().required(),
+        // Partner/Customer name
+        partner_name: Joi.string(),
+        // Total amount including tax
+        amount_total: Joi.number().min(0).required(),
+        // Amount before tax
+        amount_untaxed: Joi.number().min(0).required(),
+        // Tax amount
+        amount_tax: Joi.number().min(0).required(),
+        // Currency ID
+        currency_id: Joi.number().integer().positive().required(),
+        // Currency code/name
+        currency_name: Joi.string().required(),
+        // Order date/time
+        date_order: Joi.date().required(),
+        // Related invoice IDs
+        invoice_ids: Joi.array().items(Joi.any()).allow(null),
+        // Related invoice names/references
+        invoice_names: Joi.array().items(Joi.any()).allow(null),
+        // Session backend references
+        session_backend_refs: Joi.array().items(Joi.number().integer().positive()),
+    }).unknown(true)
+}).unknown(true); // Allow additional fields
+
+
 const validateUser = (user) => {
     const {error} = fullyQualifiedUserSchema.validate(user);
     if (error) {
@@ -159,6 +237,8 @@ module.exports = {
     steveTransactionSchema,
     qualifiedTransactionSchema,
     steveCompletedTransactionSchema,
-    invoiceCreationResponseSchema,
+    odooTxnProcessResponseSchema,
+    invoiceStateChangeEventSchema,
+    saleOrderStateChangeEventSchema,
     validateUser,
 };

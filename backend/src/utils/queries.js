@@ -12,7 +12,7 @@ const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
 const {qualifiedTransactionSchema} = require('#utils/joi');
-const {isValidNumber} = require("#helpers/validators");
+const {isValidNumber, isValidInteger} = require("#helpers/validators");
 const {GLOBAL_CONFIG} = require("#config");
 
 /**
@@ -790,6 +790,37 @@ async function saveInvoiceId(txn, invoice_id) {
     }
 }
 
+/**
+ * Retrieves a transaction by its Steve ID.
+ *
+ * @async
+ * @param {number} steve_txn_id - The transaction Steve ID
+ * @returns {Promise<Object|null>} The transaction object or null if not found
+ */
+async function getTransactionBySteveTxnId(steve_txn_id) {
+    if (!isValidInteger(steve_txn_id)) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            'steve_txn_id is required and must be a valid integer',
+        );
+    }
+    const query = `
+        SELECT *
+        FROM charging_transactions
+        WHERE txn_steve_id = $1::integer
+    `;
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query, [steve_txn_id]);
+        return result.rows[0] || null;
+    } catch (error) {
+        handleQueryError(error, 'getTransactionBySteveTxnId');
+    } finally {
+        client.release();
+    }
+}
+
 // ====================================================================================
 // ODOO TRANSACTION INTEGRATION
 // ====================================================================================
@@ -840,7 +871,7 @@ async function saveInvoiceId(txn, invoice_id) {
 
 /**
  * Creates or updates a sale order record linked to a charging transaction.
- * If odoo_saleorder_id already exists, updates the existing record.
+ * If odoo_saleorder_id already exists, updates the existing record by the txn_id
  *
  * @async
  * @param {number} txn_id - The charging transaction ID (required for insert)
@@ -912,22 +943,33 @@ async function upsertTxnOdooOrder(txn_id, orderDetails) {
  * @param {boolean} [updates.billed] - Whether the order has been billed
  * @param {boolean} [updates.cancelled] - Whether the order is cancelled
  * @param {number} [updates.total_amount] - Updated total amount
+ * @param {string} [updates.odoo_saleorder_name] - Updated sale order name
+ * @param {DateTime} [updates.deleted_at] - Deletion timestamp
  * @returns {Promise<db_odoo_txn_order|null>} The updated order record or null if not found
  */
 async function updateTxnOdooOrder(odoo_saleorder_id, updates) {
-    if (!odoo_saleorder_id) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_saleorder_id is required');
+    if (!updates || !isValidInteger(odoo_saleorder_id)) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
     }
 
     const setClauses = [];
     const values = [];
     let paramIndex = 1;
 
-    const allowedFields = ['confirmed', 'billed', 'cancelled', 'total_amount', 'odoo_saleorder_name'];
+    const allowedFields = ['confirmed', 'billed', 'cancelled', 'total_amount', 'odoo_saleorder_name', 'deleted_at'];
     for (const field of allowedFields) {
         if (updates[field] !== undefined) {
+            if (field === 'deleted_at') {
+                if (updates[field] && updates[field].isValid) {
+                    values.push(updates[field].toJSDate().toISOString());
+                } else {
+                    logger.warn(`Invalid DateTime provided for deleted_at field: ${updates[field]}`);
+                    values.push(null);
+                }
+            } else {
+                values.push(updates[field]);
+            }
             setClauses.push(`${field} = $${paramIndex}`);
-            values.push(updates[field]);
             paramIndex++;
         }
     }
@@ -936,11 +978,10 @@ async function updateTxnOdooOrder(odoo_saleorder_id, updates) {
         throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'No valid update fields provided');
     }
 
-    values.push(odoo_saleorder_id);
     const query = `
         UPDATE odoo_txn_orders
         SET ${setClauses.join(', ')}
-        WHERE odoo_saleorder_id = ${paramIndex}
+        WHERE odoo_saleorder_id = ${odoo_saleorder_id}
         RETURNING *
     `;
 
@@ -959,18 +1000,6 @@ async function updateTxnOdooOrder(odoo_saleorder_id, updates) {
 }
 
 /**
- * Creates or updates an invoice record linked to a sale order.
- * If odoo_invoice_id already exists, updates the existing record.
- *
- * @async
- * @param {Object} invoiceDetails - The invoice details
- * @param {number} invoiceDetails.txn_saleorder_id - The local odoo_txn_orders.id (required for insert)
- * @param {number} invoiceDetails.odoo_invoice_id - The Odoo invoice ID
- * @param {string} [invoiceDetails.odoo_invoice_name] - The Odoo invoice name (e.g., 'INV/2025/0001')
- * @param {number} [invoiceDetails.total_amount] - Total invoice amount
- * @param {boolean} [invoiceDetails.paid] - Whether the invoice is paid
- * @param {boolean} [invoiceDetails.cancelled] - Whether the invoice is cancelled
- /**
  * Creates or updates an invoice record.
  * If odoo_invoice_id already exists, updates the existing record.
  * To link orders to this invoice, use linkOrderToInvoice() function.
@@ -1834,6 +1863,7 @@ module.exports = {
         getInvoiceIdByOdooInvoiceId,
         linkOrderToInvoice,
         getOrdersByInvoiceId,
+        getTransactionBySteveTxnId,
     },
     normalizeRFID,
 };

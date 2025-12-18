@@ -11,7 +11,7 @@
  */
 
 const {db} = require('#utils/queries');
-const {createOdooTxnInvoice} = require('./odoo');
+const {sendTxnToOdooProcessing} = require('./odoo');
 const logger = require('#services/logger');
 const {qualifiedTransactionSchema} = require("#utils/joi");
 
@@ -21,7 +21,7 @@ const {qualifiedTransactionSchema} = require("#utils/joi");
  *
  * @async
  * @param {Object<db_txn>} txn - The unbilled transaction
- * @returns {Promise<{success: boolean, txn_id: number, user_associated: boolean, invoice_created: boolean, invoice_id: number|null, error: string|null}>}
+ * @returns {Promise<{success: boolean, txn_id: number, user_associated: boolean, invoice_created: boolean, invoice_id: number|null, order_id: number | null, error: string|null}>}
  */
 async function processSingleUnbilledTransaction(txn) {
     const result = {
@@ -74,10 +74,10 @@ async function processSingleUnbilledTransaction(txn) {
         if (user_id) {
             result.user_already_associated = !result.user_associated;
             logger.info(`Creating order/invoice for transaction ${txn.id} (Steve ID: ${txn.txn_steve_id})`);
-            const odooResult = await createOdooTxnInvoice(txn);
+            const odooResult = await sendTxnToOdooProcessing(txn);
 
             if (odooResult && odooResult.order_id) {
-                result.invoice_created = true;
+                result.invoice_created = !!odooResult.invoice_id;
                 result.order_id = odooResult.order_id;
                 result.invoice_id = odooResult.invoice_id || null;
                 result.success = true;
@@ -107,6 +107,7 @@ async function processSingleUnbilledTransaction(txn) {
  *   processed: number,
  *   users_associated: number,
  *   invoices_created: number,
+ *   orders_created: number,
  *   failed: number,
  *   results: Array<Object>
  * }>}
@@ -120,6 +121,7 @@ async function runBillingReconciliation(options = {}) {
         processed: 0,
         users_associated: 0,
         invoices_created: 0,
+        orders_created: 0,
         failed: 0,
         results: [],
     };
@@ -148,6 +150,9 @@ async function runBillingReconciliation(options = {}) {
             }
             if (!result.success) {
                 stats.failed++;
+            }
+            if (result.order_id) {
+                stats.orders_created++;
             }
 
             stats.results.push(result);
