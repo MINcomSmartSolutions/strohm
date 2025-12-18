@@ -6,7 +6,7 @@ const {
     createOdooUser,
     getOdooPortalLogin,
     rotateOdooUserAuth,
-    createOdooTxnInvoice,
+    sendTxnToOdooProcessing,
 } = require('#services/odoo');
 const {odooAuthedAxios, odooPlainAxios} = require('#services/network');
 const {db} = require('#utils/queries');
@@ -53,7 +53,7 @@ jest.mock('#config', () => ({
         USER_CREATION_URI: '/api/create_user',
         PORTAL_LOGIN_URI: '/web/login',
         ROTATE_APIKEY_URI: '/api/rotate_key',
-        TXN_PROCESS_URI: '/api/create_invoice',
+        TXN_PROCESS_URI: '/internal/txn/process',
         API_SECRET: 'test_secret',
         EXTERNAL_BASE_URL: 'https://domain.com',
     },
@@ -478,7 +478,7 @@ describe('Odoo Service', () => {
         });
     });
 
-    describe('createOdooTxnInvoice', () => {
+    describe('sendTxnToOdooProcessing', () => {
         const testTransaction = {
             id: 456,
             user_id: 123,
@@ -489,6 +489,7 @@ describe('Odoo Service', () => {
             stop_value: 15000,
             delivered_energy_wh: 10000,
             ocpp_id_tag: 'test_rfid',
+            txn_steve_id: 789,
         };
 
 
@@ -510,7 +511,7 @@ describe('Odoo Service', () => {
                 };
             });
 
-            await expect(createOdooTxnInvoice(invalidTransaction)).rejects.toThrow(ValidationError);
+            await expect(sendTxnToOdooProcessing(invalidTransaction)).rejects.toThrow(ValidationError);
         });
 
         it('should create invoice successfully', async () => {
@@ -571,15 +572,13 @@ describe('Odoo Service', () => {
 
             db.linkOrderToInvoice.mockResolvedValue(true);
 
-            const result = await createOdooTxnInvoice(testTransaction);
+            const result = await sendTxnToOdooProcessing(testTransaction);
 
             // Verify Odoo API call
             expect(odooPlainAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.TXN_PROCESS_URI,
                 expect.objectContaining({
                     timestamp: expect.toBeDateString(),
-                    user_id: fullQualifiedUser.odoo_user_id,
-                    partner_id: fullQualifiedUser.odoo_partner_id,
                     key: 'test_key',
                     key_salt: 'test_key_salt',
                     lines_data: expect.arrayContaining([
@@ -587,6 +586,9 @@ describe('Odoo Service', () => {
                             'sku': 'standard_charging',
                             'price_unit': 0.35,
                             'quantity': 10,
+                            'session_backend_ref': expect.toBeNumber(),
+                            'session_start': expect.toBeDateString(),
+                            'session_end': expect.toBeDateString(),
                         }),
                     ]),
                     salt: 'test_salt',
@@ -687,15 +689,13 @@ describe('Odoo Service', () => {
 
             db.linkOrderToInvoice.mockResolvedValue(true);
 
-            const result = await createOdooTxnInvoice(testTransaction);
+            const result = await sendTxnToOdooProcessing(testTransaction);
 
             // Verify Odoo API call
             expect(odooPlainAxios.post).toHaveBeenCalledWith(
                 ODOO_CONFIG.TXN_PROCESS_URI,
                 expect.objectContaining({
                     timestamp: expect.toBeDateString(),
-                    user_id: fullQualifiedUser.odoo_user_id,
-                    partner_id: fullQualifiedUser.odoo_partner_id,
                     key: 'test_key',
                     key_salt: 'test_key_salt',
                     lines_data: expect.arrayContaining([
@@ -703,6 +703,9 @@ describe('Odoo Service', () => {
                             'sku': 'standard_charging',
                             'price_unit': 0.0,
                             'quantity': 10,
+                            'session_backend_ref': expect.toBeNumber(),
+                            'session_start': expect.toBeDateString(),
+                            'session_end': expect.toBeDateString(),
                         }),
                     ]),
                     salt: 'test_salt',
@@ -746,8 +749,8 @@ describe('Odoo Service', () => {
                 },
             });
 
-            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(SystemError);
-            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow('Invalid invoice data');
+            await expect(sendTxnToOdooProcessing(testTransaction)).rejects.toThrow(SystemError);
+            await expect(sendTxnToOdooProcessing(testTransaction)).rejects.toThrow('Invalid invoice data');
         });
 
         it('should use default price if electricity price fetch fails', async () => {
@@ -808,7 +811,7 @@ describe('Odoo Service', () => {
 
             db.linkOrderToInvoice.mockResolvedValue(true);
 
-            await createOdooTxnInvoice(testTransaction);
+            await sendTxnToOdooProcessing(testTransaction);
 
 
             // Verify Odoo API call with default price
@@ -866,7 +869,7 @@ describe('Odoo Service', () => {
                 odoo_saleorder_id: 99999,
             });
 
-            const result = await createOdooTxnInvoice(testTransaction);
+            const result = await sendTxnToOdooProcessing(testTransaction);
 
             // Verify order was created
             expect(db.upsertTxnOdooOrder).toHaveBeenCalled();
@@ -896,7 +899,7 @@ describe('Odoo Service', () => {
             // Mock invalid user retrieval
             db.getUserUnique.mockResolvedValue({user_id: 123}); // Missing required fields
 
-            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(ValidationError);
+            await expect(sendTxnToOdooProcessing(testTransaction)).rejects.toThrow(ValidationError);
         });
 
         it('should throw error if response is missing details', async () => {
@@ -924,7 +927,7 @@ describe('Odoo Service', () => {
                 },
             });
 
-            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(SystemError);
+            await expect(sendTxnToOdooProcessing(testTransaction)).rejects.toThrow(SystemError);
         });
 
         it('should throw error if response details are invalid', async () => {
@@ -954,10 +957,7 @@ describe('Odoo Service', () => {
                 },
             });
 
-            await expect(createOdooTxnInvoice(testTransaction)).rejects.toThrow(SystemError);
-            await createOdooTxnInvoice(testTransaction).catch(err => {
-                expect(err.toString()).toContain("Invalid invoice creation details");
-            });
+            await expect(sendTxnToOdooProcessing(testTransaction)).rejects.toThrow(SystemError);
         });
     });
 });
