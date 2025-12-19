@@ -215,7 +215,7 @@ async function runIncremental() {
     const since = await db.getLastStopTimestamp();
 
     // add 1 second to the last high water mark to prevent overlapping and fetching the same transaction
-    const last_high_water = since ? since.plus(1000) : null;
+    const last_high_water = since ? since.plus(1) : null;
     let new_watermark = since ? since : DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince(last_high_water);

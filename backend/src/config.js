@@ -16,10 +16,9 @@
  * @property {string} ODOO_CONFIG.EXTERNAL_BASE_URL - Odoo external URL
  * @property {string} ODOO_CONFIG.API_SECRET - Odoo API secret
  * @property {string} ODOO_CONFIG.USER_CREATION_URI - User creation endpoint
- * @property {string} ODOO_CONFIG.INVOICE_CREATION_URI - Invoice creation endpoint
+ * @property {string} ODOO_CONFIG.TXN_PROCESS_URI - Invoice creation endpoint
  * @property {string} ODOO_CONFIG.PORTAL_LOGIN_URI - Portal login endpoint
  * @property {string} ODOO_CONFIG.ROTATE_APIKEY_URI - API key rotation endpoint
- * @property {string} ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI - Payment method check endpoint
  */
 const STEVE_CONFIG = {
     URL: process.env.STEVE_BASE_URL,
@@ -38,10 +37,9 @@ const ODOO_CONFIG = {
     EXTERNAL_BASE_URL: process.env.ODOO_EXTERNAL_BASE_URL,
     API_SECRET: process.env.ODOO_API_SECRET,
     USER_CREATION_URI: '/internal/user/create',
-    INVOICE_CREATION_URI: '/internal/bill/create',
+    TXN_PROCESS_URI: '/internal/txn/process',
     PORTAL_LOGIN_URI: '/portal_login',
     ROTATE_APIKEY_URI: '/internal/rotate_api_key',
-    CHECK_PAYMENT_METHOD_URI: '/internal/user/valid_pm',
 };
 
 const nodeEnv = (process.env.NODE_ENV || 'dev').toLowerCase();
@@ -69,7 +67,7 @@ const GLOBAL_CONFIG = {
             : [],
     },
     MAX_RFID_LENGTH: 36,
-    DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH: process.env.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH || 35,
+    DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH: process.env.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH || 30,
 }
 
 module.exports = {

@@ -12,7 +12,7 @@ const {DatabaseError, ErrorCodes, ValidationError} = require('./errors');
 const {DateTime} = require('luxon');
 const {steveTransactionSchema} = require('./joi');
 const {qualifiedTransactionSchema} = require('#utils/joi');
-const {isValidNumber} = require("#helpers/validators");
+const {isValidNumber, isValidInteger} = require("#helpers/validators");
 const {GLOBAL_CONFIG} = require("#config");
 
 /**
@@ -754,6 +754,10 @@ async function getLastStopTimestamp() {
  * Updates the `invoice_ref` field for a transaction in `charging_transactions`.
  * This is used to link a transaction to an invoice in Odoo.
  *
+ * @deprecated Use upsertTxnOdooOrder() and linkOrderToInvoice() instead.
+ * This function is kept for backward compatibility only.
+ * The invoice_ref column is being deprecated in favor of the odoo_txn_orders/odoo_invoices tables.
+ *
  * @async
  * @param {Object<db_txn>} txn - The transaction object
  * @param {number} invoice_id - The invoice ID came from Odoo to set.
@@ -786,6 +790,488 @@ async function saveInvoiceId(txn, invoice_id) {
     }
 }
 
+/**
+ * Retrieves a transaction by its Steve ID.
+ *
+ * @async
+ * @param {number} steve_txn_id - The transaction Steve ID
+ * @returns {Promise<Object|null>} The transaction object or null if not found
+ */
+async function getTransactionBySteveTxnId(steve_txn_id) {
+    if (!isValidInteger(steve_txn_id)) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
+            'steve_txn_id is required and must be a valid integer',
+        );
+    }
+    const query = `
+        SELECT *
+        FROM charging_transactions
+        WHERE txn_steve_id = $1::integer
+    `;
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(query, [steve_txn_id]);
+        return result.rows[0] || null;
+    } catch (error) {
+        handleQueryError(error, 'getTransactionBySteveTxnId');
+    } finally {
+        client.release();
+    }
+}
+
+// ====================================================================================
+// ODOO TRANSACTION INTEGRATION
+// ====================================================================================
+/**
+ * Functions for managing Odoo sale orders and invoices linked to charging transactions.
+ *
+ * STRUCTURE:
+ * - odoo_txn_orders: Sale orders (one per charging transaction)
+ * - odoo_invoices: Invoices (can contain multiple orders - consolidated billing)
+ * - odoo_order_invoice_link: Junction table linking orders to invoices
+ *
+ * TYPICAL WORKFLOW:
+ *
+ * 1. Create Order:
+ *    const order = await upsertTxnOdooOrder(txn_id, {
+ *        odoo_saleorder_id: 456,
+ *        odoo_saleorder_name: 'S00001',
+ *        qty: 10.5,
+ *        unit_price: 0.30,
+ *        total_amount: 3.15
+ *    });
+ *
+ * 2. Update Order Status:
+ *    await updateTxnOdooOrder(456, { billed: true });
+ *
+ * 3. Create Invoice (for single or multiple orders):
+ *    const invoice = await upsertTxnOdooInvoice({
+ *        odoo_invoice_id: 789,
+ *        odoo_invoice_name: 'INV/2025/0001',
+ *        total_amount: 3.15
+ *    });
+ *
+ * 4. Link Order(s) to Invoice:
+ *    // Single order
+ *    const invoiceId = await getInvoiceIdByOdooInvoiceId(789);
+ *    await linkOrderToInvoice(order.id, invoiceId);
+ *
+ *    // Multiple orders (consolidated billing)
+ *    await linkOrderToInvoice([orderId1, orderId2, orderId3], invoiceId);
+ *
+ * 5. Update Invoice Status:
+ *    await updateTxnOdooInvoice(789, { paid: true });
+ *
+ * 6. Query Details:
+ *    const details = await getTxnOdooDetails(txn_id);
+ *    const orders = await getOrdersByInvoiceId(invoiceId);
+ */
+
+/**
+ * Creates or updates a sale order record linked to a charging transaction.
+ * If odoo_saleorder_id already exists, updates the existing record by the txn_id
+ *
+ * @async
+ * @param {number} txn_id - The charging transaction ID (required for insert)
+ * @param {Object} orderDetails - The order details
+ * @param {number} orderDetails.odoo_saleorder_id - The Odoo sale order ID
+ * @param {string} [orderDetails.odoo_saleorder_name] - The Odoo sale order name (e.g., 'S00001')
+ * @param {number} [orderDetails.qty] - Quantity in kWh
+ * @param {number} [orderDetails.unit_price] - Unit price per kWh in euros
+ * @param {number} [orderDetails.total_amount] - Total amount for the order
+ * @param {boolean} [orderDetails.confirmed] - Whether the order is confirmed
+ * @param {boolean} [orderDetails.billed] - Whether the order has been billed
+ * @param {boolean} [orderDetails.cancelled] - Whether the order is cancelled
+ * @returns {Promise<db_odoo_txn_order>} The upserted order record
+ */
+async function upsertTxnOdooOrder(txn_id, orderDetails) {
+    const {
+        odoo_saleorder_id,
+        odoo_saleorder_name,
+        qty,
+        unit_price,
+        total_amount,
+        confirmed,
+        billed,
+        cancelled
+    } = orderDetails;
+
+    if (!odoo_saleorder_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_saleorder_id is required');
+    }
+
+    const query = `
+        INSERT INTO odoo_txn_orders (txn_id, odoo_saleorder_id, odoo_saleorder_name, qty, unit_price, total_amount,
+                                     confirmed, billed, cancelled)
+        VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, true), COALESCE($8, false), COALESCE($9, false))
+        ON CONFLICT (odoo_saleorder_id) DO UPDATE SET odoo_saleorder_name = COALESCE(EXCLUDED.odoo_saleorder_name,
+                                                                                     odoo_txn_orders.odoo_saleorder_name),
+                                                      qty                 = COALESCE(EXCLUDED.qty, odoo_txn_orders.qty),
+                                                      unit_price          = COALESCE(EXCLUDED.unit_price, odoo_txn_orders.unit_price),
+                                                      total_amount        = COALESCE(EXCLUDED.total_amount, odoo_txn_orders.total_amount),
+                                                      confirmed           = COALESCE(EXCLUDED.confirmed, odoo_txn_orders.confirmed),
+                                                      billed              = COALESCE(EXCLUDED.billed, odoo_txn_orders.billed),
+                                                      cancelled           = COALESCE(EXCLUDED.cancelled, odoo_txn_orders.cancelled)
+        RETURNING *
+    `;
+    const values = [txn_id, odoo_saleorder_id, odoo_saleorder_name, qty, unit_price, total_amount, confirmed, billed, cancelled];
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
+        return result.rows[0];
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'upsertTxnOdooOrder');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Updates an existing sale order record by Odoo sale order ID.
+ * Only updates fields that are provided (non-undefined).
+ *
+ * @async
+ * @param {number} odoo_saleorder_id - The Odoo sale order ID
+ * @param {Object} updates - Fields to update
+ * @param {boolean} [updates.confirmed] - Whether the order is confirmed
+ * @param {boolean} [updates.billed] - Whether the order has been billed
+ * @param {boolean} [updates.cancelled] - Whether the order is cancelled
+ * @param {number} [updates.total_amount] - Updated total amount
+ * @param {string} [updates.odoo_saleorder_name] - Updated sale order name
+ * @param {DateTime} [updates.deleted_at] - Deletion timestamp
+ * @returns {Promise<db_odoo_txn_order|null>} The updated order record or null if not found
+ */
+async function updateTxnOdooOrder(odoo_saleorder_id, updates) {
+    if (!updates || !isValidInteger(odoo_saleorder_id)) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
+    }
+
+    const setClauses = [];
+    const values = [];
+    let paramIndex = 1;
+
+    const allowedFields = ['confirmed', 'billed', 'cancelled', 'total_amount', 'odoo_saleorder_name', 'deleted_at'];
+    for (const field of allowedFields) {
+        if (updates[field] !== undefined) {
+            if (field === 'deleted_at') {
+                if (updates[field] && updates[field].isValid) {
+                    values.push(updates[field].toJSDate().toISOString());
+                } else {
+                    logger.warn(`Invalid DateTime provided for deleted_at field: ${updates[field]}`);
+                    values.push(null);
+                }
+            } else {
+                values.push(updates[field]);
+            }
+            setClauses.push(`${field} = $${paramIndex}`);
+            paramIndex++;
+        }
+    }
+
+    if (setClauses.length === 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'No valid update fields provided');
+    }
+
+    const query = `
+        UPDATE odoo_txn_orders
+        SET ${setClauses.join(', ')}
+        WHERE odoo_saleorder_id = ${odoo_saleorder_id}
+        RETURNING *
+    `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
+        return result.rows[0] || null;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'updateTxnOdooOrder');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Creates or updates an invoice record.
+ * If odoo_invoice_id already exists, updates the existing record.
+ * To link orders to this invoice, use linkOrderToInvoice() function.
+ *
+ * @async
+ * @param {Object} invoiceDetails - The invoice details
+ * @param {number} invoiceDetails.odoo_invoice_id - The Odoo invoice ID (required)
+ * @param {string} [invoiceDetails.odoo_invoice_name] - The Odoo invoice name (e.g., 'INV/2025/0001')
+ * @param {number} [invoiceDetails.total_amount] - Total invoice amount
+ * @param {boolean} [invoiceDetails.paid] - Whether the invoice is paid
+ * @param {boolean} [invoiceDetails.cancelled] - Whether the invoice is cancelled
+ * @returns {Promise<db_odoo_invoice>} The upserted invoice record
+ */
+async function upsertTxnOdooInvoice(invoiceDetails) {
+    const {
+        odoo_invoice_id,
+        odoo_invoice_name,
+        total_amount,
+        paid,
+        cancelled
+    } = invoiceDetails;
+
+    if (!odoo_invoice_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_invoice_id is required');
+    }
+
+    const query = `
+        INSERT INTO odoo_invoices (odoo_invoice_id, odoo_invoice_name, total_amount, paid, cancelled)
+        VALUES ($1, $2, $3, COALESCE($4, false), COALESCE($5, false))
+        ON CONFLICT (odoo_invoice_id) DO UPDATE SET odoo_invoice_name = COALESCE(EXCLUDED.odoo_invoice_name,
+                                                                                 odoo_invoices.odoo_invoice_name),
+                                                    total_amount      = COALESCE(EXCLUDED.total_amount, odoo_invoices.total_amount),
+                                                    paid              = COALESCE(EXCLUDED.paid, odoo_invoices.paid),
+                                                    cancelled         = COALESCE(EXCLUDED.cancelled, odoo_invoices.cancelled)
+        RETURNING *
+    `;
+    const values = [odoo_invoice_id, odoo_invoice_name, total_amount, paid, cancelled];
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
+        return result.rows[0];
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'upsertTxnOdooInvoice');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Updates an existing invoice record by Odoo invoice ID.
+ * Only updates fields that are provided (non-undefined).
+ *
+ * @async
+ * @param {number} odoo_invoice_id - The Odoo invoice ID
+ * @param {Object} updates - Fields to update
+ * @param {boolean} [updates.paid] - Whether the invoice is paid
+ * @param {boolean} [updates.cancelled] - Whether the invoice is cancelled
+ * @param {number} [updates.total_amount] - Updated total amount
+ * @returns {Promise<db_odoo_invoice|null>} The updated invoice record or null if not found
+ */
+async function updateTxnOdooInvoice(odoo_invoice_id, updates) {
+    if (!odoo_invoice_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_invoice_id is required');
+    }
+
+    const setClauses = [];
+    const values = [];
+    let paramIndex = 1;
+
+    const allowedFields = ['paid', 'cancelled', 'total_amount', 'odoo_invoice_name'];
+    for (const field of allowedFields) {
+        if (updates[field] !== undefined) {
+            setClauses.push(`${field} = $${paramIndex}`);
+            values.push(updates[field]);
+            paramIndex++;
+        }
+    }
+
+    if (setClauses.length === 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'No valid update fields provided');
+    }
+
+    values.push(odoo_invoice_id);
+    const query = `
+        UPDATE odoo_invoices
+        SET ${setClauses.join(', ')}
+        WHERE odoo_invoice_id = ${paramIndex}
+        RETURNING * `;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
+        return result.rows[0] || null;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'updateTxnOdooInvoice');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Gets all order and invoice details for a charging transaction.
+ *
+ * @async
+ * @param {number} txn_id - The charging transaction ID
+ * @returns {Promise<Array>} Array of orders with their linked invoices
+ */
+async function getTxnOdooDetails(txn_id) {
+    if (!txn_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'txn_id is required');
+    }
+
+    const query = `
+        SELECT o.id           as order_id,
+               o.txn_id,
+               o.odoo_saleorder_id,
+               o.odoo_saleorder_name,
+               o.qty,
+               o.unit_price,
+               o.total_amount as order_total,
+               o.confirmed,
+               o.billed,
+               o.cancelled    as order_cancelled,
+               o.created_at   as order_created_at,
+               i.id           as invoice_id,
+               i.odoo_invoice_id,
+               i.odoo_invoice_name,
+               i.total_amount as invoice_total,
+               i.paid,
+               i.cancelled    as invoice_cancelled,
+               i.created_at   as invoice_created_at
+        FROM odoo_txn_orders o
+                 LEFT JOIN odoo_order_invoice_link l ON l.order_id = o.id
+                 LEFT JOIN odoo_invoices i ON i.id = l.invoice_id
+        WHERE o.txn_id = $1
+        ORDER BY o.created_at DESC, i.created_at DESC
+    `;
+
+    try {
+        const result = await pool.query(query, [txn_id]);
+        return result.rows;
+    } catch (error) {
+        handleQueryError(error, 'getTxnOdooDetails');
+    }
+}
+
+/**
+ * Gets the local order record ID by Odoo sale order ID.
+ * Useful when you need to link an invoice to an order.
+ *
+ * @async
+ * @param {number} odoo_saleorder_id - The Odoo sale order ID
+ * @returns {Promise<number|null>} The local order ID or null if not found
+ */
+async function getOdooOrderIdBySaleOrderId(odoo_saleorder_id) {
+    if (!odoo_saleorder_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_saleorder_id is required');
+    }
+
+    const query = `SELECT id
+                   FROM odoo_txn_orders
+                   WHERE odoo_saleorder_id = $1`;
+    try {
+        const result = await pool.query(query, [odoo_saleorder_id]);
+        return result.rows[0]?.id || null;
+    } catch (error) {
+        handleQueryError(error, 'getOdooOrderIdBySaleOrderId');
+    }
+}
+
+/**
+ * Gets the local invoice record ID by Odoo invoice ID.
+ *
+ * @async
+ * @param {number} odoo_invoice_id - The Odoo invoice ID
+ * @returns {Promise<number|null>} The local invoice ID or null if not found
+ */
+async function getInvoiceIdByOdooInvoiceId(odoo_invoice_id) {
+    if (!odoo_invoice_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_invoice_id is required');
+    }
+
+    const query = `SELECT id
+                   FROM odoo_invoices
+                   WHERE odoo_invoice_id = $1`;
+    try {
+        const result = await pool.query(query, [odoo_invoice_id]);
+        return result.rows[0]?.id || null;
+    } catch (error) {
+        handleQueryError(error, 'getInvoiceIdByOdooInvoiceId');
+    }
+}
+
+/**
+ * Links one or more orders to an invoice (for consolidated billing).
+ * Each order can only be linked to one invoice.
+ *
+ * @async
+ * @param {number|number[]} orderIds - Local order ID(s) from odoo_txn_orders.id
+ * @param {number} invoiceId - Local invoice ID from odoo_invoices.id
+ * @returns {Promise<Array>} Array of created link records
+ */
+async function linkOrderToInvoice(orderIds, invoiceId) {
+    if (!invoiceId) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'invoiceId is required');
+    }
+
+    const orderIdArray = Array.isArray(orderIds) ? orderIds : [orderIds];
+    if (orderIdArray.length === 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'At least one orderId is required');
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const results = [];
+        for (const orderId of orderIdArray) {
+            const query = `
+                INSERT INTO odoo_order_invoice_link (order_id, invoice_id)
+                VALUES ($1, $2)
+                ON CONFLICT (order_id) DO UPDATE SET invoice_id = EXCLUDED.invoice_id
+                RETURNING *
+            `;
+            const result = await client.query(query, [orderId, invoiceId]);
+            results.push(result.rows[0]);
+        }
+
+        await client.query('COMMIT');
+        return results;
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'linkOrderToInvoice');
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * Gets all orders linked to a specific invoice.
+ *
+ * @async
+ * @param {number} invoice_id - The local invoice ID
+ * @returns {Promise<Array>} Array of order records
+ */
+async function getOrdersByInvoiceId(invoice_id) {
+    if (!invoice_id) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'invoice_id is required');
+    }
+
+    const query = `
+        SELECT o.*
+        FROM odoo_txn_orders o
+                 INNER JOIN odoo_order_invoice_link l ON l.order_id = o.id
+        WHERE l.invoice_id = $1
+        ORDER BY o.created_at DESC
+    `;
+
+    try {
+        const result = await pool.query(query, [invoice_id]);
+        return result.rows;
+    } catch (error) {
+        handleQueryError(error, 'getOrdersByInvoiceId');
+    }
+}
 
 /**
  * Retrieves the current electricity price from the database.
@@ -1222,7 +1708,7 @@ async function deleteUser(user) {
  * These are transactions that:
  * - Have a stop_timestamp (transaction is complete)
  * - Have a user_id (user is known)
- * - Do NOT have an invoice_ref (not yet billed)
+ * - Do NOT have an order created in Odoo yet (not yet billed)
  *
  * @async
  * @param {Object} options - Query options
@@ -1235,10 +1721,15 @@ async function getUnbilledTransactions(options = {}) {
     const {limit = null, olderThanHours = 0} = options;
 
     let query = `
-        SELECT *
-        FROM charging_transactions
-        WHERE stop_timestamp IS NOT NULL
-          AND invoice_ref IS NULL
+        SELECT ct.*
+        FROM charging_transactions ct
+        WHERE ct.start_timestamp IS NOT NULL
+          AND ct.stop_timestamp IS NOT NULL
+          -- For backward compatibility, check both invoice_ref and odoo_txn_orders --
+          AND ct.invoice_ref IS NULL
+          AND NOT EXISTS (SELECT 1
+                          FROM odoo_txn_orders o
+                          WHERE o.txn_id = ct.id)
     `;
 
     const values = [];
@@ -1246,11 +1737,11 @@ async function getUnbilledTransactions(options = {}) {
 
     // Add time filter if specified
     if (olderThanHours > 0) {
-        query += ` AND stop_timestamp < NOW() - INTERVAL '${olderThanHours} hours'`;
+        query += ` AND ct.stop_timestamp < NOW() - INTERVAL '${olderThanHours} hours'`;
     }
 
     // Newest transactions first
-    query += ` ORDER BY id DESC`;
+    query += ` ORDER BY ct.id DESC`;
 
     // Add limit if specified
     if (limit && Number.isSafeInteger(limit) && limit > 0) {
@@ -1362,6 +1853,17 @@ module.exports = {
         getUnbilledTransactions,
         tryAssociateUserToTransaction,
         getUserOpenChargingSession,
+        // Odoo transaction details
+        upsertTxnOdooOrder,
+        updateTxnOdooOrder,
+        upsertTxnOdooInvoice,
+        updateTxnOdooInvoice,
+        getTxnOdooDetails,
+        getOdooOrderIdBySaleOrderId,
+        getInvoiceIdByOdooInvoiceId,
+        linkOrderToInvoice,
+        getOrdersByInvoiceId,
+        getTransactionBySteveTxnId,
     },
     normalizeRFID,
 };

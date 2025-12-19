@@ -109,7 +109,7 @@ function createOdooAxios(includeAuth = true) {
 }
 
 /**
- * An Axios instance for interacting with the Odoo API with authentication.
+ * An Axios instance for interacting with the Odoo API with authentication with internal docker network.
  *
  * @constant
  * @type {AxiosInstance}
@@ -117,7 +117,7 @@ function createOdooAxios(includeAuth = true) {
 const odooAuthedAxios = createOdooAxios(true);
 
 /**
- * An Axios instance for interacting with the Odoo API without authentication.
+ * An Axios instance for interacting with the Odoo API without authentication with internal docker network.
  *
  * @constant
  * @type {AxiosInstance}

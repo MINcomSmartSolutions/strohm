@@ -111,8 +111,7 @@ services:
       - --limit-time-real=9999999
       - --workers=0
       - --dev=reload,qweb,werkzeug,xml,po,pot
-      - -i strohm_addon --i18n-overwrite
-
+      - -i strohm_addon
   steve-db:
     container_name: steve_sim_db
     image: mariadb:10.4.30

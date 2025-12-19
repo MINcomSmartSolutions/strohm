@@ -11,9 +11,8 @@
  */
 
 const {db} = require('#utils/queries');
-const {createOdooTxnInvoice} = require('./odoo');
+const {sendTxnToOdooProcessing} = require('./odoo');
 const logger = require('#services/logger');
-const {DateTime} = require('luxon');
 const {qualifiedTransactionSchema} = require("#utils/joi");
 
 
@@ -22,23 +21,24 @@ const {qualifiedTransactionSchema} = require("#utils/joi");
  *
  * @async
  * @param {Object<db_txn>} txn - The unbilled transaction
- * @returns {Promise<{success: boolean, txn_id: number, user_associated: boolean, invoice_created: boolean, invoice_id: number|null, error: string|null}>}
+ * @returns {Promise<{success: boolean, txn_id: number, user_associated: boolean, invoice_created: boolean, invoice_id: number|null, order_id: number | null, error: string|null}>}
  */
 async function processSingleUnbilledTransaction(txn) {
     const result = {
-        success: false,
         txn_id: txn.id,
-        txn_steve_id: txn.txn_steve_id,
+        success: false,
         user_associated: false,
         user_already_associated: false,
         invoice_created: false,
         invoice_id: null,
+        order_id: null,
         error: null,
     };
 
-    // Defensive check: if invoice already exists, skip billing
-    if (txn.invoice_ref) {
-        result.error = `Transaction already has invoice: ${txn.invoice_ref}`;
+    // Defensive check: if order already exists, skip billing
+    const existingOrderORInvoices = await db.getTxnOdooDetails(txn.id);
+    if (existingOrderORInvoices && existingOrderORInvoices.length > 0) {
+        result.error = `Transaction already has order(s) in Odoo`;
         logger.warn(`Cannot bill transaction ${txn.id}: ${result.error}`);
         return result;
     }
@@ -73,17 +73,18 @@ async function processSingleUnbilledTransaction(txn) {
         // Now attempt to create invoice
         if (user_id) {
             result.user_already_associated = !result.user_associated;
-            logger.info(`Creating invoice for transaction ${txn.id} (Steve ID: ${txn.txn_steve_id})`);
-            const invoice_id = await createOdooTxnInvoice(txn);
+            logger.info(`Creating order/invoice for transaction ${txn.id} (Steve ID: ${txn.txn_steve_id})`);
+            const odooResult = await sendTxnToOdooProcessing(txn);
 
-            if (invoice_id && Number.isInteger(invoice_id)) {
-                await db.saveInvoiceId(txn, invoice_id);
-                result.invoice_created = true;
-                result.invoice_id = invoice_id;
+            if (odooResult && odooResult.order_id) {
+                result.invoice_created = !!odooResult.invoice_id;
+                result.order_id = odooResult.order_id;
+                result.invoice_id = odooResult.invoice_id || null;
                 result.success = true;
-                logger.info(`Successfully created invoice ${invoice_id} for transaction ${txn.id}`);
+                logger.info(`Successfully created order ${odooResult.order_id} for transaction ${txn.id}` +
+                    (odooResult.invoice_id ? ` with invoice ${odooResult.invoice_id}` : ''));
             } else {
-                result.error = 'Failed to create or process Odoo invoice';
+                result.error = 'Failed to create or process Odoo order/invoice';
                 logger.error(`Fail to bill transaction ${txn.id} : ${result.error}`);
             }
         }
@@ -106,6 +107,7 @@ async function processSingleUnbilledTransaction(txn) {
  *   processed: number,
  *   users_associated: number,
  *   invoices_created: number,
+ *   orders_created: number,
  *   failed: number,
  *   results: Array<Object>
  * }>}
@@ -119,6 +121,7 @@ async function runBillingReconciliation(options = {}) {
         processed: 0,
         users_associated: 0,
         invoices_created: 0,
+        orders_created: 0,
         failed: 0,
         results: [],
     };
@@ -147,6 +150,9 @@ async function runBillingReconciliation(options = {}) {
             }
             if (!result.success) {
                 stats.failed++;
+            }
+            if (result.order_id) {
+                stats.orders_created++;
             }
 
             stats.results.push(result);

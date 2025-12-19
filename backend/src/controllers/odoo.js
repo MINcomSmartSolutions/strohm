@@ -14,6 +14,9 @@ const {blockSteveUser} = require('#services/steve_user');
 const {verifyOdooApiKey} = require('#middlewares/auth');
 const logger = require('#services/logger');
 const {appErrorHandler} = require('#utils/errors');
+const {saleOrderStateChangeEventSchema, invoiceStateChangeEventSchema} = require("#utils/joi");
+const {DateTime} = require("luxon");
+const {isValidInteger} = require("#helpers/validators");
 
 /**
  * Odoo internal user sync webhook endpoint.
@@ -117,5 +120,163 @@ odoo_controller.post('/internal/user/sync', verifyOdooApiKey, async (req, res) =
         appErrorHandler(error, res);
     }
 });
+
+/**
+ * Odoo invoice sync webhook.
+ * Handles creation, update, and deletion of invoices.
+ */
+odoo_controller.post('/internal/invoice', verifyOdooApiKey, async (req, res) => {
+    return handleInvoiceSync(req, res);
+});
+
+odoo_controller.put('/internal/invoice/:id', verifyOdooApiKey, async (req, res) => {
+    return handleInvoiceSync(req, res);
+});
+
+odoo_controller.delete('/internal/invoice/:id', verifyOdooApiKey, async (req, res) => {
+    try {
+        const odoo_invoice_id = parseInt(req.params.id);
+        if (isNaN(odoo_invoice_id)) {
+            return res.status(400).json({error: 'Invalid invoice ID'});
+        }
+
+        logger.info(`Syncing invoice deletion for invoice ${odoo_invoice_id}`);
+        await db.updateTxnOdooInvoice(odoo_invoice_id, {cancelled: true});
+
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+});
+
+/**
+ * Odoo sale order sync webhook.
+ * Handles creation, update, and deletion of sale orders.
+ */
+odoo_controller.post('/internal/sale', verifyOdooApiKey, async (req, res) => {
+    return handleSaleOrderSync(req, res);
+});
+
+odoo_controller.put('/internal/sale/:id', verifyOdooApiKey, async (req, res) => {
+    return handleSaleOrderSync(req, res);
+});
+
+odoo_controller.delete('/internal/sale/:id', verifyOdooApiKey, async (req, res) => {
+    try {
+        const odoo_saleorder_id = parseInt(req.params.id);
+        if (!isValidInteger(odoo_saleorder_id)) {
+            return res.status(400).json({error: 'Invalid sale order ID'});
+        }
+
+        logger.info(`Syncing sale order deletion for order ${odoo_saleorder_id}`);
+        await db.updateTxnOdooOrder(
+            odoo_saleorder_id,
+            {
+                cancelled: true,
+                deleted_at: DateTime.now()
+            });
+
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+});
+
+async function handleInvoiceSync(req, res) {
+    try {
+        const {invoice} = req.body;
+
+        // Basic validation
+        const {error} = invoiceStateChangeEventSchema.validate(invoice);
+        if (error) {
+            logger.error('Invalid invoice data received from Odoo', {error: error.message, invoice});
+            return res.status(400).json({error: `Invalid invoice data: ${error.message}`});
+        }
+
+        const invoiceData = {
+            odoo_invoice_id: invoice.id,
+            odoo_invoice_name: invoice.name,
+            total_amount: invoice.amount_total,
+            paid: ['paid', 'in_payment'].includes(invoice.payment_state),
+            cancelled: invoice.state === 'cancel'
+        };
+
+        logger.info(`Syncing invoice ${invoice.id} (${invoice.name})`);
+        const upsertedInvoice = await db.upsertTxnOdooInvoice(invoiceData);
+
+        // Link to sale orders if provided
+        if (invoice.sale_order_ids && invoice.sale_order_ids.length > 0) {
+            const localOrderIds = [];
+            for (const odooOrderId of invoice.sale_order_ids) {
+                const localOrderId = await db.getOdooOrderIdBySaleOrderId(odooOrderId);
+                if (localOrderId) {
+                    localOrderIds.push(localOrderId);
+                }
+            }
+
+            if (localOrderIds.length > 0) {
+                await db.linkOrderToInvoice(localOrderIds, upsertedInvoice.id);
+            }
+        }
+
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+}
+
+async function handleSaleOrderSync(req, res) {
+    try {
+        const {error} = saleOrderStateChangeEventSchema.validate(req.body);
+        if (error) {
+            logger.error('Invalid sale order data received from Odoo', {error: error.message, body: req.body});
+            return res.status(400).json({error: `Invalid sale order data: ${error.message}`});
+        }
+        const {sale_order: odoo_saleorder} = req.body;
+
+        const orderData = {
+            odoo_saleorder_id: odoo_saleorder.id,
+            odoo_saleorder_name: odoo_saleorder.name,
+            total_amount: odoo_saleorder.amount_total,
+            confirmed: ['sale', 'done'].includes(odoo_saleorder.state),
+            billed: odoo_saleorder.invoice_status === 'invoiced',
+            cancelled: odoo_saleorder.state === 'cancel'
+        };
+
+        // Check for transaction ID that have been sent when creating the invoice session_backend_refs
+        let transactionExists = false;
+        let db_txn = null;
+
+        if (odoo_saleorder.session_backend_refs && odoo_saleorder.session_backend_refs.length > 0) {
+            const odoo_steve_txnId = odoo_saleorder.session_backend_refs[0];
+            db_txn = await db.getTransactionBySteveTxnId(odoo_steve_txnId);
+            if (db_txn) {
+                transactionExists = true;
+            } else {
+                logger.warn(`Steve Transaction ID ${odoo_steve_txnId} from Odoo sale order ${odoo_saleorder.id} not found in database.`);
+            }
+        }
+
+        logger.info(`Syncing sale order ${odoo_saleorder.id} (${odoo_saleorder.name})`);
+
+        if (transactionExists) {
+            // If we have a valid txnId, we can upsert (create or update)
+            await db.upsertTxnOdooOrder(db_txn.id, orderData);
+        } else {
+            // If no valid txnId, we can only update if it already exists
+            const existingOrderId = await db.getOdooOrderIdBySaleOrderId(odoo_saleorder.id);
+            if (existingOrderId) {
+                await db.updateTxnOdooOrder(odoo_saleorder.id, orderData);
+            } else {
+                logger.warn(`Cannot sync new sale order ${odoo_saleorder.id} without valid transaction ID`);
+                // We return success to avoid Odoo retrying indefinitely, but we log the warning
+            }
+        }
+
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+}
 
 module.exports = odoo_controller;
