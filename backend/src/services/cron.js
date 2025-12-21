@@ -19,7 +19,7 @@ const logger = require('./logger');
 const {GLOBAL_CONFIG} = require("#config");
 
 const intervalSeconds = process.env.STEVE_FETCH_INTERVAL || 120;
-const cronExpression = `*/${intervalSeconds} * * * * *`; // Every 'intervalSeconds' seconds
+const cronExpression = `*/10 * * * * *`; // Every 'intervalSeconds' seconds
 
 // Health check interval (check every 5 minutes)
 const healthCheckInterval = 5 * 60 * 1000;

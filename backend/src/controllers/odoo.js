@@ -18,6 +18,7 @@ const {saleOrderStateChangeEventSchema, invoiceStateChangeEventSchema} = require
 const {DateTime} = require("luxon");
 const {isValidInteger, isValidNumber} = require("#helpers/validators");
 
+
 /**
  * Odoo internal user sync webhook endpoint.
  *

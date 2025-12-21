@@ -1024,7 +1024,6 @@ async function upsertTxnOdooInvoice(odoo_invoice_id, invoiceDetails) {
         cancelled
     } = invoiceDetails;
 
-
     const query = `
         INSERT INTO odoo_invoices (odoo_invoice_id, odoo_invoice_name, total_amount, paid, cancelled)
         VALUES ($1, $2, $3, COALESCE($4, false), COALESCE($5, false))
