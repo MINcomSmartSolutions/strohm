@@ -716,7 +716,7 @@ async function setLastStopTimestamp(new_watermark) {
  * @returns {Promise<DateTime|null>} The latest stop timestamp or null if not found or error on watermark fetch.
  */
 async function getLastStopTimestamp() {
-    const query = `SELECT last_stop_timestamp::timestamptz, iterated_at::timestamptz
+    const query = `SELECT last_stop_timestamp, iterated_at
                    FROM watermark
                    ORDER BY created_at DESC
                    LIMIT 1;`;
@@ -1005,26 +1005,25 @@ async function updateTxnOdooOrder(odoo_saleorder_id, updates) {
  * To link orders to this invoice, use linkOrderToInvoice() function.
  *
  * @async
+ * @param {number} odoo_invoice_id - The Odoo invoice ID (required)
  * @param {Object} invoiceDetails - The invoice details
- * @param {number} invoiceDetails.odoo_invoice_id - The Odoo invoice ID (required)
  * @param {string} [invoiceDetails.odoo_invoice_name] - The Odoo invoice name (e.g., 'INV/2025/0001')
  * @param {number} [invoiceDetails.total_amount] - Total invoice amount
  * @param {boolean} [invoiceDetails.paid] - Whether the invoice is paid
  * @param {boolean} [invoiceDetails.cancelled] - Whether the invoice is cancelled
  * @returns {Promise<db_odoo_invoice>} The upserted invoice record
  */
-async function upsertTxnOdooInvoice(invoiceDetails) {
+async function upsertTxnOdooInvoice(odoo_invoice_id, invoiceDetails) {
+    if (!odoo_invoice_id || !isValidInteger(odoo_invoice_id)) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS);
+    }
     const {
-        odoo_invoice_id,
         odoo_invoice_name,
         total_amount,
         paid,
         cancelled
     } = invoiceDetails;
 
-    if (!odoo_invoice_id) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_invoice_id is required');
-    }
 
     const query = `
         INSERT INTO odoo_invoices (odoo_invoice_id, odoo_invoice_name, total_amount, paid, cancelled)
@@ -1065,8 +1064,11 @@ async function upsertTxnOdooInvoice(invoiceDetails) {
  * @returns {Promise<db_odoo_invoice|null>} The updated invoice record or null if not found
  */
 async function updateTxnOdooInvoice(odoo_invoice_id, updates) {
-    if (!odoo_invoice_id) {
-        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, 'odoo_invoice_id is required');
+    if (!odoo_invoice_id || !isValidInteger(odoo_invoice_id) || !updates) {
+        throw new ValidationError(ErrorCodes.VALIDATION.MISSING_PARAMETERS, {
+            invoice_id: odoo_invoice_id,
+            updates: updates
+        });
     }
 
     const setClauses = [];
