@@ -16,7 +16,8 @@ const logger = require('#services/logger');
 const {appErrorHandler} = require('#utils/errors');
 const {saleOrderStateChangeEventSchema, invoiceStateChangeEventSchema} = require("#utils/joi");
 const {DateTime} = require("luxon");
-const {isValidInteger} = require("#helpers/validators");
+const {isValidInteger, isValidNumber} = require("#helpers/validators");
+
 
 /**
  * Odoo internal user sync webhook endpoint.
@@ -136,7 +137,7 @@ odoo_controller.put('/internal/invoice/:id', verifyOdooApiKey, async (req, res) 
 odoo_controller.delete('/internal/invoice/:id', verifyOdooApiKey, async (req, res) => {
     try {
         const odoo_invoice_id = parseInt(req.params.id);
-        if (isNaN(odoo_invoice_id)) {
+        if (!isValidInteger(odoo_invoice_id)) {
             return res.status(400).json({error: 'Invalid invoice ID'});
         }
 
@@ -202,7 +203,7 @@ async function handleInvoiceSync(req, res) {
         };
 
         logger.info(`Syncing invoice ${invoice.id} (${invoice.name})`);
-        const upsertedInvoice = await db.upsertTxnOdooInvoice(invoiceData);
+        const upsertedInvoice = await db.upsertTxnOdooInvoice(invoice.id, invoiceData);
 
         // Link to sale orders if provided
         if (invoice.sale_order_ids && invoice.sale_order_ids.length > 0) {
