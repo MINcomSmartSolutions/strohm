@@ -19,7 +19,7 @@ const logger = require('./logger');
 const {GLOBAL_CONFIG} = require("#config");
 
 const intervalSeconds = process.env.STEVE_FETCH_INTERVAL || 120;
-const cronExpression = `*/10 * * * * *`; // Every 'intervalSeconds' seconds
+const cronExpression = `*/${intervalSeconds} * * * * *`; // Every 'intervalSeconds' seconds
 
 // Health check interval (check every 5 minutes)
 const healthCheckInterval = 5 * 60 * 1000;
@@ -43,7 +43,7 @@ const transactionFetchLoop = new CronJob(cronExpression, async () => {
             if (result.completedTxnCount > 0) {
                 const billingResult = await runBillingReconciliation({
                     olderThanHours: 0, // Don't wait, process immediately
-                    limit: GLOBAL_CONFIG.ENV.IS_DEVELOPMENT ? null : result.completedTxnCount, // Process only the number of qualified transactions
+                    limit: GLOBAL_CONFIG.ENV.IS_DEVELOPMENT ? null : result.completedTxnCount,
                 });
 
                 if (billingResult.processed > 0) {
