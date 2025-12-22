@@ -4,6 +4,9 @@
 <dt><a href="#module_controllers/auth">controllers/auth</a></dt>
 <dd><p>Controller for handling user authentication and logout.</p>
 </dd>
+<dt><a href="#module_controllers/charging">controllers/charging</a></dt>
+<dd><p>Controller for handling charging session operations.</p>
+</dd>
 <dt><a href="#module_controllers/consent">controllers/consent</a></dt>
 <dd><p>Controller for handling user consent pages and operations.</p>
 <p>This controller manages the complete consent workflow including:</p>
@@ -31,6 +34,9 @@ service that bypass the centralized queries.js mechanism:</p>
 <p>Provides admin endpoints for managing users across SteVe, Odoo, and Database.
 These endpoints are protected by Tailscale network authentication middleware.</p>
 <p>SECURITY: Access is restricted to requests originating from Tailscale IP addresses.</p>
+</dd>
+<dt><a href="#module_controllers/electricity_price">controllers/electricity_price</a></dt>
+<dd><p>Controller for handling electricity price</p>
 </dd>
 <dt><a href="#module_controllers/odoo">controllers/odoo</a></dt>
 <dd><p>Controller for handling Odoo internal user sync webhooks.</p>
@@ -64,6 +70,16 @@ It does NOT check consent or other authorization concerns.</p>
 <p>Restricts access to endpoints based on Tailscale network membership.
 Checks if the request originates from a Tailscale IP address.</p>
 </dd>
+<dt><a href="#module_services/billing_reconciliation">services/billing_reconciliation</a></dt>
+<dd><p>Billing Reconciliation Service</p>
+<p>This service handles retroactive billing of transactions that were initially unbilled.
+Common scenarios:</p>
+<ul>
+<li>User registered after transaction completed</li>
+<li>Transaction was updated with user info after initial processing</li>
+<li>Failed billing attempts that need retry</li>
+</ul>
+</dd>
 <dt><a href="#module_services/consent">services/consent</a></dt>
 <dd><p>Service for handling user consent operations and consent revision management.</p>
 <p>This service provides a comprehensive API for managing user consent workflows including:</p>
@@ -88,13 +104,18 @@ database queries for specialized consent management requirements.</p>
 </ul>
 </dd>
 <dt><a href="#module_services/cron">services/cron</a></dt>
-<dd><p>Cron job service for periodic transaction fetching.</p>
+<dd><p>Cron job service for periodic transaction fetching and billing reconciliation.</p>
 <ul>
-<li>Schedules a job to run every 20 second.</li>
+<li>Schedules a job to run every configured interval for transaction fetching.</li>
+<li>Schedules billing reconciliation to run every hour.</li>
 <li>Calls runIncremental to fetch new transactions.</li>
 <li>Logs the result after each execution.</li>
 <li>Monitors SteVe health and automatically stops/starts cron job based on availability.</li>
 </ul>
+</dd>
+<dt><a href="#module_services/dbMigration">services/dbMigration</a></dt>
+<dd><p>Migration service module
+Handles database migrations programmatically using node-pg-migrate</p>
 </dd>
 <dt><a href="#module_services/logger">services/logger</a> : <code>winston</code></dt>
 <dd><p>Logger service using winston with file rotation and enhanced console output</p>
@@ -112,10 +133,10 @@ database queries for specialized consent management requirements.</p>
 </dd>
 <dt><a href="#module_services/steve_transactions">services/steve_transactions</a></dt>
 <dd><p>SteVe Transactions Service</p>
-<p>Incremental fetch of all transactions since last high‑water mark (T0).
-Records all transactions in database, but only bills permanently stopped ones.
-High‑Water Mark Concept:
-We persist the timestamp of the latest processed transaction (the &quot;high‑water mark&quot; or T0).
+<p>Responsible for fetching and recording transactions from the external SteVe API.
+This service does NOT handle billing - all billing logic is in billing_reconciliation service.</p>
+<p>Incremental fetch strategy using high-water mark (T0):
+We persist the timestamp of the latest processed transaction (the &quot;high-water mark&quot; or T0).
 On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
 After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
   • No overlap or reprocessing of already handled transactions.
@@ -251,6 +272,11 @@ Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
 ## controllers/auth
 Controller for handling user authentication and logout.
 
+<a name="module_controllers/charging"></a>
+
+## controllers/charging
+Controller for handling charging session operations.
+
 <a name="module_controllers/consent"></a>
 
 ## controllers/consent
@@ -348,10 +374,49 @@ Delete user from database (PERMANENT - USE WITH CAUTION)
 Revoke Odoo credentials for user
 
 **Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
+<a name="module_controllers/electricity_price"></a>
+
+## controllers/electricity\_price
+Controller for handling electricity price
+
 <a name="module_controllers/odoo"></a>
 
 ## controllers/odoo
 Controller for handling Odoo internal user sync webhooks.
+
+
+* [controllers/odoo](#module_controllers/odoo)
+    * [~handleInvoiceSync(req, res)](#module_controllers/odoo..handleInvoiceSync) ⇒ <code>Object</code>
+    * [~handleSaleOrderSync(req, res)](#module_controllers/odoo..handleSaleOrderSync) ⇒ <code>Object</code>
+
+<a name="module_controllers/odoo..handleInvoiceSync"></a>
+
+### controllers/odoo~handleInvoiceSync(req, res) ⇒ <code>Object</code>
+Handles invoice creation and updates from Odoo webhook.
+
+Validates invoice data against schema, upserts invoice record, and links to related sale orders.
+
+**Kind**: inner method of [<code>controllers/odoo</code>](#module_controllers/odoo)  
+**Returns**: <code>Object</code> - JSON response with success status  
+**Throws**:
+
+- <code>400</code> Invalid invoice data
+- <code>500</code> Database error
+
+<a name="module_controllers/odoo..handleSaleOrderSync"></a>
+
+### controllers/odoo~handleSaleOrderSync(req, res) ⇒ <code>Object</code>
+Handles sale order creation and updates from Odoo webhook.
+
+Validates sale order data, upserts order record. If a Steve transaction ID is present,
+creates new record; otherwise only updates existing orders.
+
+**Kind**: inner method of [<code>controllers/odoo</code>](#module_controllers/odoo)  
+**Returns**: <code>Object</code> - JSON response with success status  
+**Throws**:
+
+- <code>400</code> Invalid sale order data
+- <code>500</code> Database error
 
 <a name="module_helpers/notifications"></a>
 
@@ -517,6 +582,41 @@ Checks X-Forwarded-For and X-Real-IP headers against configured Tailscale IP ran
 In production, also validates that the request passed through nginx proxy.
 
 **Kind**: inner method of [<code>middlewares/tailscaleAuth</code>](#module_middlewares/tailscaleAuth)  
+<a name="module_services/billing_reconciliation"></a>
+
+## services/billing\_reconciliation
+Billing Reconciliation Service
+
+This service handles retroactive billing of transactions that were initially unbilled.
+Common scenarios:
+- User registered after transaction completed
+- Transaction was updated with user info after initial processing
+- Failed billing attempts that need retry
+
+
+* [services/billing_reconciliation](#module_services/billing_reconciliation)
+    * [~processSingleUnbilledTransaction(txn)](#module_services/billing_reconciliation..processSingleUnbilledTransaction) ⇒ <code>Promise.&lt;{success: boolean, txn\_id: number, user\_associated: boolean, invoice\_created: boolean, invoice\_id: (number\|null), order\_id: (number\|null), error: (string\|null)}&gt;</code>
+    * [~runBillingReconciliation(options)](#module_services/billing_reconciliation..runBillingReconciliation) ⇒ <code>Promise.&lt;{processed: number, users\_associated: number, invoices\_created: number, orders\_created: number, failed: number, results: Array.&lt;Object&gt;}&gt;</code>
+    * [~getUnbilledTransactionStats()](#module_services/billing_reconciliation..getUnbilledTransactionStats) ⇒ <code>Promise.&lt;{total\_unbilled: number, unbilled\_with\_user: number, unbilled\_without\_user: number}&gt;</code>
+
+<a name="module_services/billing_reconciliation..processSingleUnbilledTransaction"></a>
+
+### services/billing_reconciliation~processSingleUnbilledTransaction(txn) ⇒ <code>Promise.&lt;{success: boolean, txn\_id: number, user\_associated: boolean, invoice\_created: boolean, invoice\_id: (number\|null), order\_id: (number\|null), error: (string\|null)}&gt;</code>
+Process a single unbilled transaction: attempt to associate user and create invoice
+
+**Kind**: inner method of [<code>services/billing\_reconciliation</code>](#module_services/billing_reconciliation)  
+<a name="module_services/billing_reconciliation..runBillingReconciliation"></a>
+
+### services/billing_reconciliation~runBillingReconciliation(options) ⇒ <code>Promise.&lt;{processed: number, users\_associated: number, invoices\_created: number, orders\_created: number, failed: number, results: Array.&lt;Object&gt;}&gt;</code>
+Run billing reconciliation for all unbilled transactions
+
+**Kind**: inner method of [<code>services/billing\_reconciliation</code>](#module_services/billing_reconciliation)  
+<a name="module_services/billing_reconciliation..getUnbilledTransactionStats"></a>
+
+### services/billing_reconciliation~getUnbilledTransactionStats() ⇒ <code>Promise.&lt;{total\_unbilled: number, unbilled\_with\_user: number, unbilled\_without\_user: number}&gt;</code>
+Get summary statistics of unbilled transactions
+
+**Kind**: inner method of [<code>services/billing\_reconciliation</code>](#module_services/billing_reconciliation)  
 <a name="module_services/consent"></a>
 
 ## services/consent
@@ -692,19 +792,30 @@ validation throughout the application.
 <a name="module_services/cron"></a>
 
 ## services/cron
-Cron job service for periodic transaction fetching.
+Cron job service for periodic transaction fetching and billing reconciliation.
 
-- Schedules a job to run every 20 second.
+- Schedules a job to run every configured interval for transaction fetching.
+- Schedules billing reconciliation to run every hour.
 - Calls runIncremental to fetch new transactions.
 - Logs the result after each execution.
 - Monitors SteVe health and automatically stops/starts cron job based on availability.
 
 
 * [services/cron](#module_services/cron)
+    * [~billingReconciliationJob](#module_services/cron..billingReconciliationJob)
     * [~startCronWithHealthCheck()](#module_services/cron..startCronWithHealthCheck)
     * [~stopCronWithHealthCheck()](#module_services/cron..stopCronWithHealthCheck)
     * [~getCronStatus()](#module_services/cron..getCronStatus) ⇒ <code>Object</code>
 
+<a name="module_services/cron..billingReconciliationJob"></a>
+
+### services/cron~billingReconciliationJob
+Billing reconciliation job - runs every hour at minute 5
+Attempts to:
+1. Associate users with previously unbilled transactions
+2. Create invoices for transactions that now have associated users
+
+**Kind**: inner constant of [<code>services/cron</code>](#module_services/cron)  
 <a name="module_services/cron..startCronWithHealthCheck"></a>
 
 ### services/cron~startCronWithHealthCheck()
@@ -723,6 +834,51 @@ Stop the transaction fetch cron job and health monitoring
 Get cron job status
 
 **Kind**: inner method of [<code>services/cron</code>](#module_services/cron)  
+<a name="module_services/dbMigration"></a>
+
+## services/dbMigration
+Migration service module
+Handles database migrations programmatically using node-pg-migrate
+
+
+* [services/dbMigration](#module_services/dbMigration)
+    * [~buildConnectionUrl()](#module_services/dbMigration..buildConnectionUrl) ⇒ <code>string</code>
+    * [~createDatabaseIfNotExists()](#module_services/dbMigration..createDatabaseIfNotExists) ⇒ <code>Promise.&lt;boolean&gt;</code>
+    * [~runMigrations()](#module_services/dbMigration..runMigrations) ⇒ <code>Promise.&lt;void&gt;</code>
+
+<a name="module_services/dbMigration..buildConnectionUrl"></a>
+
+### services/dbMigration~buildConnectionUrl() ⇒ <code>string</code>
+Build database connection URL from environment variables
+
+**Kind**: inner method of [<code>services/dbMigration</code>](#module_services/dbMigration)  
+**Returns**: <code>string</code> - PostgreSQL connection URL  
+**Throws**:
+
+- <code>Error</code> If required environment variables are missing
+
+<a name="module_services/dbMigration..createDatabaseIfNotExists"></a>
+
+### services/dbMigration~createDatabaseIfNotExists() ⇒ <code>Promise.&lt;boolean&gt;</code>
+Create database if it doesn't exist
+Connects to the default 'postgres' database and creates the target database
+
+**Kind**: inner method of [<code>services/dbMigration</code>](#module_services/dbMigration)  
+**Returns**: <code>Promise.&lt;boolean&gt;</code> - True if database was created, false if it already existed  
+**Throws**:
+
+- <code>Error</code> If database creation fails
+
+<a name="module_services/dbMigration..runMigrations"></a>
+
+### services/dbMigration~runMigrations() ⇒ <code>Promise.&lt;void&gt;</code>
+Run pending database migrations
+
+**Kind**: inner method of [<code>services/dbMigration</code>](#module_services/dbMigration)  
+**Throws**:
+
+- <code>Error</code> If migration fails
+
 <a name="module_services/logger"></a>
 
 ## services/logger : <code>winston</code>
@@ -756,13 +912,13 @@ Network service module for external API clients.
 <a name="module_services/network..odooAuthedAxios"></a>
 
 ### services/network~odooAuthedAxios : <code>AxiosInstance</code>
-An Axios instance for interacting with the Odoo API with authentication.
+An Axios instance for interacting with the Odoo API with authentication with internal docker network.
 
 **Kind**: inner constant of [<code>services/network</code>](#module_services/network)  
 <a name="module_services/network..odooPlainAxios"></a>
 
 ### services/network~odooPlainAxios : <code>AxiosInstance</code>
-An Axios instance for interacting with the Odoo API without authentication.
+An Axios instance for interacting with the Odoo API without authentication with internal docker network.
 
 **Kind**: inner constant of [<code>services/network</code>](#module_services/network)  
 <a name="module_services/network..steveAxios"></a>
@@ -820,8 +976,7 @@ It is responsible for user creation, login, key rotation, and invoicing with Odo
     * [~createOdooUser(user)](#module_services/odoo..createOdooUser)
     * [~getOdooPortalLogin(user)](#module_services/odoo..getOdooPortalLogin) ⇒ <code>string</code>
     * [~rotateOdooUserAuth(user)](#module_services/odoo..rotateOdooUserAuth) ⇒ <code>Promise.&lt;Object&gt;</code>
-    * [~createOdooTxnInvoice(db_txn)](#module_services/odoo..createOdooTxnInvoice) ⇒ <code>Promise.&lt;Number&gt;</code>
-    * ~~[~checkValidPaymentMethod(user)](#module_services/odoo..checkValidPaymentMethod) ⇒ <code>Promise.&lt;boolean&gt;</code>~~
+    * [~sendTxnToOdooProcessing(db_txn)](#module_services/odoo..sendTxnToOdooProcessing) ⇒ <code>Promise.&lt;Object&gt;</code>
 
 <a name="module_services/odoo..createOdooUser"></a>
 
@@ -872,14 +1027,12 @@ Rotates the Odoo user API key for the given user.
 
 - <code>ValidationError</code><code>SystemError</code> On validation or Odoo errors.
 
-<a name="module_services/odoo..createOdooTxnInvoice"></a>
+<a name="module_services/odoo..sendTxnToOdooProcessing"></a>
 
-### services/odoo~createOdooTxnInvoice(db_txn) ⇒ <code>Promise.&lt;Number&gt;</code>
-Creates a bill/invoice in Odoo for a given transaction.
+### services/odoo~sendTxnToOdooProcessing(db_txn) ⇒ <code>Promise.&lt;Object&gt;</code>
+Sends the txn to odoo for processing. Creating sales or invoice is its responsibility.
 
 Request payload to Odoo:
-  session_start (datetime): Session start datetime in UTC.
-  session_end (datetime): Session end datetime in UTC.
   partner_id (int): ID of the sale/customer (`res.partner`).
   lines_data (list[dict]): Invoice line data dict with the following fields:
     - name (str): Product name.
@@ -888,35 +1041,20 @@ Request payload to Odoo:
     - base_price (float): Standard list price for product (e.g., 0.35).
     - custom_rate (float): Actual invoice price (e.g., 0.38).
     - quantity (float): Consumed quantity (e.g., 150, in kWh).
+    - session_start (datetime): Session start datetime in ISO.
+    - session_end (datetime): Session end datetime in ISO.
+    - session_backend_ref (int): Steve txn ID for the transaction.
     // TODO: Add more fields if needed. e.g. payment terms, bill_date etc.
 
 - Validates the transaction object.
 - Fetches Odoo credentials for the user.
 - Prepares invoice line data.
-- Sends a POST request to Odoo to create the invoice.
-- Throws if creation fails.
+- Sends a POST request to Odoo to create the order/invoice.
+- Stores order and invoice (if created) in local database.
+- Links them via junction table for consolidated billing support.
 
 **Kind**: inner method of [<code>services/odoo</code>](#module_services/odoo)  
-**Returns**: <code>Promise.&lt;Number&gt;</code> - The created bill ID.  
-**Throws**:
-
-- <code>ValidationError</code><code>SystemError</code> On validation or Odoo errors.
-
-<a name="module_services/odoo..checkValidPaymentMethod"></a>
-
-### ~~services/odoo~checkValidPaymentMethod(user) ⇒ <code>Promise.&lt;boolean&gt;</code>~~
-***Deprecated***
-
-Checks if the given user has a valid payment method in Odoo.
-
-- Validates the user object.
-- Fetches Odoo credentials for the user.
-- Constructs and signs a request to Odoo to check payment method validity.
-- Verifies the response hash for integrity.
-- Returns true if the payment method is valid, false otherwise.
-
-**Kind**: inner method of [<code>services/odoo</code>](#module_services/odoo)  
-**Returns**: <code>Promise.&lt;boolean&gt;</code> - True if payment method is valid, false otherwise.  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - Object containing {order_id, odoo_order_id, invoice_id, odoo_invoice_id}  
 **Throws**:
 
 - <code>ValidationError</code><code>SystemError</code> On validation or Odoo errors.
@@ -926,10 +1064,11 @@ Checks if the given user has a valid payment method in Odoo.
 ## services/steve\_transactions
 SteVe Transactions Service
 
-Incremental fetch of all transactions since last high‑water mark (T0).
-Records all transactions in database, but only bills permanently stopped ones.
-High‑Water Mark Concept:
-We persist the timestamp of the latest processed transaction (the "high‑water mark" or T0).
+Responsible for fetching and recording transactions from the external SteVe API.
+This service does NOT handle billing - all billing logic is in billing_reconciliation service.
+
+Incremental fetch strategy using high-water mark (T0):
+We persist the timestamp of the latest processed transaction (the "high-water mark" or T0).
 On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
 After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
   • No overlap or reprocessing of already handled transactions.
@@ -942,12 +1081,11 @@ Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/i
 * [services/steve_transactions](#module_services/steve_transactions)
     * [~TEMPORARY_STOP_REASONS](#module_services/steve_transactions..TEMPORARY_STOP_REASONS)
     * [~PERMANENT_STOP_REASONS](#module_services/steve_transactions..PERMANENT_STOP_REASONS)
-    * [~fetchTxnsSince(since)](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
-    * [~shouldProcessTransaction(txn)](#module_services/steve_transactions..shouldProcessTransaction) ⇒ <code>boolean</code>
-    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code>
-    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
-    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+    * [~fetchTxnsSince([since])](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
 
 <a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
 
@@ -969,46 +1107,39 @@ For now we do not handle any temporary stop reasons differently. Bill the transa
 **Kind**: inner constant of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..fetchTxnsSince"></a>
 
-### services/steve_transactions~fetchTxnsSince(since) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
+### services/steve_transactions~fetchTxnsSince([since]) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
 Fetch all transactions since a given timestamp (exclusive)
 If no timestamp is provided, fetch all transactions
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 **Returns**: <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code> - Array of transactions  
-<a name="module_services/steve_transactions..shouldProcessTransaction"></a>
-
-### services/steve_transactions~shouldProcessTransaction(txn) ⇒ <code>boolean</code>
-Determines if a transaction should be processed for billing based on its stop reason
-
-**Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>boolean</code> - True if transaction should be billed  
 <a name="module_services/steve_transactions..processTxns"></a>
 
-### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code>
-Record all transactions and create bills for permanently stopped transactions
+### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+Record all transactions in the database.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedCount: number, billedCount: number}&gt;</code> - The new high‑water mark (max stopTimestamp), count of all processed transactions, and count of billed transactions  
+**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code> - The new high-water mark and count of processed transactions  
 **Throws**:
 
 - <code>ValidationError</code> If any transaction does not match the expected schema
 
 <a name="module_services/steve_transactions..runIncremental"></a>
 
-### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
-Run incremental billing cycle: fetch and process since last watermark
+### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+Run incremental fetch: fetch and record transactions since last watermark
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
-### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
 Fetches all transactions from Steve, processes them, and updates the high-water mark.
 Use for a full sync (no time filter).
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runToday"></a>
 
-### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetched: number, billed: number, high\_water\_mark: DateTime}&gt;</code>
+### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
 Fetch and process all of today's transactions and updates the high-water mark.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
@@ -1027,15 +1158,16 @@ All functions validate input and handle errors using custom error types.
 
 
 * [services/steve_user](#module_services/steve_user)
-    * [~createSteveUser(user, [blocked], [reason])](#module_services/steve_user..createSteveUser) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+    * [~createSteveUser(user, [blocked], [reason], [failIfExists])](#module_services/steve_user..createSteveUser) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
     * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(steve\_user\|null)&gt;</code>
     * [~blockSteveUser(user, [reason], [expiredDate])](#module_services/steve_user..blockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~deleteSteveUser(user)](#module_services/steve_user..deleteSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~changeRFIDofSteveUser(user, old_rfid)](#module_services/steve_user..changeRFIDofSteveUser)
 
 <a name="module_services/steve_user..createSteveUser"></a>
 
-### services/steve_user~createSteveUser(user, [blocked], [reason]) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+### services/steve_user~createSteveUser(user, [blocked], [reason], [failIfExists]) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
 Creates a new user in SteVe with the given RFID.
 - If the user already exists in SteVe, records a FIND USER activity and saves the `ocppTagPk` to the local DB.
 - If the user does not exist, creates it with the specified block status, validates the response,
@@ -1094,6 +1226,13 @@ Validates input, deletes the user, and logs the action.
 
 - <code>ValidationError</code><code>Error</code> If input is invalid or deletion fails.
 
+<a name="module_services/steve_user..changeRFIDofSteveUser"></a>
+
+### services/steve_user~changeRFIDofSteveUser(user, old_rfid)
+Changes the RFID of an existing SteVe user.
+Should run after the RFID is changed in the local DB.
+
+**Kind**: inner method of [<code>services/steve\_user</code>](#module_services/steve_user)  
 <a name="module_services/user_operations"></a>
 
 ## services/user\_operations
@@ -1202,6 +1341,7 @@ Global database queries
 
 
 * [utils/queries](#module_utils/queries)
+    * [~normalizeRFID(rfid)](#module_utils/queries..normalizeRFID) ⇒ <code>string</code>
     * [~handleQueryError(error, operation, silent)](#module_utils/queries..handleQueryError)
     * [~getUsers(filters, options)](#module_utils/queries..getUsers) ⇒ <code>Promise.&lt;Array&gt;</code>
     * [~getUserUnique(filters)](#module_utils/queries..getUserUnique) ⇒ <code>Promise.&lt;(User\|null)&gt;</code>
@@ -1214,13 +1354,35 @@ Global database queries
     * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
     * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
-    * [~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>
-    * [~getCurrentElectricityPrice(specified_datetime)](#module_utils/queries..getCurrentElectricityPrice) ⇒ <code>Promise.&lt;number&gt;</code> \| <code>null</code>
+    * ~~[~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>~~
+    * [~getTransactionBySteveTxnId(steve_txn_id)](#module_utils/queries..getTransactionBySteveTxnId) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+    * [~upsertTxnOdooOrder(txn_id, orderDetails)](#module_utils/queries..upsertTxnOdooOrder) ⇒ <code>Promise.&lt;db\_odoo\_txn\_order&gt;</code>
+    * [~updateTxnOdooOrder(odoo_saleorder_id, updates)](#module_utils/queries..updateTxnOdooOrder) ⇒ <code>Promise.&lt;(db\_odoo\_txn\_order\|null)&gt;</code>
+    * [~upsertTxnOdooInvoice(odoo_invoice_id, invoiceDetails)](#module_utils/queries..upsertTxnOdooInvoice) ⇒ <code>Promise.&lt;db\_odoo\_invoice&gt;</code>
+    * [~updateTxnOdooInvoice(odoo_invoice_id, updates)](#module_utils/queries..updateTxnOdooInvoice) ⇒ <code>Promise.&lt;(db\_odoo\_invoice\|null)&gt;</code>
+    * [~getTxnOdooDetails(txn_id)](#module_utils/queries..getTxnOdooDetails) ⇒ <code>Promise.&lt;Array&gt;</code>
+    * [~getOdooOrderIdBySaleOrderId(odoo_saleorder_id)](#module_utils/queries..getOdooOrderIdBySaleOrderId) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+    * [~getInvoiceIdByOdooInvoiceId(odoo_invoice_id)](#module_utils/queries..getInvoiceIdByOdooInvoiceId) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+    * [~linkOrderToInvoice(orderIds, invoiceId)](#module_utils/queries..linkOrderToInvoice) ⇒ <code>Promise.&lt;Array&gt;</code>
+    * [~getOrdersByInvoiceId(invoice_id)](#module_utils/queries..getOrdersByInvoiceId) ⇒ <code>Promise.&lt;Array&gt;</code>
+    * [~getElectricityPrice(specified_datetime)](#module_utils/queries..getElectricityPrice) ⇒ <code>Promise.&lt;({price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
+    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
     * [~updateUser(userId, updates)](#module_utils/queries..updateUser) ⇒ <code>Promise.&lt;object&gt;</code>
     * [~activateUser(user)](#module_utils/queries..activateUser)
+    * [~getUserOpenChargingSession(user_id)](#module_utils/queries..getUserOpenChargingSession) ⇒ <code>Promise.&lt;(db\_txn\|null)&gt;</code>
     * [~deleteUser(user)](#module_utils/queries..deleteUser)
+    * [~getUnbilledTransactions(options)](#module_utils/queries..getUnbilledTransactions) ⇒ <code>Promise.&lt;Array.&lt;Object.&lt;db\_txn&gt;&gt;&gt;</code>
+    * [~tryAssociateUserToTransaction(db_txn)](#module_utils/queries..tryAssociateUserToTransaction) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
 
+<a name="module_utils/queries..normalizeRFID"></a>
+
+### utils/queries~normalizeRFID(rfid) ⇒ <code>string</code>
+Normalizes RFID tags to uppercase for consistent storage and comparison.
+RFIDs may come in different cases from different sources (SteVe, OIDC, etc.)
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>string</code> - Normalized RFID in uppercase  
 <a name="module_utils/queries..handleQueryError"></a>
 
 ### utils/queries~handleQueryError(error, operation, silent)
@@ -1242,12 +1404,6 @@ Gets users based on dynamic filter parameters.
 
 - <code>DatabaseError</code> - If the database operation fails
 
-**Example**  
-```js
-getUsers({ first_name: 'John' }) - Get all users named John
-getUsers({ active: true }, { limit: 10, offset: 20 }) - Get 10 active users, skipping first 20
-getUsers({}, { orderBy: 'created_at', orderDirection: 'DESC' }) - Get all users ordered by creation date descending
-```
 <a name="module_utils/queries..getUserUnique"></a>
 
 ### utils/queries~getUserUnique(filters) ⇒ <code>Promise.&lt;(User\|null)&gt;</code>
@@ -1349,7 +1505,11 @@ Returns a Luxon DateTime if found, otherwise null.
 **Returns**: <code>Promise.&lt;(DateTime\|null)&gt;</code> - The latest stop timestamp or null if not found or error on watermark fetch.  
 <a name="module_utils/queries..saveInvoiceId"></a>
 
-### utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>
+### ~~utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>~~
+***Use upsertTxnOdooOrder() and linkOrderToInvoice() instead.
+This function is kept for backward compatibility only.
+The invoice_ref column is being deprecated in favor of the odoo_txn_orders/odoo_invoices tables.***
+
 Updates the `invoice_ref` field for a transaction in `charging_transactions`.
 This is used to link a transaction to an invoice in Odoo.
 
@@ -1358,15 +1518,107 @@ This is used to link a transaction to an invoice in Odoo.
 
 - <code>DatabaseError</code><code>ValidationError</code> On query error.
 
-<a name="module_utils/queries..getCurrentElectricityPrice"></a>
+<a name="module_utils/queries..getTransactionBySteveTxnId"></a>
 
-### utils/queries~getCurrentElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;number&gt;</code> \| <code>null</code>
+### utils/queries~getTransactionBySteveTxnId(steve_txn_id) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
+Retrieves a transaction by its Steve ID.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(Object\|null)&gt;</code> - The transaction object or null if not found  
+<a name="module_utils/queries..upsertTxnOdooOrder"></a>
+
+### utils/queries~upsertTxnOdooOrder(txn_id, orderDetails) ⇒ <code>Promise.&lt;db\_odoo\_txn\_order&gt;</code>
+Creates or updates a sale order record linked to a charging transaction.
+If odoo_saleorder_id already exists, updates the existing record by the txn_id
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;db\_odoo\_txn\_order&gt;</code> - The upserted order record  
+<a name="module_utils/queries..updateTxnOdooOrder"></a>
+
+### utils/queries~updateTxnOdooOrder(odoo_saleorder_id, updates) ⇒ <code>Promise.&lt;(db\_odoo\_txn\_order\|null)&gt;</code>
+Updates an existing sale order record by Odoo sale order ID.
+Only updates fields that are provided (non-undefined).
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(db\_odoo\_txn\_order\|null)&gt;</code> - The updated order record or null if not found  
+<a name="module_utils/queries..upsertTxnOdooInvoice"></a>
+
+### utils/queries~upsertTxnOdooInvoice(odoo_invoice_id, invoiceDetails) ⇒ <code>Promise.&lt;db\_odoo\_invoice&gt;</code>
+Creates or updates an invoice record.
+If odoo_invoice_id already exists, updates the existing record.
+To link orders to this invoice, use linkOrderToInvoice() function.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;db\_odoo\_invoice&gt;</code> - The upserted invoice record  
+<a name="module_utils/queries..updateTxnOdooInvoice"></a>
+
+### utils/queries~updateTxnOdooInvoice(odoo_invoice_id, updates) ⇒ <code>Promise.&lt;(db\_odoo\_invoice\|null)&gt;</code>
+Updates an existing invoice record by Odoo invoice ID.
+Only updates fields that are provided (non-undefined).
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(db\_odoo\_invoice\|null)&gt;</code> - The updated invoice record or null if not found  
+<a name="module_utils/queries..getTxnOdooDetails"></a>
+
+### utils/queries~getTxnOdooDetails(txn_id) ⇒ <code>Promise.&lt;Array&gt;</code>
+Gets all order and invoice details for a charging transaction.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Array&gt;</code> - Array of orders with their linked invoices  
+<a name="module_utils/queries..getOdooOrderIdBySaleOrderId"></a>
+
+### utils/queries~getOdooOrderIdBySaleOrderId(odoo_saleorder_id) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+Gets the local order record ID by Odoo sale order ID.
+Useful when you need to link an invoice to an order.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(number\|null)&gt;</code> - The local order ID or null if not found  
+<a name="module_utils/queries..getInvoiceIdByOdooInvoiceId"></a>
+
+### utils/queries~getInvoiceIdByOdooInvoiceId(odoo_invoice_id) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+Gets the local invoice record ID by Odoo invoice ID.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(number\|null)&gt;</code> - The local invoice ID or null if not found  
+<a name="module_utils/queries..linkOrderToInvoice"></a>
+
+### utils/queries~linkOrderToInvoice(orderIds, invoiceId) ⇒ <code>Promise.&lt;Array&gt;</code>
+Links one or more orders to an invoice (for consolidated billing).
+Each order can only be linked to one invoice.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Array&gt;</code> - Array of created link records  
+<a name="module_utils/queries..getOrdersByInvoiceId"></a>
+
+### utils/queries~getOrdersByInvoiceId(invoice_id) ⇒ <code>Promise.&lt;Array&gt;</code>
+Gets all orders linked to a specific invoice.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Array&gt;</code> - Array of order records  
+<a name="module_utils/queries..getElectricityPrice"></a>
+
+### utils/queries~getElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;({price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
 If no price is found, it returns null.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;number&gt;</code> \| <code>null</code> - If `specified_datetime` provided, that datetime's if not, the current electricity price in cents per kWh.  
+<a name="module_utils/queries..getElectricityPriceOrDefault"></a>
+
+### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+Retrieves the current electricity price or falls back to a default price if none is found.
+
+This function attempts to fetch the electricity price for a specified datetime
+or the current time if no datetime is provided. If no price is found or the price
+is invalid, it falls back to a default price defined in the global configuration.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in cents per kWh.  
+**Throws**:
+
+- <code>ValidationError</code> - If the specified datetime is invalid.
+- <code>DatabaseError</code> - If there is an error during the database query.
+
 <a name="module_utils/queries..getUsersCount"></a>
 
 ### utils/queries~getUsersCount(filters) ⇒ <code>Promise.&lt;number&gt;</code>
@@ -1398,6 +1650,19 @@ Activates a previously deactivated user.
 - <code>ValidationError</code> If required parameters are missing.
 - <code>DatabaseError</code> If activation fails.
 
+<a name="module_utils/queries..getUserOpenChargingSession"></a>
+
+### utils/queries~getUserOpenChargingSession(user_id) ⇒ <code>Promise.&lt;(db\_txn\|null)&gt;</code>
+Checks if a user has an open (active) charging session.
+An open charging session is one where stop_timestamp is NULL.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(db\_txn\|null)&gt;</code> - The open charging transaction if exists, null otherwise.  
+**Throws**:
+
+- <code>ValidationError</code> If user_id is invalid.
+- <code>DatabaseError</code> If database operation fails.
+
 <a name="module_utils/queries..deleteUser"></a>
 
 ### utils/queries~deleteUser(user)
@@ -1409,6 +1674,33 @@ WARNING: This permanently removes the user and all associated records.
 
 - <code>ValidationError</code> If required parameters are missing.
 - <code>DatabaseError</code> If deletion fails.
+
+<a name="module_utils/queries..getUnbilledTransactions"></a>
+
+### utils/queries~getUnbilledTransactions(options) ⇒ <code>Promise.&lt;Array.&lt;Object.&lt;db\_txn&gt;&gt;&gt;</code>
+Retrieves unbilled transactions that are stopped and have an associated user.
+These are transactions that:
+- Have a stop_timestamp (transaction is complete)
+- Have a user_id (user is known)
+- Do NOT have an order created in Odoo yet (not yet billed)
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Array.&lt;Object.&lt;db\_txn&gt;&gt;&gt;</code> - Array of unbilled transaction objects  
+**Throws**:
+
+- <code>DatabaseError</code> On query error
+
+<a name="module_utils/queries..tryAssociateUserToTransaction"></a>
+
+### utils/queries~tryAssociateUserToTransaction(db_txn) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+Attempts to associate a user with a transaction by looking up the user via RFID.
+This is useful for retroactively associating users who registered after their transaction started.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;(number\|null)&gt;</code> - The user_id if found and updated, null otherwise  
+**Throws**:
+
+- <code>DatabaseError</code><code>ValidationError</code> On query error
 
 <a name="module_utils/steve"></a>
 
@@ -1438,10 +1730,13 @@ Type definitions
     * [~OIDCUser](#module_utils/typedef..OIDCUser) : <code>Object</code>
     * [~steve_user](#module_utils/typedef..steve_user) : <code>Object</code>
     * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
-    * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
+    * ~~[~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>~~
     * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
     * [~db_consent_revision](#module_utils/typedef..db_consent_revision) : <code>Object</code>
     * [~db_user_consent](#module_utils/typedef..db_user_consent) : <code>Object</code>
+    * [~db_odoo_txn_order](#module_utils/typedef..db_odoo_txn_order) : <code>Object</code>
+    * [~db_odoo_invoice](#module_utils/typedef..db_odoo_invoice) : <code>Object</code>
+    * [~db_odoo_order_invoice_link](#module_utils/typedef..db_odoo_order_invoice_link) : <code>Object</code>
 
 <a name="module_utils/typedef..User"></a>
 
@@ -1451,7 +1746,7 @@ Type definitions
 
 | Name | Type | Description |
 | --- | --- | --- |
-| user_id | <code>string</code> | The user's ID |
+| user_id | <code>number</code> | The user's ID |
 | name | <code>string</code> | The user's name |
 | email | <code>string</code> | The user's email |
 | odoo_user_id | <code>number</code> | The user's Odoo ID |
@@ -1517,7 +1812,9 @@ Type definitions
 
 <a name="module_utils/typedef..db_txn"></a>
 
-### utils/typedef~db\_txn : <code>Object</code>
+### ~~utils/typedef~db\_txn : <code>Object</code>~~
+***{number} invoice_ref - The invoice reference associated with the transaction returned from Odoo. Deprecated, use db_odoo_txn_order and db_odoo_invoice instead.***
+
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
@@ -1537,7 +1834,6 @@ Type definitions
 | ocpp_tag_pk | <code>number</code> | PK of the OCPP tag used in the transaction in SteVe (steve_id in strohm.users table) |
 | ocpp_id_tag | <code>number</code> | The Ocpp Tag used in the transaction (rfid in strohm.users table) |
 | user_id | <code>number</code> | The user ID associated with the transaction |
-| invoice_ref | <code>number</code> | The invoice reference associated with the transaction returned from Odoo |
 | txn_steve_id | <code>number</code> | PK of the transaction in SteVe |
 
 <a name="module_utils/typedef..electricity_price"></a>
@@ -1590,6 +1886,55 @@ Type definitions
 | withdrawn_at | <code>Date</code> | Timestamp when consent was withdrawn (null if not withdrawn) |
 | effective_from | <code>Date</code> | Timestamp when the consent became effective |
 | updated_at | <code>Date</code> | Timestamp when the consent record was last updated |
+
+<a name="module_utils/typedef..db_odoo_txn_order"></a>
+
+### utils/typedef~db\_odoo\_txn\_order : <code>Object</code>
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| id | <code>number</code> | Primary key for the order record |
+| txn_id | <code>number</code> | Foreign key linking to charging_transactions.id |
+| odoo_saleorder_id | <code>number</code> \| <code>null</code> | The Odoo sale order ID |
+| odoo_saleorder_name | <code>string</code> \| <code>null</code> | The Odoo sale order name (e.g., 'S00001') |
+| qty | <code>number</code> \| <code>null</code> | Quantity of electricity delivered in kWh |
+| unit_price | <code>number</code> \| <code>null</code> | Unit price per kWh in euros at the time of order creation |
+| total_amount | <code>number</code> \| <code>null</code> | Total amount for the order (may include taxes and discounts) |
+| confirmed | <code>boolean</code> | Whether the order is confirmed (default: true) |
+| billed | <code>boolean</code> | Whether the order has been billed (default: false) |
+| cancelled | <code>boolean</code> | Whether the order is cancelled (default: false) |
+| created_at | <code>Date</code> | Timestamp when the order record was created |
+
+<a name="module_utils/typedef..db_odoo_invoice"></a>
+
+### utils/typedef~db\_odoo\_invoice : <code>Object</code>
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| id | <code>number</code> | Primary key for the invoice record |
+| odoo_invoice_id | <code>number</code> | The Odoo invoice ID (unique) |
+| odoo_invoice_name | <code>string</code> \| <code>null</code> | The Odoo invoice name (e.g., 'INV/2025/0001') |
+| total_amount | <code>number</code> \| <code>null</code> | Total invoice amount (may include taxes and discounts) |
+| paid | <code>boolean</code> | Whether the invoice is paid (default: false) |
+| cancelled | <code>boolean</code> | Whether the invoice is cancelled (default: false) |
+| created_at | <code>Date</code> | Timestamp when the invoice record was created |
+
+<a name="module_utils/typedef..db_odoo_order_invoice_link"></a>
+
+### utils/typedef~db\_odoo\_order\_invoice\_link : <code>Object</code>
+**Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
+**Properties**
+
+| Name | Type | Description |
+| --- | --- | --- |
+| id | <code>number</code> | Primary key for the link record |
+| order_id | <code>number</code> | Foreign key to odoo_txn_orders.id (unique - one order per invoice) |
+| invoice_id | <code>number</code> | Foreign key to odoo_invoices.id (one invoice can have multiple orders) |
+| created_at | <code>Date</code> | Timestamp when the link was created |
 
 <a name="module_app"></a>
 
@@ -1683,10 +2028,9 @@ Configuration settings for SteVe and Odoo integrations
 | ODOO_CONFIG.EXTERNAL_BASE_URL | <code>string</code> | Odoo external URL |
 | ODOO_CONFIG.API_SECRET | <code>string</code> | Odoo API secret |
 | ODOO_CONFIG.USER_CREATION_URI | <code>string</code> | User creation endpoint |
-| ODOO_CONFIG.INVOICE_CREATION_URI | <code>string</code> | Invoice creation endpoint |
+| ODOO_CONFIG.TXN_PROCESS_URI | <code>string</code> | Invoice creation endpoint |
 | ODOO_CONFIG.PORTAL_LOGIN_URI | <code>string</code> | Portal login endpoint |
 | ODOO_CONFIG.ROTATE_APIKEY_URI | <code>string</code> | API key rotation endpoint |
-| ODOO_CONFIG.CHECK_PAYMENT_METHOD_URI | <code>string</code> | Payment method check endpoint |
 
 <a name="logger"></a>
 

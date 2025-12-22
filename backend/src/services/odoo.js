@@ -227,7 +227,7 @@ async function rotateOdooUserAuth(user) {
 
 
 /**
- * Creates a sale order (and optionally invoice) in Odoo for a given transaction.
+ * Sends the txn to odoo for processing. Creating sales or invoice is its responsibility.
  *
  * Request payload to Odoo:
  *   partner_id (int): ID of the sale/customer (`res.partner`).

@@ -134,6 +134,22 @@ odoo_controller.put('/internal/invoice/:id', verifyOdooApiKey, async (req, res) 
     return handleInvoiceSync(req, res);
 });
 
+/**
+ * DELETE /internal/invoice/:id
+ *
+ * Marks an invoice as cancelled in the system.
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {string} req.params.id - Odoo invoice ID to delete
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with success status
+ * @throws {400} Invalid invoice ID format
+ * @throws {500} Database error
+ *
+ * @middleware verifyOdooApiKey - Validates API key authentication
+ */
 odoo_controller.delete('/internal/invoice/:id', verifyOdooApiKey, async (req, res) => {
     try {
         const odoo_invoice_id = parseInt(req.params.id);
@@ -162,6 +178,22 @@ odoo_controller.put('/internal/sale/:id', verifyOdooApiKey, async (req, res) => 
     return handleSaleOrderSync(req, res);
 });
 
+/**
+ * DELETE /internal/sale/:id
+ *
+ * Marks a sale order as cancelled and records deletion timestamp.
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {string} req.params.id - Odoo sale order ID to delete
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with success status
+ * @throws {400} Invalid sale order ID format
+ * @throws {500} Database error
+ *
+ * @middleware verifyOdooApiKey - Validates API key authentication
+ */
 odoo_controller.delete('/internal/sale/:id', verifyOdooApiKey, async (req, res) => {
     try {
         const odoo_saleorder_id = parseInt(req.params.id);
@@ -183,6 +215,26 @@ odoo_controller.delete('/internal/sale/:id', verifyOdooApiKey, async (req, res) 
     }
 });
 
+/**
+ * Handles invoice creation and updates from Odoo webhook.
+ *
+ * Validates invoice data against schema, upserts invoice record, and links to related sale orders.
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Request body containing invoice object
+ * @param {Object} req.body.invoice - Invoice data from Odoo
+ * @param {number} req.body.invoice.id - Odoo invoice ID
+ * @param {string} req.body.invoice.name - Invoice name/number
+ * @param {number} req.body.invoice.amount_total - Total invoice amount
+ * @param {string} req.body.invoice.payment_state - Payment state (paid, in_payment, etc.)
+ * @param {string} req.body.invoice.state - Invoice state (draft, posted, cancel)
+ * @param {Array<number>} [req.body.invoice.sale_order_ids] - Related sale order IDs
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with success status
+ * @throws {400} Invalid invoice data
+ * @throws {500} Database error
+ */
 async function handleInvoiceSync(req, res) {
     try {
         const {invoice} = req.body;
@@ -226,6 +278,27 @@ async function handleInvoiceSync(req, res) {
     }
 }
 
+/**
+ * Handles sale order creation and updates from Odoo webhook.
+ *
+ * Validates sale order data, upserts order record. If a Steve transaction ID is present,
+ * creates new record; otherwise only updates existing orders.
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Request body containing sale_order object
+ * @param {Object} req.body.sale_order - Sale order data from Odoo
+ * @param {number} req.body.sale_order.id - Odoo sale order ID
+ * @param {string} req.body.sale_order.name - Sale order name/number
+ * @param {number} req.body.sale_order.amount_total - Total order amount
+ * @param {string} req.body.sale_order.state - Order state (draft, sale, done, cancel)
+ * @param {string} req.body.sale_order.invoice_status - Invoice status (upsell, invoiced, to invoice)
+ * @param {Array<string>} [req.body.sale_order.session_backend_refs] - Steve transaction IDs
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with success status
+ * @throws {400} Invalid sale order data
+ * @throws {500} Database error
+ */
 async function handleSaleOrderSync(req, res) {
     try {
         const {error} = saleOrderStateChangeEventSchema.validate(req.body);

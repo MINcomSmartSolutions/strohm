@@ -171,11 +171,7 @@ async function runBillingReconciliation(options = {}) {
  * Get summary statistics of unbilled transactions
  *
  * @async
- * @returns {Promise<{
- *   total_unbilled: number,
- *   unbilled_with_user: number,
- *   unbilled_without_user: number,
- * }>}
+ * @returns {Promise<{total_unbilled: number, unbilled_with_user: number, unbilled_without_user: number}>}
  */
 async function getUnbilledTransactionStats() {
     try {
