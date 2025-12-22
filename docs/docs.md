@@ -158,12 +158,9 @@ After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
 <dt><a href="#module_services/user_operations">services/user_operations</a></dt>
 <dd><p>Service for checking overall user integrity and creating users with proper links to external systems.</p>
 </dd>
-<dt><a href="#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_">utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.</a></dt>
-<dd><p>Environment variable validation</p>
+<dt><a href="#module_utils/env-validator">utils/env-validator</a></dt>
+<dd><p>Environment variable validation
+Validates all required environment variables at startup to catch configuration issues early.</p>
 </dd>
 <dt><a href="#module_utils/oidc_config">utils/oidc_config</a></dt>
 <dd><p>OIDC configuration for authentication middleware.</p>
@@ -1253,79 +1250,42 @@ Handles user creation and linking with external systems.
 
 **Kind**: inner method of [<code>services/user\_operations</code>](#module_services/user_operations)  
 **Returns**: <code>Promise.&lt;Object&gt;</code> - User object from the database.  
-<a name="utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_"></a>
+<a name="module_utils/env-validator"></a>
 
 ## utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.
 Environment variable validation
+Validates all required environment variables at startup to catch configuration issues early.
 
 
-* [utils/env-validator
+* [utils/env-validator](#module_utils/env-validator)
+    * [~envSchema](#module_utils/env-validator..envSchema)
+    * [~validateEnv()](#module_utils/env-validator..validateEnv) ⇒ <code>Object</code>
+    * [~validateEnvOrExit()](#module_utils/env-validator..validateEnvOrExit)
 
-Validates all required environment variables at startup to catch configuration issues early.](#utils/env-validator
+<a name="module_utils/env-validator..envSchema"></a>
 
-Validates all required environment variables at startup to catch configuration issues early.module_)
-    * [~envSchema](#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_..envSchema)
-    * [~validateEnv()](#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_..validateEnv) ⇒ <code>Object</code>
-    * [~validateEnvOrExit()](#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_..validateEnvOrExit)
-
-<a name="utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_..envSchema"></a>
-
-### utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.~envSchema
+### utils/env-validator~envSchema
 Schema for environment variable validation
 
-**Kind**: inner constant of [<code>utils/env-validator
+**Kind**: inner constant of [<code>utils/env-validator</code>](#module_utils/env-validator)  
+<a name="module_utils/env-validator..validateEnv"></a>
 
-Validates all required environment variables at startup to catch configuration issues early.</code>](#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_)  
-<a name="utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_..validateEnv"></a>
-
-### utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.~validateEnv() ⇒ <code>Object</code>
+### utils/env-validator~validateEnv() ⇒ <code>Object</code>
 Validates environment variables against the schema
 
-**Kind**: inner method of [<code>utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.</code>](#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_)  
+**Kind**: inner method of [<code>utils/env-validator</code>](#module_utils/env-validator)  
 **Returns**: <code>Object</code> - Validated and sanitized environment variables  
 **Throws**:
 
 - <code>Error</code> If validation fails
 
-<a name="utils/env-validator
+<a name="module_utils/env-validator..validateEnvOrExit"></a>
 
-Validates all required environment variables at startup to catch configuration issues early.module_..validateEnvOrExit"></a>
-
-### utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.~validateEnvOrExit()
+### utils/env-validator~validateEnvOrExit()
 Validates environment variables and exits process if validation fails
-Call this at the very beginning of your application
+Should be called at the very beginning of the application
 
-**Kind**: inner method of [<code>utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.</code>](#utils/env-validator
-
-Validates all required environment variables at startup to catch configuration issues early.module_)  
+**Kind**: inner method of [<code>utils/env-validator</code>](#module_utils/env-validator)  
 <a name="module_utils/oidc_config"></a>
 
 ## utils/oidc\_config

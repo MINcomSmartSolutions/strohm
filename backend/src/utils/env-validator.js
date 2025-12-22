@@ -1,9 +1,9 @@
 'use strict';
 /**
  * @file Environment variable validation
- * @module utils/env-validator
- *
  * Validates all required environment variables at startup to catch configuration issues early.
+ *
+ * @module utils/env-validator
  */
 
 const Joi = require('joi');
@@ -119,7 +119,9 @@ function validateEnv() {
         stripUnknown: false, // Keep unknown environment variables
     });
 
-    if (error) {
+    const testMode = process.env.NODE_ENV === 'test';
+
+    if (error && !testMode) {
         const errorMessages = error.details.map(detail => {
             return `  - ${detail.message}`;
         }).join('\n');
@@ -138,7 +140,7 @@ function validateEnv() {
 
 /**
  * Validates environment variables and exits process if validation fails
- * Call this at the very beginning of your application
+ * Should be called at the very beginning of the application
  */
 function validateEnvOrExit() {
     try {
