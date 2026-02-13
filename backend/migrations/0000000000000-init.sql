@@ -227,7 +227,7 @@ CREATE TABLE public.electricity_prices (
 -- Name: COLUMN electricity_prices.price; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.electricity_prices.price IS 'in cents/wh';
+COMMENT ON COLUMN public.electricity_prices.price IS 'NETTO';
 
 
 --

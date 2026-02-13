@@ -57,10 +57,12 @@ electricity_price_controller.get('/api/electricity_price', verifyOdooApiKey, asy
 
         // Fetch electricity price for datetime or get default price
         const price_data = await db.getElectricityPriceOrDefault(datetime);
+        const vat_rate = await db.getVAT(datetime);
 
         return res.status(200).json({
             success: true,
             price_data: price_data,
+            vat_rate: vat_rate,
         });
     } catch (error) {
         logger.error('Error checking for price', error);

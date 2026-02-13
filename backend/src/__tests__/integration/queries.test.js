@@ -770,7 +770,7 @@ describe('Database Queries Integration Tests', () => {
             const price = await db.getElectricityPrice();
 
             expect(price).toBeDefined();
-            expect(price.price_ct_kwh).toBe(42);
+            expect(price.price_eur_kwh).toBe(0.42);
         });
 
         test('getElectricityPrice should return price for specific date', async () => {
@@ -780,7 +780,7 @@ describe('Database Queries Integration Tests', () => {
             const yesterdayDate = DateTime.now().minus({days: 1});
             const price = await db.getElectricityPrice(yesterdayDate);
 
-            expect(price.price_ct_kwh).toBe(42);
+            expect(price.price_eur_kwh).toBe(0.42);
         });
 
         test('getElectricityPrice should throw with invalid dateTime', async () => {
@@ -804,11 +804,11 @@ describe('Database Queries Integration Tests', () => {
                 // Check price from 2 days ago (should be 25)
                 const oldDate = DateTime.now().minus({days: 2});
                 const oldPrice = await db.getElectricityPrice(oldDate);
-                expect(oldPrice.price_ct_kwh).toBe(25);
+                expect(oldPrice.price_eur_kwh).toBe(0.25);
 
                 // Check current price (should be 42)
                 const currentPrice = await db.getElectricityPrice();
-                expect(currentPrice.price_ct_kwh).toBe(42);
+                expect(currentPrice.price_eur_kwh).toBe(0.42);
             } finally {
                 client.release();
             }
@@ -825,7 +825,7 @@ describe('Database Queries Integration Tests', () => {
                 );
 
                 const price = await db.getElectricityPrice();
-                expect(price.price_ct_kwh).toBe(0);
+                expect(price.price_eur_kwh).toBe(0.0);
             } finally {
                 client.release();
             }
@@ -843,7 +843,7 @@ describe('Database Queries Integration Tests', () => {
 
                 const testDate = DateTime.now().minus({days: 1, hours: 12});
                 const price = await db.getElectricityPrice(testDate);
-                expect(price.price_ct_kwh).toBe(0);
+                expect(price.price_eur_kwh).toBe(0.0);
 
             } finally {
                 client.release();

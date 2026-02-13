@@ -525,8 +525,8 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 35});
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 35});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -642,8 +642,8 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 0});
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 0});
+            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 0});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -732,7 +732,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPrice.mockResolvedValue({price_ct_kwh: 35});
+            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 35});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -765,7 +765,7 @@ describe('Odoo Service', () => {
 
             // Mock electricity price fetch returning null as no price is available
             db.getElectricityPrice.mockResolvedValue(null);
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35}); // Default price 0.35
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 35}); // Default price 0.35
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -838,7 +838,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 35});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -913,7 +913,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 35});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -941,7 +941,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_ct_kwh: 35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 35});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');

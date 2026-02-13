@@ -282,8 +282,7 @@ async function sendTxnToOdooProcessing(db_txn) {
     }
 
     // The price of electricity at the time of transaction started
-    const txn_started_with_electricity_price = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
-    const unit_price_eur = txn_started_with_electricity_price.price_ct_kwh / 100; // convert cts to €
+    const txn_started_with_electricity_price_eur_kwh = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
 
     const lines_data = [
         {
@@ -293,7 +292,7 @@ async function sendTxnToOdooProcessing(db_txn) {
             'session_backend_ref': db_txn.txn_steve_id,
             // 'uom_name': 'kWh',
             // 'base_price': 0.35,
-            'price_unit': unit_price_eur, // convert cts to €
+            'price_unit': txn_started_with_electricity_price_eur_kwh, // Should be NETTO in euros per kWh!
             'quantity': db_txn.delivered_energy_wh / 1000, // convert Wh to kWh
         },
     ];
@@ -343,9 +342,9 @@ async function sendTxnToOdooProcessing(db_txn) {
         odoo_saleorder_id: order.id,
         odoo_saleorder_name: order.name,
         confirmed: order.confirmed || true,
-        qty: order.qty || null,
-        unit_price: unit_price_eur,
-        total_amount: order.total_amount || null,
+        qty: order.qty,
+        unit_price: order.unit_price,
+        total_amount: order.total_amount,
         billed: order.invoice || false,
     });
 
@@ -353,12 +352,12 @@ async function sendTxnToOdooProcessing(db_txn) {
 
     // Create invoice record if invoice was created by Odoo
     if (invoice && invoice.id) {
-        db_created_invoice = await db.upsertTxnOdooInvoice({
-            odoo_invoice_id: invoice.id,
-            odoo_invoice_name: invoice.name || null,
-            total_amount: invoice.total_amount || null,
-            paid: invoice.paid || false,
-        });
+        db_created_invoice = await db.upsertTxnOdooInvoice(
+            invoice.id, {
+                odoo_invoice_name: invoice.name || null,
+                total_amount: invoice.total_amount || null,
+                paid: invoice.paid || false,
+            });
 
         // Link order to invoice
         await db.linkOrderToInvoice(db_created_order.id, db_created_invoice.id);

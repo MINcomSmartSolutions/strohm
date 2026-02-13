@@ -1281,7 +1281,7 @@ async function getOrdersByInvoiceId(invoice_id) {
  *
  * @async
  * @param {DateTime|null} specified_datetime - Optional luxon datetime object to check the price at a specific time.
- * @returns {Promise<{price_ct_kwh: Number, valid_from: DateTime, valid_till: DateTime}|null>}
+ * @returns {Promise<{price_eur_kwh: Number, valid_from: DateTime, valid_till: DateTime}|null>}
  */
 async function getElectricityPrice(specified_datetime = null) {
     if (specified_datetime && !specified_datetime.isValid) {
@@ -1296,7 +1296,7 @@ async function getElectricityPrice(specified_datetime = null) {
 
     if (specified_datetime) {
         query = `
-            SELECT price, valid_from, valid_till
+            SELECT price_eur_kwh, valid_from, valid_till
             FROM electricity_prices
             WHERE valid_from <= $1::timestamptz
               AND (valid_till IS NULL OR valid_till > $1::timestamptz)
@@ -1305,7 +1305,7 @@ async function getElectricityPrice(specified_datetime = null) {
         params = [specified_datetime];
     } else {
         query = `
-            SELECT price, valid_from, valid_till
+            SELECT price_eur_kwh, valid_from, valid_till
             FROM electricity_prices
             WHERE valid_from <= NOW()
               AND (valid_till IS NULL OR valid_till > NOW())
@@ -1322,7 +1322,7 @@ async function getElectricityPrice(specified_datetime = null) {
         }
         return {
             for_timestamp: specified_datetime ?? DateTime.now().toUTC(),
-            price_ct_kwh: result.rows[0].price,
+            price_eur_kwh: result.rows[0].price_eur_kwh,
             valid_from: result.rows[0].valid_from,
             valid_till: result.rows[0].valid_till,
         };
@@ -1343,7 +1343,7 @@ async function getElectricityPrice(specified_datetime = null) {
  * @async
  * @function getElectricityPriceOrDefault
  * @param {DateTime|null} [specified_datetime=null] - Optional Luxon DateTime object to check the price at a specific time.
- * @returns {Promise<{price_ct_kwh: Number, valid_from: DateTime, valid_till: DateTime}>} - The electricity price in cents per kWh.
+ * @returns {Promise<{price_eur_kwh: Number, valid_from: DateTime, valid_till: DateTime}>} - The electricity price in cents per kWh.
  *
  * @throws {ValidationError} - If the specified datetime is invalid.
  * @throws {DatabaseError} - If there is an error during the database query.
@@ -1351,21 +1351,21 @@ async function getElectricityPrice(specified_datetime = null) {
 async function getElectricityPriceOrDefault(specified_datetime = null) {
     const priceData = await getElectricityPrice(specified_datetime);
 
-    let for_timestamp, price_ct_kwh, valid_from, valid_till;
+    let for_timestamp, price_eur_kwh, valid_from, valid_till;
 
     if (priceData) {
-        ({for_timestamp, price_ct_kwh, valid_from, valid_till} = priceData);
+        ({for_timestamp, price_eur_kwh, valid_from, valid_till} = priceData);
     }
 
-    if (!isValidNumber(price_ct_kwh)) {
-        const default_price = GLOBAL_CONFIG.DEFAULT_ELECTRICITY_PRICE_CENTS_PER_KWH;
+    if (!isValidNumber(price_eur_kwh)) {
+        const default_price = GLOBAL_CONFIG.DEFAULT_ELECTRICITY_PRICE_EUR_PER_KWH_NETTO;
         logger.warn(`No price could be found for ${specified_datetime ?? DateTime.now().toISO()}, falling back to default price ${default_price}`);
-        price_ct_kwh = default_price;
+        price_eur_kwh = default_price;
         valid_from = null;
         valid_till = null;
     }
 
-    return {for_timestamp, price_ct_kwh, valid_from, valid_till};
+    return {for_timestamp, price_eur_kwh, valid_from, valid_till};
 }
 
 
@@ -1828,6 +1828,35 @@ async function tryAssociateUserToTransaction(db_txn) {
     }
 }
 
+
+async function getVAT(datetime = null) {
+    if (datetime && !datetime.isValid) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'datetime must be valid DateTime objects');
+    }
+    datetime = datetime ? datetime.toJSDate() : DateTime.now().toJSDate();
+
+    try {
+        const query_format = `
+            SELECT *
+            FROM vat_rates
+            WHERE (effective_from <= $1::timestamptz)
+              AND (effective_to IS NULL OR effective_to >= $1::timestamptz)`;
+
+        const params = [datetime];
+
+        const results = await pool.query(query_format, params);
+        return results.rows[0];
+    } catch (error) {
+        handleQueryError(error, 'getVAT');
+    }
+};
+
+module.exports = {
+    getVAT,
+};
+
+
 module.exports = {
     db: {
         handleQueryError,
@@ -1865,6 +1894,7 @@ module.exports = {
         linkOrderToInvoice,
         getOrdersByInvoiceId,
         getTransactionBySteveTxnId,
+        getVAT,
     },
     normalizeRFID,
 };
