@@ -1325,8 +1325,8 @@ Global database queries
     * [~getInvoiceIdByOdooInvoiceId(odoo_invoice_id)](#module_utils/queries..getInvoiceIdByOdooInvoiceId) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
     * [~linkOrderToInvoice(orderIds, invoiceId)](#module_utils/queries..linkOrderToInvoice) ⇒ <code>Promise.&lt;Array&gt;</code>
     * [~getOrdersByInvoiceId(invoice_id)](#module_utils/queries..getOrdersByInvoiceId) ⇒ <code>Promise.&lt;Array&gt;</code>
-    * [~getElectricityPrice(specified_datetime)](#module_utils/queries..getElectricityPrice) ⇒ <code>Promise.&lt;({price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
-    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+    * [~getElectricityPrice(specified_datetime)](#module_utils/queries..getElectricityPrice) ⇒ <code>Promise.&lt;({price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
+    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
     * [~updateUser(userId, updates)](#module_utils/queries..updateUser) ⇒ <code>Promise.&lt;object&gt;</code>
     * [~activateUser(user)](#module_utils/queries..activateUser)
@@ -1557,7 +1557,7 @@ Gets all orders linked to a specific invoice.
 **Returns**: <code>Promise.&lt;Array&gt;</code> - Array of order records  
 <a name="module_utils/queries..getElectricityPrice"></a>
 
-### utils/queries~getElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;({price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
+### utils/queries~getElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;({price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
 If no price is found, it returns null.
@@ -1565,7 +1565,7 @@ If no price is found, it returns null.
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..getElectricityPriceOrDefault"></a>
 
-### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
 Retrieves the current electricity price or falls back to a default price if none is found.
 
 This function attempts to fetch the electricity price for a specified datetime
@@ -1573,7 +1573,7 @@ or the current time if no datetime is provided. If no price is found or the pric
 is invalid, it falls back to a default price defined in the global configuration.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in cents per kWh.  
+**Returns**: <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in cents eur/kWh.  
 **Throws**:
 
 - <code>ValidationError</code> - If the specified datetime is invalid.
@@ -1690,7 +1690,7 @@ Type definitions
     * [~OIDCUser](#module_utils/typedef..OIDCUser) : <code>Object</code>
     * [~steve_user](#module_utils/typedef..steve_user) : <code>Object</code>
     * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
-    * ~~[~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>~~
+    * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
     * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
     * [~db_consent_revision](#module_utils/typedef..db_consent_revision) : <code>Object</code>
     * [~db_user_consent](#module_utils/typedef..db_user_consent) : <code>Object</code>
@@ -1772,9 +1772,7 @@ Type definitions
 
 <a name="module_utils/typedef..db_txn"></a>
 
-### ~~utils/typedef~db\_txn : <code>Object</code>~~
-***{number} invoice_ref - The invoice reference associated with the transaction returned from Odoo. Deprecated, use db_odoo_txn_order and db_odoo_invoice instead.***
-
+### utils/typedef~db\_txn : <code>Object</code>
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 
