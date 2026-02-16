@@ -525,8 +525,8 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 0.35});
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.35});
+            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 0.30});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.30});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -584,7 +584,7 @@ describe('Odoo Service', () => {
                     lines_data: expect.arrayContaining([
                         expect.objectContaining({
                             'sku': 'standard_charging',
-                            'price_unit': 0.35,
+                            'price_unit': 0.30,
                             'quantity': 10,
                             'session_backend_ref': expect.toBeNumber(),
                             'session_start': expect.toBeDateString(),
@@ -603,7 +603,7 @@ describe('Odoo Service', () => {
                     odoo_saleorder_name: 'SO001',
                     confirmed: true,
                     qty: 10,
-                    unit_price: 0.35,
+                    unit_price: 0.30,
                     total_amount: 3.50,
                     billed: false,
                 }),
@@ -611,8 +611,8 @@ describe('Odoo Service', () => {
 
             // Verify invoice creation
             expect(db.upsertTxnOdooInvoice).toHaveBeenCalledWith(
+                67890,
                 expect.objectContaining({
-                    odoo_invoice_id: 67890,
                     odoo_invoice_name: 'INV001',
                     total_amount: 3.50,
                     paid: false,
@@ -675,7 +675,6 @@ describe('Odoo Service', () => {
                 },
             });
 
-            // Mock database operations
             db.upsertTxnOdooOrder.mockResolvedValue({
                 id: 3,
                 txn_id: testTransaction.id,
@@ -732,7 +731,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 35});
+            db.getElectricityPrice.mockResolvedValue({price_eur_kwh: 0.30});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -765,7 +764,7 @@ describe('Odoo Service', () => {
 
             // Mock electricity price fetch returning null as no price is available
             db.getElectricityPrice.mockResolvedValue(null);
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.30});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -820,7 +819,7 @@ describe('Odoo Service', () => {
                 expect.objectContaining({
                     lines_data: expect.arrayContaining([
                         expect.objectContaining({
-                            'price_unit': 0.35, // Default price
+                            'price_unit': 0.30, // Default price
                         }),
                     ]),
                 }),
@@ -838,7 +837,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.30});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -913,7 +912,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.30});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');
@@ -941,7 +940,7 @@ describe('Odoo Service', () => {
             db.getUserUnique.mockResolvedValue(fullQualifiedUser);
 
             // Mock electricity price
-            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.35});
+            db.getElectricityPriceOrDefault.mockResolvedValue({price_eur_kwh: 0.30});
 
             // Mock salt and hash
             generateSalt.mockReturnValue('test_salt');

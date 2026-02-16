@@ -256,6 +256,7 @@ async function rotateOdooUserAuth(user) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function sendTxnToOdooProcessing(db_txn) {
+    // TODO: Needs refactoring, function seperation
     const {error} = qualifiedTransactionSchema.validate(db_txn);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -282,7 +283,9 @@ async function sendTxnToOdooProcessing(db_txn) {
     }
 
     // The price of electricity at the time of transaction started
-    const txn_started_with_electricity_price_eur_kwh = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
+    const {
+        price_eur_kwh: txn_started_with_electricity_price_eur_kwh,
+    } = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
 
     const lines_data = [
         {
@@ -343,7 +346,7 @@ async function sendTxnToOdooProcessing(db_txn) {
         odoo_saleorder_name: order.name,
         confirmed: order.confirmed || true,
         qty: order.qty,
-        unit_price: order.unit_price,
+        unit_price: order.unit_price ?? txn_started_with_electricity_price_eur_kwh,
         total_amount: order.total_amount,
         billed: order.invoice || false,
     });

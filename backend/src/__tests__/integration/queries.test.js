@@ -793,9 +793,9 @@ describe('Database Queries Integration Tests', () => {
             const client = await pool.connect();
             try {
                 await client.query(
-                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
+                    `INSERT INTO electricity_prices (price_eur_kwh, valid_from, valid_till)
                      VALUES ($1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 day')`,
-                    [25],
+                    [0.25],
                 );
 
                 // Insert current price (already done in insertElectricityPrice)
@@ -819,7 +819,7 @@ describe('Database Queries Integration Tests', () => {
             const client = await pool.connect();
             try {
                 await client.query(
-                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
+                    `INSERT INTO electricity_prices (price_eur_kwh, valid_from, valid_till)
                      VALUES ($1, NOW() - INTERVAL '1 hour', NULL)`,
                     [0],
                 );
@@ -836,7 +836,7 @@ describe('Database Queries Integration Tests', () => {
             try {
                 // Insert a price of 0 effective from 2 days ago to 1 day ago
                 await client.query(
-                    `INSERT INTO electricity_prices (price, valid_from, valid_till)
+                    `INSERT INTO electricity_prices (price_eur_kwh, valid_from, valid_till)
                      VALUES ($1, NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day')`,
                     [0],
                 );
