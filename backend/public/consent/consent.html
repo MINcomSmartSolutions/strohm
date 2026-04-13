@@ -134,32 +134,28 @@
 </div>
 
 <script>
-    var consentDocs = {
-    {
-        CONSENT_DATA
-    }
-    }
-    ;
-    var TYPE_LABELS = {'agb': 'AGB', 'datenschutz': 'Datenschutz'};
+    <!-- @formatter:off-->
+    let consentDocs = {{CONSENT_DATA}}; //FIXME: Clunky injection
+    let TYPE_LABELS = {'agb': 'AGB', 'datenschutz': 'Datenschutz'};
 
     function escapeHtml(text) {
-        var div = document.createElement('div');
+        let div = document.createElement('div');
         div.appendChild(document.createTextNode(text));
         return div.innerHTML;
     }
 
     function renderConsentDocuments() {
-        var container = document.getElementById('consentDocuments');
-        var ids = [];
+        let container = document.getElementById('consentDocuments');
+        let ids = [];
 
         consentDocs.forEach(function (doc) {
             ids.push(doc.id);
-            var docEl = document.createElement('div');
+            let docEl = document.createElement('div');
             docEl.className = 'consent-document';
 
-            var typeClass = 'consent-type-' + doc.type;
-            var typeLabel = TYPE_LABELS[doc.type] || doc.type;
-            var contentHtml;
+            let typeClass = 'consent-type-' + doc.type;
+            let typeLabel = TYPE_LABELS[doc.type] || doc.type;
+            let contentHtml;
 
             if (!doc.hasPdf) {
                 console.log('NO PDF')
@@ -189,8 +185,8 @@
 
     renderConsentDocuments();
 
-    var checkbox = document.getElementById('consent_checkbox');
-    var submitBtn = document.getElementById('submitBtn');
+    let checkbox = document.getElementById('consent_checkbox');
+    let submitBtn = document.getElementById('submitBtn');
     document.getElementById('declineBtn').addEventListener('click', function (e) {
         e.preventDefault();
         window.location.assign('/logout?reason=consent_declined');

@@ -106,13 +106,6 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
             return res.redirect('/logout?reason=consent_system_error');
         }
 
-        // Skip consent page if none of the revisions have a PDF uploaded yet
-        const hasAnyPdf = activeConsents.some(c => !!c.pdf_filename);
-        if (!hasAnyPdf) {
-            log.warn('No consent revisions have PDFs uploaded yet - skipping consent page');
-            return res.redirect('/');
-        }
-
         log.debug('Rendering consent page for user:', req.user ? req.user.user_id : ['new user']);
 
         // Read the HTML template file
@@ -374,9 +367,6 @@ consent_controller.get('/consent/pdf/:id', async (req, res) => {
         res.setHeader('Content-Length', pdf.pdf_size);
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Cache-Control', 'public, max-age=3600');
-        // Remove Helmet's CSP from the PDF response. Applying a CSP to a binary
-        // application/pdf response is meaningless but actively breaks Firefox's
-        // built-in PDF.js renderer which requires inline script execution.
         res.removeHeader('Content-Security-Policy');
 
         res.send(pdf.pdf_data);
@@ -397,32 +387,11 @@ consent_controller.get('/agb', async (req, res) => {
         }
 
         if (activeConsent.pdf_filename) {
-            // Redirect to PDF endpoint
             return res.redirect(`/consent/pdf/${activeConsent.id}`);
+        } else {
+            logger.warn('Active AGB consent revision has no PDF, redirecting to home page');
+            return res.redirect('/');
         }
-
-        // Fallback: render text content if no PDF
-        const templatePath = path.join(__dirname, '../../public/consent/consent-view.html');
-        if (!fs.existsSync(templatePath)) {
-            return res.status(503).send('Vorlage nicht verfügbar');
-        }
-        let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
-
-        const escapeHtml = (text) => {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        };
-
-        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
-        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, (activeConsent.content || '').replace(/\n/g, '<br>'));
-        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
-        htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
-
-        res.send(htmlTemplate);
     } catch (error) {
         logger.error('Error displaying AGB page:', error);
         appErrorHandler(error, res);
@@ -441,30 +410,10 @@ consent_controller.get('/datenschutz', async (req, res) => {
 
         if (activeConsent.pdf_filename) {
             return res.redirect(`/consent/pdf/${activeConsent.id}`);
+        } else {
+            logger.warn('Active Datenschutz consent revision has no PDF, redirecting to home page');
+            return res.redirect('/');
         }
-
-        // Fallback: render text content
-        const templatePath = path.join(__dirname, '../../public/consent/consent-view.html');
-        if (!fs.existsSync(templatePath)) {
-            return res.status(503).send('Vorlage nicht verfügbar');
-        }
-        let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
-
-        const escapeHtml = (text) => {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        };
-
-        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
-        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, (activeConsent.content || '').replace(/\n/g, '<br>'));
-        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
-        htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
-
-        res.send(htmlTemplate);
     } catch (error) {
         logger.error('Error displaying Datenschutz page:', error);
         appErrorHandler(error, res);
