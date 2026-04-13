@@ -7,6 +7,10 @@
 <dt><a href="#module_controllers/charging">controllers/charging</a></dt>
 <dd><p>Controller for handling charging session operations.</p>
 </dd>
+<dt><a href="#module_controllers/consent_admin">controllers/consent_admin</a></dt>
+<dd><p>Admin controller for consent management (PDF upload).
+Protected by Tailscale network authentication.</p>
+</dd>
 <dt><a href="#module_controllers/consent">controllers/consent</a></dt>
 <dd><p>Controller for handling user consent pages and operations.</p>
 <p>This controller manages the complete consent workflow including:</p>
@@ -274,6 +278,35 @@ Controller for handling user authentication and logout.
 ## controllers/charging
 Controller for handling charging session operations.
 
+<a name="module_controllers/consent_admin"></a>
+
+## controllers/consent\_admin
+Admin controller for consent management (PDF upload).
+Protected by Tailscale network authentication.
+
+
+* [controllers/consent_admin](#module_controllers/consent_admin)
+    * [~getConsentRevisions()](#module_controllers/consent_admin..getConsentRevisions)
+    * [~uploadConsentPdf()](#module_controllers/consent_admin..uploadConsentPdf)
+
+<a name="module_controllers/consent_admin..getConsentRevisions"></a>
+
+### controllers/consent_admin~getConsentRevisions()
+GET /api/dev/consent/revisions - Get current active consent revisions
+
+**Kind**: inner method of [<code>controllers/consent\_admin</code>](#module_controllers/consent_admin)  
+<a name="module_controllers/consent_admin..uploadConsentPdf"></a>
+
+### controllers/consent_admin~uploadConsentPdf()
+POST /api/dev/consent/upload - Upload a new consent PDF
+
+Body (multipart/form-data):
+- pdf: PDF file (required, max 10MB)
+- consent_type: 'agb' or 'datenschutz' (required)
+- version: version string (required)
+- title: document title (required)
+
+**Kind**: inner method of [<code>controllers/consent\_admin</code>](#module_controllers/consent_admin)  
 <a name="module_controllers/consent"></a>
 
 ## controllers/consent
@@ -648,6 +681,9 @@ This approach provides:
     * [~withdrawConsent(userId)](#module_services/consent..withdrawConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~getUserConsentHistory(userId)](#module_services/consent..getUserConsentHistory) ⇒ <code>Promise.&lt;Array.&lt;db\_user\_consent&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
     * [~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+    * [~getAllActiveConsentRevisions()](#module_services/consent..getAllActiveConsentRevisions)
+    * [~getConsentPdf()](#module_services/consent..getConsentPdf)
+    * [~validateAndSanitizePdf()](#module_services/consent..validateAndSanitizePdf)
 
 <a name="module_services/consent..getActiveConsentRevision"></a>
 
@@ -786,6 +822,27 @@ validation throughout the application.
 
 - <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
 
+<a name="module_services/consent..getAllActiveConsentRevisions"></a>
+
+### services/consent~getAllActiveConsentRevisions()
+Retrieves all active consent revisions (one per consent_type).
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+<a name="module_services/consent..getConsentPdf"></a>
+
+### services/consent~getConsentPdf()
+Retrieves the PDF binary data for a consent revision.
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+<a name="module_services/consent..validateAndSanitizePdf"></a>
+
+### services/consent~validateAndSanitizePdf()
+Validates and sanitizes a PDF buffer.
+- Checks magic bytes (%PDF)
+- Enforces 10MB size limit
+- Re-serializes with pdf-lib to strip JavaScript and other active content
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
 <a name="module_services/cron"></a>
 
 ## services/cron
