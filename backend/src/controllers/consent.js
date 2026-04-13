@@ -29,16 +29,18 @@ const express = require('express');
 const consent_controller = express.Router();
 const {
     getActiveConsentRevision,
+    getAllActiveConsentRevisions,
+    getConsentPdf,
     recordConsent,
     withdrawConsent,
     hasLatestConsent,
+    CONSENT_TYPES,
 } = require('#services/consent');
 const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('#utils/errors');
 const logger = require('#services/logger');
 const fs = require('fs');
 const path = require('path');
 const {userOperations} = require('#services/user_operations');
-const {initializeConsent} = require("#utils/init-consent");
 const {ensureAuthenticated} = require("#middlewares/ensureAuthenticated");
 const {saveSession} = require("#utils/session");
 
@@ -90,7 +92,6 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
 
     try {
         // Check if user already has latest consent
-        // This is a safety check - normally they wouldn't reach here if they have consent
         if (req.user) {
             const hasConsent = await hasLatestConsent(req.user);
             if (hasConsent) {
@@ -99,60 +100,42 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
             }
         }
 
-        let activeConsent = await getActiveConsentRevision();
-        if (!activeConsent) {
-            log.error('No active consent revision found');
-            await initializeConsent();
-            activeConsent = await getActiveConsentRevision();
-            if (!activeConsent) {
-                return res.redirect('/logout?reason=consent_system_error')
-            }
+        const activeConsents = await getAllActiveConsentRevisions();
+        if (!activeConsents || activeConsents.length === 0) {
+            log.error('No active consent revisions found');
+            return res.redirect('/logout?reason=consent_system_error');
         }
+
+        // Skip consent page if none of the revisions have a PDF uploaded yet
+        const hasAnyPdf = activeConsents.some(c => !!c.pdf_filename);
+        if (!hasAnyPdf) {
+            log.warn('No consent revisions have PDFs uploaded yet - skipping consent page');
+            return res.redirect('/');
+        }
+
         log.debug('Rendering consent page for user:', req.user ? req.user.user_id : ['new user']);
 
         // Read the HTML template file
         const templatePath = path.join(__dirname, '../../public/consent/consent.html');
         let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
 
-        // Escape content to prevent XSS in consent content
-        const escapeHtml = (text) => {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        };
+        // Build consent documents data for the template
+        const consentDocs = activeConsents.map(c => ({
+            id: c.id,
+            type: c.consent_type,
+            title: c.title,
+            version: c.version,
+            hasPdf: !!c.pdf_filename,
+            pdfFilename: c.pdf_filename,
+            updatedAt: new Date(c.updated_at).toLocaleDateString('de-DE'),
+        }));
 
-        // Replace placeholders with dynamic content (escaped)
-        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
-        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, activeConsent.content.replace(/\n/g, '<br>'));
-        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
-        htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
+        // Inject consent data as JSON for the client-side script
+        htmlTemplate = htmlTemplate.replace(
+            '{{CONSENT_DATA}}',
+            JSON.stringify(consentDocs).replace(/</g, '\\u003c')
+        );
 
-        // Generate links section if URLs are provided (validate URLs)
-        // let linksSection = '';
-        // if (activeConsent.privacy_policy_url || activeConsent.terms_url) {
-        //     linksSection = '<div class="links">';
-        //     if (activeConsent.privacy_policy_url) {
-        //         // Validate URL is safe (starts with http/https)
-        //         const privacyUrl = activeConsent.privacy_policy_url;
-        //         if (privacyUrl.startsWith('http://') || privacyUrl.startsWith('https://')) {
-        //             linksSection += `<a href="${escapeHtml(privacyUrl)}" target="_blank" rel="noopener noreferrer">Datenschutzbestimmungen</a>`;
-        //         }
-        //     }
-        //     if (activeConsent.terms_url) {
-        //         // Validate URL is safe (starts with http/https)
-        //         const termsUrl = activeConsent.terms_url;
-        //         if (termsUrl.startsWith('http://') || termsUrl.startsWith('https://')) {
-        //             linksSection += `<a href="${escapeHtml(termsUrl)}" target="_blank" rel="noopener noreferrer">Bedingungen der Dienstleistung</a>`;
-        //         }
-        //     }
-        //     linksSection += '</div>';
-        // }
-        // htmlTemplate = htmlTemplate.replace(/{{LINKS_SECTION}}/g, linksSection);
-
-        // Send the processed HTML
         res.send(htmlTemplate);
     } catch (error) {
         logger.error('Error displaying consent page:', error);
@@ -214,7 +197,7 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
     const log = logger.withSession(sessionId);
 
     try {
-        const {consent_given, consent_version} = req.body;
+        const {consent_given, consent_ids} = req.body;
 
         if (!consent_given) {
             log.info('User declined consent');
@@ -226,8 +209,6 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
             throw new SystemError(ErrorCodes.SYSTEM.INVALID_SESSION, 'User info missing in session during consent processing');
         }
 
-        // Now we can create (or get if this is n-th consent given for the) user
-        // This also creates Odoo and Steve users if they don't exist
         const user = await userOperations(userInfo);
 
         // Double-check if user already has latest consent
@@ -237,11 +218,30 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
             return res.redirect('/');
         }
 
-        let activeConsent = await getActiveConsentRevision(); // A consent must exist if we are here, if not let it fail
+        // Parse and validate consent_ids - user must consent to all active revisions
+        let revisionIds;
+        try {
+            revisionIds = JSON.parse(consent_ids);
+            if (!Array.isArray(revisionIds) || revisionIds.length === 0) {
+                throw new Error('Invalid consent IDs');
+            }
+            revisionIds = revisionIds.map(id => parseInt(id, 10)).filter(id => Number.isFinite(id));
+        } catch {
+            return res.status(400).send(`
+                <script>
+                    alert('Ungültige Einwilligungsdaten. Bitte laden Sie die Seite neu.');
+                    window.location.reload();
+                </script>
+            `);
+        }
 
-        // Verify that the consent version matches the current active version
-        if (consent_version && consent_version !== activeConsent.version) {
-            log.warn(`Consent version mismatch: submitted ${consent_version}, current ${activeConsent.version}`);
+        // Verify that the submitted IDs match the current active revisions
+        const activeConsents = await getAllActiveConsentRevisions();
+        const activeIds = activeConsents.map(c => c.id).sort();
+        const submittedIds = [...revisionIds].sort();
+
+        if (JSON.stringify(activeIds) !== JSON.stringify(submittedIds)) {
+            log.warn(`Consent revision mismatch: submitted ${submittedIds}, current ${activeIds}`);
             return res.status(400).send(`
                 <script>
                     alert('Die Einverständniserklärung wurde aktualisiert. Bitte laden Sie die Seite neu.');
@@ -250,27 +250,24 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
             `);
         }
 
-        // Record the consent AFTER user creation (if new user) or for existing user
         const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
             (req.connection.socket ? req.connection.socket.remoteAddress : null);
         const userAgent = req.get('User-Agent');
 
-        log.info(`Recording consent for user ${user.user_id}`);
-        await recordConsent(user.user_id, activeConsent.id, ipAddress, userAgent);
+        // Record consent for each active revision
+        for (const revisionId of revisionIds) {
+            log.info(`Recording consent for user ${user.user_id}, revision ${revisionId}`);
+            await recordConsent(user.user_id, revisionId, ipAddress, userAgent);
+        }
 
-        // Update req.user and session to reflect the newly created user
-        // (userOperations might have just created this user)
         req.user = user;
         req.session.user = user;
         await saveSession(req);
 
-        log.info(`Consent v${activeConsent.version} recorded and user session created for user ${user.user_id}`);
+        log.info(`Consent recorded and user session created for user ${user.user_id}`);
 
-        // Check for redirect URL in session or query params
         const redirectUrl = req.session.returnTo || req.query.returnTo || '/';
-        delete req.session.returnTo; // Clear the return URL after use
-
-        // Redirect to the intended destination
+        delete req.session.returnTo;
         res.redirect(redirectUrl);
     } catch (error) {
         log.error('Error processing consent submission:', error);
@@ -350,48 +347,67 @@ consent_controller.post('/consent/withdraw', ensureAuthenticated, async (req, re
 });
 
 /**
- * GET /agb - Display consent/terms for viewing only (publicly accessible)
+ * GET /consent/pdf/:id - Serve a consent PDF from the database
  *
- * This route handler displays the active consent content in a read-only view
- * accessible to anyone without authentication. It serves the Terms and Conditions
- * (AGB - Allgemeine Geschäftsbedingungen) for users to read.
- *
- * @async
- * @function
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- *
- * @throws {SystemError} When no active consent revision is available
- *
- * @returns {void} Sends HTML response with read-only consent content
- *
- * @description
- * Flow:
- * 1. Retrieves active consent revision using consent service
- * 2. If no active consent exists, initializes consent and retries
- * 3. Renders consent content in a view-only template
- * 4. Replaces template placeholders with actual consent data
- * 5. Sends the processed HTML to the client
- *
- * @see {@link module:services/consent.getActiveConsentRevision} For consent retrieval
+ * Serves the PDF with restrictive headers to prevent JS execution.
+ */
+consent_controller.get('/consent/pdf/:id', async (req, res) => {
+    try {
+        const revisionId = parseInt(req.params.id, 10);
+        if (!Number.isFinite(revisionId) || revisionId <= 0) {
+            return res.status(400).json({error: 'Invalid revision ID'});
+        }
+
+        const pdf = await getConsentPdf(revisionId);
+        if (!pdf) {
+            return res.status(404).json({error: 'PDF not found'});
+        }
+
+        // Set restrictive headers
+        // Use RFC 5987 encoding for filenames with non-ASCII characters (e.g. German umlauts)
+        const safeFilename = pdf.pdf_filename.replace(/[^\x20-\x7E]/g, '_');
+        const encodedFilename = encodeURIComponent(pdf.pdf_filename);
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition',
+            `inline; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`);
+        res.setHeader('Content-Length', pdf.pdf_size);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        // Remove Helmet's CSP from the PDF response. Applying a CSP to a binary
+        // application/pdf response is meaningless but actively breaks Firefox's
+        // built-in PDF.js renderer which requires inline script execution.
+        res.removeHeader('Content-Security-Policy');
+
+        res.send(pdf.pdf_data);
+    } catch (error) {
+        logger.error('Error serving consent PDF:', error);
+        appErrorHandler(error, res);
+    }
+});
+
+/**
+ * GET /agb - Display AGB consent PDF for viewing (publicly accessible)
  */
 consent_controller.get('/agb', async (req, res) => {
     try {
-        let activeConsent = await getActiveConsentRevision();
+        const activeConsent = await getActiveConsentRevision(CONSENT_TYPES.AGB);
         if (!activeConsent) {
-            logger.error('No active consent revision found');
-            await initializeConsent();
-            activeConsent = await getActiveConsentRevision();
-            if (!activeConsent) {
-                return res.status(503).send('Consent system temporarily unavailable');
-            }
+            return res.redirect('/');
         }
 
-        // Read the HTML template file
-        const templatePath = path.join(__dirname, '../../public/consent/consent.html');
+        if (activeConsent.pdf_filename) {
+            // Redirect to PDF endpoint
+            return res.redirect(`/consent/pdf/${activeConsent.id}`);
+        }
+
+        // Fallback: render text content if no PDF
+        const templatePath = path.join(__dirname, '../../public/consent/consent-view.html');
+        if (!fs.existsSync(templatePath)) {
+            return res.status(503).send('Vorlage nicht verfügbar');
+        }
         let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
 
-        // Escape content to prevent XSS in consent content
         const escapeHtml = (text) => {
             return text
                 .replace(/&/g, '&amp;')
@@ -401,22 +417,56 @@ consent_controller.get('/agb', async (req, res) => {
                 .replace(/'/g, '&#039;');
         };
 
-        // Replace placeholders with dynamic content (escaped)
         htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
-        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, activeConsent.content.replace(/\n/g, '<br>'));
+        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, (activeConsent.content || '').replace(/\n/g, '<br>'));
         htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
         htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
 
-        // Remove the form and buttons - display only the content
-        htmlTemplate = htmlTemplate.replace(/<form[\s\S]*?<\/form>/i, '');
-
-        // Hide the FAQ button for view-only mode
-        htmlTemplate = htmlTemplate.replace(/<div style="position: fixed;[\s\S]*?<\/div>/i, '');
-
-        // Send the processed HTML
         res.send(htmlTemplate);
     } catch (error) {
         logger.error('Error displaying AGB page:', error);
+        appErrorHandler(error, res);
+    }
+});
+
+/**
+ * GET /datenschutz - Display Datenschutz consent PDF for viewing (publicly accessible)
+ */
+consent_controller.get('/datenschutz', async (req, res) => {
+    try {
+        const activeConsent = await getActiveConsentRevision(CONSENT_TYPES.DATENSCHUTZ);
+        if (!activeConsent) {
+            return res.redirect('/');
+        }
+
+        if (activeConsent.pdf_filename) {
+            return res.redirect(`/consent/pdf/${activeConsent.id}`);
+        }
+
+        // Fallback: render text content
+        const templatePath = path.join(__dirname, '../../public/consent/consent-view.html');
+        if (!fs.existsSync(templatePath)) {
+            return res.status(503).send('Vorlage nicht verfügbar');
+        }
+        let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
+
+        const escapeHtml = (text) => {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
+        htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, (activeConsent.content || '').replace(/\n/g, '<br>'));
+        htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
+        htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
+
+        res.send(htmlTemplate);
+    } catch (error) {
+        logger.error('Error displaying Datenschutz page:', error);
         appErrorHandler(error, res);
     }
 });

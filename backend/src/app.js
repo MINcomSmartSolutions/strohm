@@ -95,25 +95,28 @@ if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
     form_action_urls.push("http://localhost:3000", "http://localhost:18069");
 }
 
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
-            scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
-            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
-            styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
-            imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
-            connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
-            fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin and external domains
-            objectSrc: ["'none'"], // Block plugins (Flash, etc.)
-            mediaSrc: ["'self'"], // Allow media from same origin
-            frameSrc: ["'self'"], // Allow iframes from same origin
-            formAction: form_action_urls,
-        },
-    },
-    crossOriginEmbedderPolicy: false, // Needed for Auth0 OIDC compatibility
-}));
+//FIXME: Helmet clashes with HM's own CSP and breaks the some custom html pages
+// app.use(helmet({
+//     contentSecurityPolicy: {
+//         directives: {
+//             defaultSrc: ["'self'"],
+//             scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
+//             scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
+//             styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
+//             styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
+//             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
+//             connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
+//             fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin and external domains
+//             objectSrc: ["'self'"], // Allow PDF rendering in browser viewers
+//             mediaSrc: ["'self'"], // Allow media from same origin
+//             frameSrc: ["'self'"], // Allow iframes from same origin (consent PDFs)
+//             frameAncestors: ["'self'"], // Only allow embedding in same origin
+//             formAction: form_action_urls,
+//         },
+//     },
+//     xFrameOptions: { action: "sameorigin" },
+//     crossOriginEmbedderPolicy: false, // Needed for Auth0 OIDC compatibility
+// }));
 
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 // See: https://github.com/auth0/express-openid-connect
@@ -189,6 +192,7 @@ app.use(electricity_price_controller)
 // Enable with TAILSCALE_ENABLE_ADMIN=true environment variable
 if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     const dev_admin_controller = require('./controllers/dev_admin');
+    const consent_admin_controller = require('./controllers/consent_admin');
 
     logger.verbose('Admin Panel enabled - protected by Tailscale authentication');
     logger.info('Admin panel available at /dev-admin.html');
@@ -213,6 +217,10 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
     app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);
     app.post('/api/dev/users/:user_id/odoo/revoke', dev_admin_controller.revokeOdooCredentials);
+
+    // Consent management admin routes
+    app.get('/api/dev/consent/revisions', consent_admin_controller.getConsentRevisions);
+    app.post('/api/dev/consent/upload', consent_admin_controller.uploadConsentPdf);
 } else {
     logger.info('Admin Panel disabled - set TAILSCALE_ENABLE_ADMIN=true to enable');
 }

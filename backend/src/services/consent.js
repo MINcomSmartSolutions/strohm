@@ -29,7 +29,15 @@
 const pool = require('./db_conn');
 const logger = require('./logger');
 const {db} = require('#utils/queries');
-const {SystemError, ErrorCodes} = require("#utils/errors");
+const {SystemError, ErrorCodes, ValidationError} = require("#utils/errors");
+
+const CONSENT_TYPES = Object.freeze({
+    AGB: 'agb',
+    DATENSCHUTZ: 'datenschutz',
+});
+
+const MAX_PDF_SIZE = 10 * 1024 * 1024; // 10 MB
+const PDF_MAGIC_BYTES = Buffer.from([0x25, 0x50, 0x44, 0x46]); // %PDF
 
 
 /**
@@ -53,14 +61,18 @@ const {SystemError, ErrorCodes} = require("#utils/errors");
  * 4. Limits to 1 result for performance
  *
  */
-const getActiveConsentRevision = async () => {
+const getActiveConsentRevision = async (consentType = null) => {
     const client = await pool.connect();
     try {
-        const result = await client.query(`
+        let query = `
             SELECT id,
                    version,
                    title,
                    content,
+                   consent_type,
+                   pdf_filename,
+                   pdf_size,
+                   pdf_content_type,
                    privacy_policy_url,
                    terms_url,
                    created_at,
@@ -70,10 +82,17 @@ const getActiveConsentRevision = async () => {
             FROM consent_revisions
             WHERE is_active = true
               AND (expires_at IS NULL OR expires_at > NOW())
-            ORDER BY created_at DESC
-            LIMIT 1
-        `);
+        `;
+        const params = [];
 
+        if (consentType) {
+            params.push(consentType);
+            query += ` AND consent_type = $${params.length}`;
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT 1`;
+
+        const result = await client.query(query, params);
         return result.rows[0] || null;
     } catch (error) {
         db.handleQueryError(error, 'getActiveConsentRevision');
@@ -164,35 +183,38 @@ const hasLatestConsent = async (user) => {
 
     const client = await pool.connect();
     try {
-        // Get the latest active consent revision
-        const latestRevision = await client.query(`
-            SELECT id
+        // Get ALL latest active, non-optional consent revisions (one per type)
+        const latestRevisions = await client.query(`
+            SELECT DISTINCT ON (consent_type) id, consent_type
             FROM consent_revisions
             WHERE is_active = true
               AND (expires_at IS NULL OR expires_at > NOW())
               AND optional = false
-            ORDER BY created_at DESC
-            LIMIT 1
+            ORDER BY consent_type, created_at DESC
         `);
 
-        if (latestRevision.rows.length === 0) {
-            // No active consent revision found
+        if (latestRevisions.rows.length === 0) {
+            // No active consent revisions found
             return false;
         }
 
-        const latestRevisionId = latestRevision.rows[0].id;
+        // Check that user has consented to ALL required revisions
+        for (const revision of latestRevisions.rows) {
+            const userConsent = await client.query(`
+                SELECT id
+                FROM user_consents
+                WHERE user_id = $1::integer
+                  AND consent_revision_id = $2::integer
+                  AND is_withdrawn = false
+                LIMIT 1
+            `, [user.user_id, revision.id]);
 
-        // Check if user has consented to this specific revision
-        const userConsent = await client.query(`
-            SELECT id
-            FROM user_consents
-            WHERE user_id = $1::integer
-              AND consent_revision_id = $2::integer
-              AND is_withdrawn = false
-            LIMIT 1
-        `, [user.user_id, latestRevisionId]);
+            if (userConsent.rows.length === 0) {
+                return false;
+            }
+        }
 
-        return userConsent.rows.length > 0;
+        return true;
     } catch (error) {
         db.handleQueryError(error, 'hasLatestConsent');
     } finally {
@@ -403,22 +425,26 @@ const getUserConsentHistory = async (userId) => {
  * validation throughout the application.
  *
  */
-const createConsentRevision = async (version, title, content, privacyPolicyUrl = null, termsUrl = null, expiresAt = null, optional = false) => {
+const createConsentRevision = async (version, title, content, consentType = CONSENT_TYPES.AGB, pdfData = null, pdfFilename = null, pdfSize = null, pdfContentType = null, privacyPolicyUrl = null, termsUrl = null, expiresAt = null, optional = false) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Deactivate previous active revisions
-        await client.query('UPDATE consent_revisions SET is_active = false WHERE is_active = true');
+        // Deactivate previous active revisions of the same type only
+        await client.query(
+            'UPDATE consent_revisions SET is_active = false WHERE is_active = true AND consent_type = $1',
+            [consentType]
+        );
 
         const result = await client.query(`
-            INSERT INTO consent_revisions (version, title, content, privacy_policy_url, terms_url, expires_at, optional)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, version, title, content, privacy_policy_url, terms_url, created_at, expires_at, is_active, optional, effective_from, updated_at
-        `, [version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optional]);
+            INSERT INTO consent_revisions (version, title, content, consent_type, pdf_data, pdf_filename, pdf_size,
+                                           pdf_content_type, privacy_policy_url, terms_url, expires_at, optional)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING id, version, title, consent_type, pdf_filename, pdf_size, pdf_content_type, created_at, expires_at, is_active, optional, effective_from, updated_at
+        `, [version, title, content, consentType, pdfData, pdfFilename, pdfSize, pdfContentType, privacyPolicyUrl, termsUrl, expiresAt, optional]);
 
         await client.query('COMMIT');
-        logger.info(`New consent revision created: ${version}`);
+        logger.info(`New consent revision created: ${version} (type: ${consentType})`);
         return result.rows[0];
     } catch (error) {
         await client.query('ROLLBACK');
@@ -428,12 +454,132 @@ const createConsentRevision = async (version, title, content, privacyPolicyUrl =
     }
 };
 
+/**
+ * Retrieves all active consent revisions (one per consent_type).
+ */
+const getAllActiveConsentRevisions = async () => {
+    const client = await pool.connect();
+    try {
+        const result = await client.query(`
+            SELECT DISTINCT ON (consent_type) id,
+                                              version,
+                                              title,
+                                              content,
+                                              consent_type,
+                                              pdf_filename,
+                                              pdf_size,
+                                              pdf_content_type,
+                                              privacy_policy_url,
+                                              terms_url,
+                                              created_at,
+                                              expires_at,
+                                              effective_from,
+                                              updated_at
+            FROM consent_revisions
+            WHERE is_active = true
+              AND (expires_at IS NULL OR expires_at > NOW())
+            ORDER BY consent_type, created_at DESC
+        `);
+        return result.rows;
+    } catch (error) {
+        db.handleQueryError(error, 'getAllActiveConsentRevisions');
+    } finally {
+        client.release();
+    }
+};
+
+/**
+ * Retrieves the PDF binary data for a consent revision.
+ */
+const getConsentPdf = async (revisionId) => {
+    const client = await pool.connect();
+    try {
+        const result = await client.query(`
+            SELECT pdf_data, pdf_filename, pdf_content_type, pdf_size
+            FROM consent_revisions
+            WHERE id = $1::integer
+              AND pdf_data IS NOT NULL
+        `, [revisionId]);
+        return result.rows[0] || null;
+    } catch (error) {
+        db.handleQueryError(error, 'getConsentPdf');
+    } finally {
+        client.release();
+    }
+};
+
+/**
+ * Validates and sanitizes a PDF buffer.
+ * - Checks magic bytes (%PDF)
+ * - Enforces 10MB size limit
+ * - Re-serializes with pdf-lib to strip JavaScript and other active content
+ */
+const validateAndSanitizePdf = async (buffer, filename) => {
+    if (!buffer || buffer.length === 0) {
+        throw new ValidationError(ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'PDF file is empty');
+    }
+
+    if (buffer.length > MAX_PDF_SIZE) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            `PDF file exceeds maximum size of ${MAX_PDF_SIZE / 1024 / 1024}MB`
+        );
+    }
+
+    // Validate PDF magic bytes
+    if (buffer.length < 4 || !buffer.subarray(0, 4).equals(PDF_MAGIC_BYTES)) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            'Invalid PDF file: missing PDF header'
+        );
+    }
+
+    // Re-serialize the PDF with pdf-lib to strip JavaScript and active content
+    const {PDFDocument} = require('pdf-lib');
+    try {
+        const pdfDoc = await PDFDocument.load(buffer, {
+            ignoreEncryption: true,
+            updateMetadata: false,
+        });
+
+        // Remove JavaScript actions from the document catalog
+        const catalog = pdfDoc.catalog;
+        if (catalog.has(pdfDoc.context.obj('Names'))) {
+            const names = catalog.lookup(pdfDoc.context.obj('Names'));
+            if (names && names.has && names.has(pdfDoc.context.obj('JavaScript'))) {
+                names.delete(pdfDoc.context.obj('JavaScript'));
+            }
+        }
+        if (catalog.has(pdfDoc.context.obj('OpenAction'))) {
+            catalog.delete(pdfDoc.context.obj('OpenAction'));
+        }
+        if (catalog.has(pdfDoc.context.obj('AA'))) {
+            catalog.delete(pdfDoc.context.obj('AA'));
+        }
+
+        const sanitizedBytes = await pdfDoc.save();
+        logger.info(`PDF sanitized successfully: ${filename} (${buffer.length} -> ${sanitizedBytes.length} bytes)`);
+        return Buffer.from(sanitizedBytes);
+    } catch (error) {
+        logger.error(`PDF sanitization failed for ${filename}:`, error);
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            'Invalid or corrupted PDF file'
+        );
+    }
+};
+
 module.exports = {
     getActiveConsentRevision,
+    getAllActiveConsentRevisions,
+    getConsentPdf,
     hasValidConsent,
     hasLatestConsent,
     recordConsent,
     withdrawConsent,
     getUserConsentHistory,
-    createConsentRevision
+    createConsentRevision,
+    validateAndSanitizePdf,
+    CONSENT_TYPES,
+    MAX_PDF_SIZE,
 };

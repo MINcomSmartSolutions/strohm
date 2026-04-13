@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>{{TITLE}}</title>
+    <title>Einwilligung erforderlich</title>
     <link href="/consent/consent.css" rel="stylesheet">
     <link href="/assets/css/notifications.css" rel="stylesheet">
     <link href="/assets/css/fonts.css" rel="stylesheet">
@@ -11,10 +11,72 @@
     <link href="https://sso.hm.edu/idp/css/hm.css" rel="stylesheet">
     <link href="https://mediapool.hm.edu/media/_technik/img/_technik_1/favicon.jpg" rel="icon" type="image/x-icon">
     <script defer src="https://sso.hm.edu/idp/js/dark-mode-switch.min.js"></script>
-    <link href="/assets/css/fonts.css" rel="stylesheet">
+    <style>
+        .consent-document {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .consent-document-header {
+            background: #f9f9f9;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .consent-document-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            display: inline;
+        }
+
+        .consent-document-header .meta {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .consent-pdf-frame {
+            width: 100%;
+            height: 450px;
+            border: none;
+        }
+
+        .consent-text-content {
+            max-height: 450px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f9f9f9;
+            font-size: 1rem;
+            line-height: 1.4rem;
+        }
+
+        .consent-type-label {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .consent-type-agb {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .consent-type-datenschutz {
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
 </head>
 <body>
-
 
 <div class="container-fluid">
     <div class="row justify-content-center">
@@ -24,22 +86,18 @@
     </div>
     <div class="row mt-4">
         <div class="col-12 text-center">
-            <h1 class="mb-3">{{TITLE}}</h1>
-            <small class="text-muted d-block mb-1">Version: {{VERSION}}</small>
-            <small class="text-muted d-block mb-3">Zuletzt aktualisiert: {{LAST_UPDATED}}</small>
+            <h1 class="mb-3">Einwilligung erforderlich</h1>
+            <p class="text-muted">Bitte lesen und akzeptieren Sie die folgenden Dokumente, um fortzufahren.</p>
         </div>
     </div>
 
     <div class="row mb-3">
-        <div class="col-12 col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
-            <div style="max-height: 500px; overflow-y: auto; padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; font-size: 1rem; line-height: 1.4rem;">
-                {{CONTENT}}
-            </div>
+        <div class="col-12 col-lg-10 offset-lg-1 col-xl-8 offset-xl-2" id="consentDocuments">
         </div>
     </div>
 
     <form action="/consent/" id="consentForm" method="POST">
-        <input name="consent_version" type="hidden" value="{{VERSION}}">
+        <input id="consentIdsInput" name="consent_ids" type="hidden" value="">
 
         <div class="row mb-3">
             <div class="col-12 col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
@@ -47,14 +105,13 @@
                      style="border: 1px solid #e0e0e0; padding: 15px; font-size: 1rem; line-height: 1.4rem;">
                     <input class="form-check-input" id="consent_checkbox" name="consent_given" type="checkbox">
                     <label class="form-check-label" for="consent_checkbox">
-                        Ich habe die oben genannten Bedingungen gelesen und stimme ihnen zu. Mir ist bekannt, dass ich
-                        meine
-                        Zustimmung jederzeit widerrufen kann.
+                        Ich habe die oben genannten Dokumente (AGB und Datenschutzerklärung) gelesen und stimme ihnen
+                        zu.
+                        Mir ist bekannt, dass ich meine Zustimmung jederzeit widerrufen kann.
                     </label>
                 </div>
             </div>
         </div>
-
 
         <div class="row mb-3">
             <div class="col-12 col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
@@ -69,12 +126,6 @@
             </div>
         </div>
 
-        <!--        <div class="row justify-content-center mt-5">-->
-        <!--            <div class="col-md-7 col-lg-6 col-xl-5 text-center">-->
-        <!--                {{LINKS_SECTION}}-->
-        <!--            </div>-->
-        <!--        </div>-->
-
         <div id="error" style="display: none; color: #dc3545; margin-top: 10px; text-align: center;"></div>
     </form>
 </div>
@@ -82,7 +133,72 @@
     <a class="btn btn-hm" href="/faq">FAQ</a>
 </div>
 
+<script>
+    var consentDocs = {
+    {
+        CONSENT_DATA
+    }
+    }
+    ;
+    var TYPE_LABELS = {'agb': 'AGB', 'datenschutz': 'Datenschutz'};
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    function renderConsentDocuments() {
+        var container = document.getElementById('consentDocuments');
+        var ids = [];
+
+        consentDocs.forEach(function (doc) {
+            ids.push(doc.id);
+            var docEl = document.createElement('div');
+            docEl.className = 'consent-document';
+
+            var typeClass = 'consent-type-' + doc.type;
+            var typeLabel = TYPE_LABELS[doc.type] || doc.type;
+            var contentHtml;
+
+            if (!doc.hasPdf) {
+                console.log('NO PDF')
+            }
+
+
+            if (doc.hasPdf) {
+                contentHtml = '<iframe class="consent-pdf-frame" src="/consent/pdf/' + doc.id +
+                    '" title="' + typeLabel + '"></iframe>';
+            } else {
+                contentHtml = '<div class="consent-text-content">Dokument nicht verfügbar</div>';
+            }
+
+            docEl.innerHTML =
+                '<div class="consent-document-header">' +
+                '<div><span class="consent-type-label ' + typeClass + '">' + typeLabel + '</span> ' +
+                '<h3>' + escapeHtml(doc.title) + '</h3></div>' +
+                '<div class="meta">Version: ' + escapeHtml(doc.version) +
+                ' | Aktualisiert: ' + escapeHtml(doc.updatedAt) + '</div>' +
+                '</div>' + contentHtml;
+
+            container.appendChild(docEl);
+        });
+
+        document.getElementById('consentIdsInput').value = JSON.stringify(ids);
+    }
+
+    renderConsentDocuments();
+
+    var checkbox = document.getElementById('consent_checkbox');
+    var submitBtn = document.getElementById('submitBtn');
+    document.getElementById('declineBtn').addEventListener('click', function (e) {
+        e.preventDefault();
+        window.location.assign('/logout?reason=consent_declined');
+    });
+    checkbox.addEventListener('change', function () {
+        submitBtn.disabled = !this.checked;
+    });
+</script>
 <script src="/assets/js/notifications.js"></script>
-<script src="/consent/consent.js"></script>
 </body>
 </html>
