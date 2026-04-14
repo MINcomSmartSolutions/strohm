@@ -447,24 +447,19 @@ describe('Consent Service', () => {
             expect(mockClient.release).toHaveBeenCalled();
         });
 
-        it('should default to AGB type and null PDF fields when not provided', async () => {
-            mockClient.query
-                .mockResolvedValueOnce()
-                .mockResolvedValueOnce()
-                .mockResolvedValueOnce({rows: [mockRevision]})
-                .mockResolvedValueOnce();
+        it('should throw when PDF data is not provided', async () => {
+            await expect(createConsentRevision(version, title, null))
+                .rejects.toThrow('PDF data is required for creating a consent revision');
+        });
 
-            await createConsentRevision(version, title, null);
+        it('should throw when PDF data is empty', async () => {
+            await expect(createConsentRevision(version, title, null, CONSENT_TYPES.AGB, Buffer.alloc(0)))
+                .rejects.toThrow('PDF data is required for creating a consent revision');
+        });
 
-            expect(mockClient.query).toHaveBeenCalledWith(
-                'UPDATE consent_revisions SET is_active = false WHERE is_active = true AND consent_type = $1',
-                [CONSENT_TYPES.AGB]
-            );
-            expect(mockClient.query).toHaveBeenCalledWith(
-                expect.stringContaining('INSERT INTO consent_revisions'),
-                [version, title, null, CONSENT_TYPES.AGB, null, null, null, null,
-                    null, null, null, false]
-            );
+        it('should throw when consent type is invalid', async () => {
+            await expect(createConsentRevision(version, title, null, 'invalid_type', pdfBuffer, pdfFilename, pdfSize, pdfContentType))
+                .rejects.toThrow('Invalid consent type: invalid_type');
         });
 
         it('should only deactivate revisions of the same consent_type', async () => {
@@ -474,7 +469,7 @@ describe('Consent Service', () => {
                 .mockResolvedValueOnce({rows: [mockRevision]})
                 .mockResolvedValueOnce();
 
-            await createConsentRevision(version, title, null, CONSENT_TYPES.DATENSCHUTZ);
+            await createConsentRevision(version, title, null, CONSENT_TYPES.DATENSCHUTZ, pdfBuffer, pdfFilename, pdfSize, pdfContentType);
 
             expect(mockClient.query).toHaveBeenCalledWith(
                 'UPDATE consent_revisions SET is_active = false WHERE is_active = true AND consent_type = $1',
@@ -489,7 +484,7 @@ describe('Consent Service', () => {
                 .mockResolvedValueOnce()       // deactivate
                 .mockRejectedValueOnce(error); // INSERT fails
 
-            await createConsentRevision(version, title, null);
+            await createConsentRevision(version, title, null, CONSENT_TYPES.AGB, pdfBuffer, pdfFilename, pdfSize, pdfContentType);
 
             expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
             expect(db.handleQueryError).toHaveBeenCalledWith(error, 'createConsentRevision');
