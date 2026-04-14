@@ -319,7 +319,7 @@
 
     <!-- Consent Management Section -->
     <div style="margin: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-        <h2 style="margin-bottom: 15px; color: #333;">Einwilligungsverwaltung (Consent Management)</h2>
+        <h2 style="margin-bottom: 15px; color: #333;">Einwilligungsverwaltung</h2>
 
         <div id="currentConsents" style="margin-bottom: 20px;">
             <h3 style="font-size: 1.1em; color: #555;">Aktuelle Einwilligungen</h3>
@@ -573,7 +573,7 @@
 
             if (result.success) {
                 showToast(result.message, 'success');
-                await await loadUsers();
+                await loadUsers();
             } else {
                 showToast('Error: ' + result.error, 'error');
             }

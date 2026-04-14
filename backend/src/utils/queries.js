@@ -1343,7 +1343,7 @@ async function getElectricityPrice(specified_datetime = null) {
  * @async
  * @function getElectricityPriceOrDefault
  * @param {DateTime|null} [specified_datetime=null] - Optional Luxon DateTime object to check the price at a specific time.
- * @returns {Promise<{price_eur_kwh: Number, valid_from: DateTime, valid_till: DateTime}>} - The electricity price in cents eur/kWh.
+ * @returns {Promise<{for_timestamp:DateTime, price_eur_kwh: Number, valid_from: DateTime, valid_till: DateTime}>} - The electricity price in EUR/kWh.
  *
  * @throws {ValidationError} - If the specified datetime is invalid.
  * @throws {DatabaseError} - If there is an error during the database query.

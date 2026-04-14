@@ -55,6 +55,11 @@ export const down = (pgm) => {
     pgm.addConstraint('consent_revisions', 'consent_revisions_version_key', {
         unique: ['version'],
     });
+
+    // Populate NULL content values with empty string before making column NOT NULL
+    // This prevents rollback failures when pdf_data is used instead of content
+    pgm.sql("UPDATE consent_revisions SET content = '' WHERE content IS NULL;");
+
     pgm.alterColumn('consent_revisions', 'content', {
         notNull: true,
     });

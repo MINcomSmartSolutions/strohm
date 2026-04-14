@@ -95,28 +95,29 @@ if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
     form_action_urls.push("http://localhost:3000", "http://localhost:18069");
 }
 
-//FIXME: Helmet clashes with HM's own CSP and breaks the some custom html pages
-// app.use(helmet({
-//     contentSecurityPolicy: {
-//         directives: {
-//             defaultSrc: ["'self'"],
-//             scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
-//             scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
-//             styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
-//             styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
-//             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
-//             connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
-//             fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin and external domains
-//             objectSrc: ["'self'"], // Allow PDF rendering in browser viewers
-//             mediaSrc: ["'self'"], // Allow media from same origin
-//             frameSrc: ["'self'"], // Allow iframes from same origin (consent PDFs)
-//             frameAncestors: ["'self'"], // Only allow embedding in same origin
-//             formAction: form_action_urls,
-//         },
-//     },
-//     xFrameOptions: { action: "sameorigin" },
-//     crossOriginEmbedderPolicy: false, // Needed for Auth0 OIDC compatibility
-// }));
+
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
+            scriptSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu"], // External scripts + inline scripts
+            styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
+            styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
+            imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
+            connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
+            fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin and external domains
+            objectSrc: ["'self'", "blob:"], // Allow PDF rendering in browser viewers
+            mediaSrc: ["'self'"], // Allow media from same origin
+            frameSrc: ["'self'", "blob:"], // Allow iframes from same origin (consent PDFs)
+            frameAncestors: ["'self'"], // Only allow embedding in same origin
+            formAction: form_action_urls,
+            upgradeInsecureRequests: GLOBAL_CONFIG.ENV.IS_DEVELOPMENT ? null : [],
+        },
+    },
+    xFrameOptions: {action: 'sameorigin'},
+    crossOriginEmbedderPolicy: false, // Needed for Auth0 OIDC compatibility
+}));
 
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 // See: https://github.com/auth0/express-openid-connect
@@ -135,7 +136,6 @@ app.get('/', ensureAuthenticated, requireConsent, async (req, res) => {
             throw new AuthError(ErrorCodes.USER.NOT_FOUND);
         }
 
-        // Check if user is deactivated
         if (req.user.deactivated_at !== null) {
             logger.warn(`User ${req.user.user_id} is deactivated`);
             throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);

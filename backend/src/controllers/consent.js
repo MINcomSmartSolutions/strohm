@@ -230,8 +230,8 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
 
         // Verify that the submitted IDs match the current active revisions
         const activeConsents = await getAllActiveConsentRevisions();
-        const activeIds = activeConsents.map(c => c.id).sort();
-        const submittedIds = [...revisionIds].sort();
+        const activeIds = activeConsents.map(c => c.id).sort((a, b) => a - b);
+        const submittedIds = [...revisionIds].sort((a, b) => a - b);
 
         if (JSON.stringify(activeIds) !== JSON.stringify(submittedIds)) {
             log.warn(`Consent revision mismatch: submitted ${submittedIds}, current ${activeIds}`);
@@ -358,7 +358,11 @@ consent_controller.get('/consent/pdf/:id', async (req, res) => {
 
         // Set restrictive headers
         // Use RFC 5987 encoding for filenames with non-ASCII characters (e.g. German umlauts)
-        const safeFilename = pdf.pdf_filename.replace(/[^\x20-\x7E]/g, '_');
+        // Strip non-printable/non-ASCII chars first, then strip chars that break the
+        // quoted-string token in Content-Disposition: " and \ can allow header injection.
+        const safeFilename = pdf.pdf_filename
+            .replace(/[^\x20-\x7E]/g, '_')
+            .replace(/["\\]/g, '_');
         const encodedFilename = encodeURIComponent(pdf.pdf_filename);
 
         res.setHeader('Content-Type', 'application/pdf');
@@ -366,8 +370,7 @@ consent_controller.get('/consent/pdf/:id', async (req, res) => {
             `inline; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`);
         res.setHeader('Content-Length', pdf.pdf_size);
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.removeHeader('Content-Security-Policy');
+        res.setHeader('Cache-Control', 'no-store, no-cache');
 
         res.send(pdf.pdf_data);
     } catch (error) {
