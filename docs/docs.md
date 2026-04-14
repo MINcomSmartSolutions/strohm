@@ -680,7 +680,7 @@ This approach provides:
     * [~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod])](#module_services/consent..recordConsent) ⇒ <code>Promise.&lt;db\_user\_consent&gt;</code>
     * [~withdrawConsent(userId)](#module_services/consent..withdrawConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~getUserConsentHistory(userId)](#module_services/consent..getUserConsentHistory) ⇒ <code>Promise.&lt;Array.&lt;db\_user\_consent&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
-    * [~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+    * [~createConsentRevision(version, title, content, [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
     * [~getAllActiveConsentRevisions()](#module_services/consent..getAllActiveConsentRevisions)
     * [~getConsentPdf()](#module_services/consent..getConsentPdf)
     * [~validateAndSanitizePdf()](#module_services/consent..validateAndSanitizePdf)
@@ -804,7 +804,7 @@ History Data Includes:
 principle by providing complete documentation of consent lifecycle events.  
 <a name="module_services/consent..createConsentRevision"></a>
 
-### services/consent~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+### services/consent~createConsentRevision(version, title, content, [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
 Creation Process:
 1. **Transaction Start**: Begins database transaction for atomicity
 2. **Deactivation**: Sets all existing active revisions to inactive

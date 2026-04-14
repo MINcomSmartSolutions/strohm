@@ -404,6 +404,11 @@ const getUserConsentHistory = async (userId) => {
  * @param {string} version - Version identifier for the new revision (e.g., "2.1.0")
  * @param {string} title - Human-readable title for the consent
  * @param {string} content - Full consent text content (supports HTML)
+ * @param {string} [consentType=CONSENT_TYPES] - Type of consent (e.g., AGB, DATENSCHUTZ)
+ * @param {Buffer|null} [pdfData=null] - Optional PDF binary data for the consent document
+ * @param {string|null} [pdfFilename=null] - Original filename of the uploaded PDF
+ * @param {number|null} [pdfSize=null] - Size of the PDF in bytes
+ * @param {string|null} [pdfContentType=null] - MIME type of the PDF (e.g., "application/pdf")
  * @param {string|null} [privacyPolicyUrl=null] - URL to privacy policy document
  * @param {string|null} [termsUrl=null] - URL to terms of service document
  * @param {Date|null} [expiresAt=null] - Optional expiration date for the revision

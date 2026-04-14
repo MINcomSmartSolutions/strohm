@@ -3,12 +3,17 @@
  */
 const {
     getActiveConsentRevision,
+    getAllActiveConsentRevisions,
+    getConsentPdf,
     hasValidConsent,
     hasLatestConsent,
     recordConsent,
     withdrawConsent,
     getUserConsentHistory,
-    createConsentRevision
+    createConsentRevision,
+    validateAndSanitizePdf,
+    CONSENT_TYPES,
+    MAX_PDF_SIZE,
 } = require('#services/consent');
 const pool = require('#services/db_conn');
 const logger = require('#services/logger');
@@ -18,6 +23,11 @@ const {db} = require('#utils/queries');
 jest.mock('#services/db_conn');
 jest.mock('#services/logger');
 jest.mock('#utils/queries');
+jest.mock('pdf-lib', () => ({
+    PDFDocument: {
+        load: jest.fn(),
+    },
+}));
 
 describe('Consent Service', () => {
     let mockClient;
@@ -50,21 +60,37 @@ describe('Consent Service', () => {
             const mockConsent = {
                 id: 1,
                 version: '1.0',
-                title: 'Privacy Policy',
-                content: 'Test content',
-                privacy_policy_url: 'https://example.com/privacy',
-                terms_url: 'https://example.com/terms',
+                title: 'AGB',
+                content: null,
+                consent_type: 'agb',
+                pdf_filename: 'agb.pdf',
+                pdf_size: 12345,
+                pdf_content_type: 'application/pdf',
+                privacy_policy_url: null,
+                terms_url: null,
                 created_at: '2025-01-01T00:00:00Z',
-                expires_at: null
+                expires_at: null,
             };
 
             mockClient.query.mockResolvedValue({rows: [mockConsent]});
 
             const result = await getActiveConsentRevision();
 
-
             expect(result).toEqual(mockConsent);
             expect(mockClient.release).toHaveBeenCalled();
+        });
+
+        it('should filter by consent type when provided', async () => {
+            const mockConsent = {id: 1, consent_type: 'agb'};
+            mockClient.query.mockResolvedValue({rows: [mockConsent]});
+
+            const result = await getActiveConsentRevision(CONSENT_TYPES.AGB);
+
+            expect(mockClient.query).toHaveBeenCalledWith(
+                expect.stringContaining('AND consent_type = $1'),
+                [CONSENT_TYPES.AGB]
+            );
+            expect(result).toEqual(mockConsent);
         });
 
         it('should return null when no active consent revision exists', async () => {
@@ -124,12 +150,10 @@ describe('Consent Service', () => {
     });
 
     describe('hasLatestConsent', () => {
-        const userId = 123;
-
-        it('should return true when user has consented to latest revision', async () => {
+        it('should return true when user has consented to the single latest revision', async () => {
             mockClient.query
-                .mockResolvedValueOnce({rows: [{id: 1}]}) // Latest revision query
-                .mockResolvedValueOnce({rows: [{id: 1}]}); // User consent query
+                .mockResolvedValueOnce({rows: [{id: 1, consent_type: 'agb'}]}) // DISTINCT ON query
+                .mockResolvedValueOnce({rows: [{id: 1}]});                      // user consent for agb
 
             const result = await hasLatestConsent(user);
 
@@ -138,8 +162,20 @@ describe('Consent Service', () => {
             expect(mockClient.release).toHaveBeenCalled();
         });
 
-        it('should return false when no active consent revision exists', async () => {
-            mockClient.query.mockResolvedValueOnce({rows: []}); // No latest revision
+        it('should return true when user has consented to all required revisions (agb + datenschutz)', async () => {
+            mockClient.query
+                .mockResolvedValueOnce({rows: [{id: 1, consent_type: 'agb'}, {id: 2, consent_type: 'datenschutz'}]})
+                .mockResolvedValueOnce({rows: [{id: 1}]}) // consent for agb
+                .mockResolvedValueOnce({rows: [{id: 2}]}); // consent for datenschutz
+
+            const result = await hasLatestConsent(user);
+
+            expect(mockClient.query).toHaveBeenCalledTimes(3);
+            expect(result).toBe(true);
+        });
+
+        it('should return false when no active consent revisions exist', async () => {
+            mockClient.query.mockResolvedValueOnce({rows: []});
 
             const result = await hasLatestConsent(user);
 
@@ -147,15 +183,31 @@ describe('Consent Service', () => {
             expect(mockClient.release).toHaveBeenCalled();
         });
 
-        it('should return false when user has not consented to latest revision', async () => {
+        it('should return false when user has not consented to one of the required revisions', async () => {
             mockClient.query
-                .mockResolvedValueOnce({rows: [{id: 1}]}) // Latest revision exists
-                .mockResolvedValueOnce({rows: []}); // User has not consented
+                .mockResolvedValueOnce({rows: [{id: 1, consent_type: 'agb'}, {id: 2, consent_type: 'datenschutz'}]})
+                .mockResolvedValueOnce({rows: [{id: 1}]}) // consent for agb found
+                .mockResolvedValueOnce({rows: []});        // consent for datenschutz missing
+
+            const result = await hasLatestConsent(user);
+
+            expect(result).toBe(false);
+        });
+
+        it('should return false when user has not consented to the single latest revision', async () => {
+            mockClient.query
+                .mockResolvedValueOnce({rows: [{id: 1, consent_type: 'agb'}]})
+                .mockResolvedValueOnce({rows: []});
 
             const result = await hasLatestConsent(user);
 
             expect(result).toBe(false);
             expect(mockClient.release).toHaveBeenCalled();
+        });
+
+        it('should throw when user object is invalid', async () => {
+            await expect(hasLatestConsent(null)).rejects.toThrow();
+            await expect(hasLatestConsent({})).rejects.toThrow();
         });
 
         it('should handle database errors gracefully', async () => {
@@ -344,90 +396,231 @@ describe('Consent Service', () => {
 
     describe('createConsentRevision', () => {
         const version = '2.0';
-        const title = 'Updated Privacy Policy';
-        const content = 'Updated content';
-        const privacyPolicyUrl = 'https://example.com/privacy';
-        const termsUrl = 'https://example.com/terms';
-        const expiresAt = new Date('2026-01-01');
-        const optinal = false;
+        const title = 'Allgemeine Geschäftsbedingungen';
+        const consentType = CONSENT_TYPES.AGB;
+        const pdfBuffer = Buffer.from('%PDF-fake');
+        const pdfFilename = 'agb.pdf';
+        const pdfSize = pdfBuffer.length;
+        const pdfContentType = 'application/pdf';
 
-        it('should successfully create new consent revision with all parameters', async () => {
-            const mockRevision = {
-                id: 2,
-                version,
-                title,
-                content,
-                privacy_policy_url: privacyPolicyUrl,
-                terms_url: termsUrl,
-                created_at: '2025-01-01T00:00:00Z',
-                expires_at: expiresAt,
-                is_active: true,
-                optinal: false
-            };
+        const mockRevision = {
+            id: 2,
+            version,
+            title,
+            consent_type: consentType,
+            pdf_filename: pdfFilename,
+            pdf_size: pdfSize,
+            pdf_content_type: pdfContentType,
+            created_at: '2025-01-01T00:00:00Z',
+            expires_at: null,
+            is_active: true,
+            optional: false,
+        };
 
+        it('should create a new consent revision with PDF data', async () => {
             mockClient.query
-                .mockResolvedValueOnce() // BEGIN
-                .mockResolvedValueOnce() // Deactivate previous revisions
-                .mockResolvedValueOnce({rows: [mockRevision]}) // INSERT new revision
-                .mockResolvedValueOnce(); // COMMIT
+                .mockResolvedValueOnce()                        // BEGIN
+                .mockResolvedValueOnce()                        // deactivate previous
+                .mockResolvedValueOnce({rows: [mockRevision]}) // INSERT
+                .mockResolvedValueOnce();                       // COMMIT
 
-            const result = await createConsentRevision(version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optinal);
+            const result = await createConsentRevision(
+                version, title, null, consentType,
+                pdfBuffer, pdfFilename, pdfSize, pdfContentType
+            );
 
             expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
             expect(mockClient.query).toHaveBeenCalledWith(
-                'UPDATE consent_revisions SET is_active = false WHERE is_active = true'
+                'UPDATE consent_revisions SET is_active = false WHERE is_active = true AND consent_type = $1',
+                [consentType]
             );
             expect(mockClient.query).toHaveBeenCalledWith(
                 expect.stringContaining('INSERT INTO consent_revisions'),
-                [version, title, content, privacyPolicyUrl, termsUrl, expiresAt, optinal]
+                [version, title, null, consentType, pdfBuffer, pdfFilename, pdfSize, pdfContentType,
+                    null, null, null, false]
             );
             expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
             expect(result).toEqual(mockRevision);
-            expect(logger.info).toHaveBeenCalledWith(`New consent revision created: ${version}`);
+            expect(logger.info).toHaveBeenCalledWith(
+                `New consent revision created: ${version} (type: ${consentType})`
+            );
             expect(mockClient.release).toHaveBeenCalled();
         });
 
-        it('should create consent revision with only required parameters', async () => {
-            const mockRevision = {
-                id: 2,
-                version,
-                title,
-                content,
-                privacy_policy_url: null,
-                terms_url: null,
-                created_at: '2025-01-01T00:00:00Z',
-                expires_at: null,
-                is_active: true,
-                optinal: false
-            };
-
+        it('should default to AGB type and null PDF fields when not provided', async () => {
             mockClient.query
-                .mockResolvedValueOnce() // BEGIN
-                .mockResolvedValueOnce() // Deactivate previous revisions
-                .mockResolvedValueOnce({rows: [mockRevision]}) // INSERT new revision
-                .mockResolvedValueOnce(); // COMMIT
+                .mockResolvedValueOnce()
+                .mockResolvedValueOnce()
+                .mockResolvedValueOnce({rows: [mockRevision]})
+                .mockResolvedValueOnce();
 
-            const result = await createConsentRevision(version, title, content);
+            await createConsentRevision(version, title, null);
 
             expect(mockClient.query).toHaveBeenCalledWith(
-                expect.stringContaining('INSERT INTO consent_revisions'),
-                [version, title, content, null, null, null, false]
+                'UPDATE consent_revisions SET is_active = false WHERE is_active = true AND consent_type = $1',
+                [CONSENT_TYPES.AGB]
             );
-            expect(result).toEqual(mockRevision);
+            expect(mockClient.query).toHaveBeenCalledWith(
+                expect.stringContaining('INSERT INTO consent_revisions'),
+                [version, title, null, CONSENT_TYPES.AGB, null, null, null, null,
+                    null, null, null, false]
+            );
+        });
+
+        it('should only deactivate revisions of the same consent_type', async () => {
+            mockClient.query
+                .mockResolvedValueOnce()
+                .mockResolvedValueOnce()
+                .mockResolvedValueOnce({rows: [mockRevision]})
+                .mockResolvedValueOnce();
+
+            await createConsentRevision(version, title, null, CONSENT_TYPES.DATENSCHUTZ);
+
+            expect(mockClient.query).toHaveBeenCalledWith(
+                'UPDATE consent_revisions SET is_active = false WHERE is_active = true AND consent_type = $1',
+                [CONSENT_TYPES.DATENSCHUTZ]
+            );
         });
 
         it('should rollback transaction on error', async () => {
             const error = new Error('Insert failed');
             mockClient.query
-                .mockResolvedValueOnce() // BEGIN
-                .mockResolvedValueOnce() // Deactivate previous revisions
+                .mockResolvedValueOnce()       // BEGIN
+                .mockResolvedValueOnce()       // deactivate
                 .mockRejectedValueOnce(error); // INSERT fails
 
-            await createConsentRevision(version, title, content);
+            await createConsentRevision(version, title, null);
 
             expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
             expect(db.handleQueryError).toHaveBeenCalledWith(error, 'createConsentRevision');
             expect(mockClient.release).toHaveBeenCalled();
+        });
+    });
+
+    describe('getAllActiveConsentRevisions', () => {
+        it('should return all active revisions (one per type)', async () => {
+            const mockRevisions = [
+                {id: 1, consent_type: 'agb', version: '1.0', title: 'AGB', pdf_filename: 'agb.pdf'},
+                {id: 2, consent_type: 'datenschutz', version: '1.0', title: 'Datenschutz', pdf_filename: 'ds.pdf'},
+            ];
+            mockClient.query.mockResolvedValue({rows: mockRevisions});
+
+            const result = await getAllActiveConsentRevisions();
+
+            expect(mockClient.query).toHaveBeenCalledWith(
+                expect.stringContaining('DISTINCT ON (consent_type)')
+            );
+            expect(result).toEqual(mockRevisions);
+            expect(mockClient.release).toHaveBeenCalled();
+        });
+
+        it('should return empty array when no active revisions exist', async () => {
+            mockClient.query.mockResolvedValue({rows: []});
+
+            const result = await getAllActiveConsentRevisions();
+
+            expect(result).toEqual([]);
+        });
+
+        it('should handle database errors gracefully', async () => {
+            const error = new Error('Query failed');
+            mockClient.query.mockRejectedValue(error);
+
+            await getAllActiveConsentRevisions();
+
+            expect(db.handleQueryError).toHaveBeenCalledWith(error, 'getAllActiveConsentRevisions');
+            expect(mockClient.release).toHaveBeenCalled();
+        });
+    });
+
+    describe('getConsentPdf', () => {
+        it('should return PDF data when revision has a PDF', async () => {
+            const mockPdf = {
+                pdf_data: Buffer.from('%PDF-fake'),
+                pdf_filename: 'agb.pdf',
+                pdf_content_type: 'application/pdf',
+                pdf_size: 9,
+            };
+            mockClient.query.mockResolvedValue({rows: [mockPdf]});
+
+            const result = await getConsentPdf(1);
+
+            expect(mockClient.query).toHaveBeenCalledWith(
+                expect.stringContaining('pdf_data IS NOT NULL'),
+                [1]
+            );
+            expect(result).toEqual(mockPdf);
+            expect(mockClient.release).toHaveBeenCalled();
+        });
+
+        it('should return null when revision has no PDF', async () => {
+            mockClient.query.mockResolvedValue({rows: []});
+
+            const result = await getConsentPdf(99);
+
+            expect(result).toBeNull();
+        });
+
+        it('should handle database errors gracefully', async () => {
+            const error = new Error('Query failed');
+            mockClient.query.mockRejectedValue(error);
+
+            await getConsentPdf(1);
+
+            expect(db.handleQueryError).toHaveBeenCalledWith(error, 'getConsentPdf');
+            expect(mockClient.release).toHaveBeenCalled();
+        });
+    });
+
+    describe('validateAndSanitizePdf', () => {
+        const {PDFDocument} = require('pdf-lib');
+        const validPdfHeader = Buffer.from('%PDF-1.4 fake content');
+
+        beforeEach(() => {
+            PDFDocument.load.mockReset();
+        });
+
+        it('should throw when buffer is empty', async () => {
+            await expect(validateAndSanitizePdf(Buffer.alloc(0), 'test.pdf'))
+                .rejects.toThrow('PDF file is empty');
+        });
+
+        it('should throw when buffer exceeds max size', async () => {
+            const oversized = Buffer.alloc(MAX_PDF_SIZE + 1);
+            oversized.write('%PDF', 0);
+            await expect(validateAndSanitizePdf(oversized, 'big.pdf'))
+                .rejects.toThrow(/exceeds maximum size/);
+        });
+
+        it('should throw when magic bytes are invalid', async () => {
+            const notPdf = Buffer.from('notapdf content here');
+            await expect(validateAndSanitizePdf(notPdf, 'fake.pdf'))
+                .rejects.toThrow('Invalid PDF file: missing PDF header');
+        });
+
+        it('should return sanitized buffer for a valid PDF', async () => {
+            const mockCatalog = {
+                has: jest.fn().mockReturnValue(false),
+                delete: jest.fn(),
+            };
+            const mockPdfDoc = {
+                catalog: mockCatalog,
+                context: {obj: jest.fn().mockReturnValue('key')},
+                save: jest.fn().mockResolvedValue(new Uint8Array([0x25, 0x50, 0x44, 0x46])),
+            };
+            PDFDocument.load.mockResolvedValue(mockPdfDoc);
+
+            const result = await validateAndSanitizePdf(validPdfHeader, 'agb.pdf');
+
+            expect(PDFDocument.load).toHaveBeenCalledWith(validPdfHeader, expect.any(Object));
+            expect(Buffer.isBuffer(result)).toBe(true);
+        });
+
+        it('should throw ValidationError when pdf-lib fails to parse', async () => {
+            PDFDocument.load.mockRejectedValue(new Error('corrupted'));
+
+            await expect(validateAndSanitizePdf(validPdfHeader, 'bad.pdf'))
+                .rejects.toThrow('Invalid or corrupted PDF file');
         });
     });
 });
