@@ -7,6 +7,10 @@
 <dt><a href="#module_controllers/charging">controllers/charging</a></dt>
 <dd><p>Controller for handling charging session operations.</p>
 </dd>
+<dt><a href="#module_controllers/consent_admin">controllers/consent_admin</a></dt>
+<dd><p>Admin controller for consent management (PDF upload).
+Protected by Tailscale network authentication.</p>
+</dd>
 <dt><a href="#module_controllers/consent">controllers/consent</a></dt>
 <dd><p>Controller for handling user consent pages and operations.</p>
 <p>This controller manages the complete consent workflow including:</p>
@@ -274,6 +278,35 @@ Controller for handling user authentication and logout.
 ## controllers/charging
 Controller for handling charging session operations.
 
+<a name="module_controllers/consent_admin"></a>
+
+## controllers/consent\_admin
+Admin controller for consent management (PDF upload).
+Protected by Tailscale network authentication.
+
+
+* [controllers/consent_admin](#module_controllers/consent_admin)
+    * [~getConsentRevisions()](#module_controllers/consent_admin..getConsentRevisions)
+    * [~uploadConsentPdf()](#module_controllers/consent_admin..uploadConsentPdf)
+
+<a name="module_controllers/consent_admin..getConsentRevisions"></a>
+
+### controllers/consent_admin~getConsentRevisions()
+GET /api/dev/consent/revisions - Get current active consent revisions
+
+**Kind**: inner method of [<code>controllers/consent\_admin</code>](#module_controllers/consent_admin)  
+<a name="module_controllers/consent_admin..uploadConsentPdf"></a>
+
+### controllers/consent_admin~uploadConsentPdf()
+POST /api/dev/consent/upload - Upload a new consent PDF
+
+Body (multipart/form-data):
+- pdf: PDF file (required, max 10MB)
+- consent_type: 'agb' or 'datenschutz' (required)
+- version: version string (required)
+- title: document title (required)
+
+**Kind**: inner method of [<code>controllers/consent\_admin</code>](#module_controllers/consent_admin)  
 <a name="module_controllers/consent"></a>
 
 ## controllers/consent
@@ -647,7 +680,10 @@ This approach provides:
     * [~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod])](#module_services/consent..recordConsent) ⇒ <code>Promise.&lt;db\_user\_consent&gt;</code>
     * [~withdrawConsent(userId)](#module_services/consent..withdrawConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~getUserConsentHistory(userId)](#module_services/consent..getUserConsentHistory) ⇒ <code>Promise.&lt;Array.&lt;db\_user\_consent&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
-    * [~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+    * [~createConsentRevision(version, title, content, [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+    * [~getAllActiveConsentRevisions()](#module_services/consent..getAllActiveConsentRevisions)
+    * [~getConsentPdf()](#module_services/consent..getConsentPdf)
+    * [~validateAndSanitizePdf()](#module_services/consent..validateAndSanitizePdf)
 
 <a name="module_services/consent..getActiveConsentRevision"></a>
 
@@ -768,7 +804,7 @@ History Data Includes:
 principle by providing complete documentation of consent lifecycle events.  
 <a name="module_services/consent..createConsentRevision"></a>
 
-### services/consent~createConsentRevision(version, title, content, [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+### services/consent~createConsentRevision(version, title, content, [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
 Creation Process:
 1. **Transaction Start**: Begins database transaction for atomicity
 2. **Deactivation**: Sets all existing active revisions to inactive
@@ -786,6 +822,27 @@ validation throughout the application.
 
 - <code>Error</code> Database connection or query errors (handled via db.handleQueryError)
 
+<a name="module_services/consent..getAllActiveConsentRevisions"></a>
+
+### services/consent~getAllActiveConsentRevisions()
+Retrieves all active consent revisions (one per consent_type).
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+<a name="module_services/consent..getConsentPdf"></a>
+
+### services/consent~getConsentPdf()
+Retrieves the PDF binary data for a consent revision.
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
+<a name="module_services/consent..validateAndSanitizePdf"></a>
+
+### services/consent~validateAndSanitizePdf()
+Validates and sanitizes a PDF buffer.
+- Checks magic bytes (%PDF)
+- Enforces 10MB size limit
+- Re-serializes with pdf-lib to strip JavaScript and other active content
+
+**Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
 <a name="module_services/cron"></a>
 
 ## services/cron
@@ -1325,8 +1382,8 @@ Global database queries
     * [~getInvoiceIdByOdooInvoiceId(odoo_invoice_id)](#module_utils/queries..getInvoiceIdByOdooInvoiceId) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
     * [~linkOrderToInvoice(orderIds, invoiceId)](#module_utils/queries..linkOrderToInvoice) ⇒ <code>Promise.&lt;Array&gt;</code>
     * [~getOrdersByInvoiceId(invoice_id)](#module_utils/queries..getOrdersByInvoiceId) ⇒ <code>Promise.&lt;Array&gt;</code>
-    * [~getElectricityPrice(specified_datetime)](#module_utils/queries..getElectricityPrice) ⇒ <code>Promise.&lt;({price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
-    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+    * [~getElectricityPrice(specified_datetime)](#module_utils/queries..getElectricityPrice) ⇒ <code>Promise.&lt;({price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
+    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
     * [~updateUser(userId, updates)](#module_utils/queries..updateUser) ⇒ <code>Promise.&lt;object&gt;</code>
     * [~activateUser(user)](#module_utils/queries..activateUser)
@@ -1557,7 +1614,7 @@ Gets all orders linked to a specific invoice.
 **Returns**: <code>Promise.&lt;Array&gt;</code> - Array of order records  
 <a name="module_utils/queries..getElectricityPrice"></a>
 
-### utils/queries~getElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;({price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
+### utils/queries~getElectricityPrice(specified_datetime) ⇒ <code>Promise.&lt;({price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
 Retrieves the current electricity price from the database.
 If a `specified_datetime` is provided, it will return the price valid at that time.
 If no price is found, it returns null.
@@ -1565,7 +1622,7 @@ If no price is found, it returns null.
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..getElectricityPriceOrDefault"></a>
 
-### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
 Retrieves the current electricity price or falls back to a default price if none is found.
 
 This function attempts to fetch the electricity price for a specified datetime
@@ -1573,7 +1630,7 @@ or the current time if no datetime is provided. If no price is found or the pric
 is invalid, it falls back to a default price defined in the global configuration.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;{price\_ct\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in cents per kWh.  
+**Returns**: <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in cents eur/kWh.  
 **Throws**:
 
 - <code>ValidationError</code> - If the specified datetime is invalid.
@@ -1690,7 +1747,7 @@ Type definitions
     * [~OIDCUser](#module_utils/typedef..OIDCUser) : <code>Object</code>
     * [~steve_user](#module_utils/typedef..steve_user) : <code>Object</code>
     * [~steve_txn](#module_utils/typedef..steve_txn) : <code>Object</code>
-    * ~~[~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>~~
+    * [~db_txn](#module_utils/typedef..db_txn) : <code>Object</code>
     * [~electricity_price](#module_utils/typedef..electricity_price) : <code>Object</code>
     * [~db_consent_revision](#module_utils/typedef..db_consent_revision) : <code>Object</code>
     * [~db_user_consent](#module_utils/typedef..db_user_consent) : <code>Object</code>
@@ -1772,9 +1829,7 @@ Type definitions
 
 <a name="module_utils/typedef..db_txn"></a>
 
-### ~~utils/typedef~db\_txn : <code>Object</code>~~
-***{number} invoice_ref - The invoice reference associated with the transaction returned from Odoo. Deprecated, use db_odoo_txn_order and db_odoo_invoice instead.***
-
+### utils/typedef~db\_txn : <code>Object</code>
 **Kind**: inner typedef of [<code>utils/typedef</code>](#module_utils/typedef)  
 **Properties**
 

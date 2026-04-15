@@ -95,23 +95,27 @@ if (!GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
     form_action_urls.push("http://localhost:3000", "http://localhost:18069");
 }
 
+
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
-            scriptSrcElem: ["'self'", "https://sso.hm.edu"], // External scripts
+            scriptSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu"], // External scripts + inline scripts
             styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
             styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
             imgSrc: ["'self'", "data:", "https:", "https://assets.hm.edu", "https://mediapool.hm.edu"], // Allow images from same origin, data URIs, HTTPS, and mediapool
             connectSrc: ["'self'", "https://sso.hm.edu", "https://backend.laden.hm.edu"], // Allow WebSocket, and EventSource connections to same origin and external domains
             fontSrc: ["'self'", "https://assets.hm.edu"], // Allow fonts from same origin and external domains
-            objectSrc: ["'none'"], // Block plugins (Flash, etc.)
+            objectSrc: ["'self'", "blob:"], // Allow PDF rendering in browser viewers
             mediaSrc: ["'self'"], // Allow media from same origin
-            frameSrc: ["'self'"], // Allow iframes from same origin
+            frameSrc: ["'self'", "blob:"], // Allow iframes from same origin (consent PDFs)
+            frameAncestors: ["'self'"], // Only allow embedding in same origin
             formAction: form_action_urls,
+            upgradeInsecureRequests: GLOBAL_CONFIG.ENV.IS_DEVELOPMENT ? null : [],
         },
     },
+    xFrameOptions: {action: 'sameorigin'},
     crossOriginEmbedderPolicy: false, // Needed for Auth0 OIDC compatibility
 }));
 
@@ -132,7 +136,6 @@ app.get('/', ensureAuthenticated, requireConsent, async (req, res) => {
             throw new AuthError(ErrorCodes.USER.NOT_FOUND);
         }
 
-        // Check if user is deactivated
         if (req.user.deactivated_at !== null) {
             logger.warn(`User ${req.user.user_id} is deactivated`);
             throw new AuthError(ErrorCodes.AUTH.USER_INACTIVE);
@@ -189,6 +192,7 @@ app.use(electricity_price_controller)
 // Enable with TAILSCALE_ENABLE_ADMIN=true environment variable
 if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     const dev_admin_controller = require('./controllers/dev_admin');
+    const consent_admin_controller = require('./controllers/consent_admin');
 
     logger.verbose('Admin Panel enabled - protected by Tailscale authentication');
     logger.info('Admin panel available at /dev-admin.html');
@@ -213,6 +217,10 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
     app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);
     app.post('/api/dev/users/:user_id/odoo/revoke', dev_admin_controller.revokeOdooCredentials);
+
+    // Consent management admin routes
+    app.get('/api/dev/consent/revisions', consent_admin_controller.getConsentRevisions);
+    app.post('/api/dev/consent/upload', consent_admin_controller.uploadConsentPdf);
 } else {
     logger.info('Admin Panel disabled - set TAILSCALE_ENABLE_ADMIN=true to enable');
 }
