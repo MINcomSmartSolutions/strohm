@@ -19,6 +19,7 @@ const {
     odooTxnProcessResponseSchema
 } = require('#utils/joi');
 const logger = require('#services/logger');
+const {isValidNumber} = require("#helpers/validators");
 
 
 /**
@@ -282,15 +283,17 @@ async function sendTxnToOdooProcessing(db_txn) {
             `Invalid user: ${user_error.error.message}`);
     }
 
+
+    const txn_startdatetime = DateTime.fromJSDate(db_txn.start_timestamp);
     // The price of electricity at the time of transaction started
     const {
         price_eur_kwh: txn_started_with_electricity_price_eur_kwh,
-    } = await db.getElectricityPriceOrDefault(DateTime.fromJSDate(db_txn.start_timestamp));
+    } = await db.getElectricityPriceOrDefault(txn_startdatetime);
 
     const lines_data = [
         {
             'sku': 'standard_charging',
-            'session_start': DateTime.fromJSDate(db_txn.start_timestamp).toISO(),
+            'session_start': txn_startdatetime.toISO(),
             'session_end': DateTime.fromJSDate(db_txn.stop_timestamp).toISO(),
             'session_backend_ref': db_txn.txn_steve_id,
             // 'uom_name': 'kWh',
@@ -299,6 +302,13 @@ async function sendTxnToOdooProcessing(db_txn) {
             'quantity': db_txn.delivered_energy_wh / 1000, // convert Wh to kWh
         },
     ];
+    const vat_rate = await db.getVAT(txn_startdatetime);
+    if (vat_rate && isValidNumber(vat_rate.rate)) {
+        lines_data[0].tax_rate = vat_rate.rate;
+        lines_data[0].tax_included = false; // since the vat is net
+    }
+
+    logger.verbose(`Sending transaction ${db_txn.id} to Odoo for processing with data: ${logger.prettyPrint(lines_data)}`);
 
     const data = {
         timestamp: DateTime.utc().toISO(),

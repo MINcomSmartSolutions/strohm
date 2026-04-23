@@ -122,5 +122,24 @@ logger.withSession = function (sessionId) {
     });
 };
 
+/**
+ * Pretty-print a value for logs (safe for circular refs)
+ * @param {*} value
+ * @returns {string}
+ */
+function prettyPrint(value) {
+    if (value === undefined) return 'undefined';
+    if (value === null) return 'null';
+    if (typeof value === 'string') return value;
+
+    try {
+        return safeStringify(value);
+    } catch (err) {
+        return `[Unserializable: ${err.message}]`;
+    }
+}
+
+
 module.exports = logger;
 module.exports.morganMiddleware = morganMiddleware;
+module.exports.prettyPrint = prettyPrint;

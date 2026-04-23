@@ -40,6 +40,7 @@ jest.mock('#utils/queries', () => ({
         upsertTxnOdooOrder: jest.fn(),
         upsertTxnOdooInvoice: jest.fn(),
         linkOrderToInvoice: jest.fn(),
+        getVAT: jest.fn(),
     },
 }));
 
@@ -66,6 +67,7 @@ jest.mock('#services/logger', () => ({
     error: jest.fn(),
     verbose: jest.fn(),
     debug: jest.fn(),
+    prettyPrint: jest.fn(),
 }));
 
 describe('Odoo Service', () => {
