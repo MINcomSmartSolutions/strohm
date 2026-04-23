@@ -1834,14 +1834,19 @@ async function getVAT(datetime = null) {
         throw new ValidationError(
             ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'datetime must be valid DateTime objects');
     }
-    datetime = datetime ? datetime.toJSDate() : DateTime.now().toJSDate();
+
+    // Normalize lookup timestamp to UTC to avoid local timezone ambiguity.
+    datetime = datetime ? datetime.toUTC().toJSDate() : DateTime.utc().toJSDate();
 
     try {
         const query_format = `
             SELECT *
             FROM vat_rates
-            WHERE (effective_from <= $1::timestamptz)
-              AND (effective_to IS NULL OR effective_to >= $1::timestamptz)`;
+            WHERE effective_from <= $1::timestamptz
+              AND (effective_to IS NULL OR effective_to > $1::timestamptz)
+            ORDER BY effective_from DESC, id DESC
+            LIMIT 1
+        `;
 
         const params = [datetime];
 
@@ -1850,7 +1855,7 @@ async function getVAT(datetime = null) {
     } catch (error) {
         handleQueryError(error, 'getVAT');
     }
-};
+}
 
 module.exports = {
     getVAT,
