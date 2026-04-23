@@ -10,7 +10,7 @@ const {execSync} = require('child_process');
  */
 const setupTestDatabase = async () => {
 
-    if (!process.env.STROHM_DB_USER || !process.env.STROHM_DB_HOST || !process.env.STROHM_DB_NAME || !process.env.STROHM_DB_PASSWORD || !process.env.STROHM_DB_PORT) {
+    if (!process.env.STROHM_DB_USER || !process.env.STROHM_DB_HOST || !process.env.STROHM_DB_NAME || !process.env.STROHM_DB_PASSWORD) {
         throw new Error('Database environment variables are not set. Please check your test env file.');
     }
 
@@ -36,7 +36,7 @@ const setupTestDatabase = async () => {
         host: process.env.STROHM_DB_HOST,
         database: process.env.STROHM_DB_NAME,
         password: process.env.STROHM_DB_PASSWORD,
-        port: process.env.STROHM_DB_PORT,
+        port: 5433,
     });
 };
 
