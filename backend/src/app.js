@@ -193,6 +193,7 @@ app.use(electricity_price_controller)
 if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     const dev_admin_controller = require('./controllers/dev_admin');
     const consent_admin_controller = require('./controllers/consent_admin');
+    const pricing_admin_controller = require('./controllers/pricing_admin');
 
     logger.verbose('Admin Panel enabled - protected by Tailscale authentication');
     logger.info('Admin panel available at /dev-admin.html');
@@ -221,6 +222,12 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     // Consent management admin routes
     app.get('/api/dev/consent/revisions', consent_admin_controller.getConsentRevisions);
     app.post('/api/dev/consent/upload', consent_admin_controller.uploadConsentPdf);
+
+    // Pricing admin routes
+    app.get('/api/dev/pricing/electricity', pricing_admin_controller.getElectricityPrices);
+    app.post('/api/dev/pricing/electricity', pricing_admin_controller.createElectricityPrice);
+    app.get('/api/dev/pricing/vat', pricing_admin_controller.getVATRates);
+    app.post('/api/dev/pricing/vat', pricing_admin_controller.createVATRate);
 } else {
     logger.info('Admin Panel disabled - set TAILSCALE_ENABLE_ADMIN=true to enable');
 }

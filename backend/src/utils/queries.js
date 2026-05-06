@@ -1832,7 +1832,7 @@ async function tryAssociateUserToTransaction(db_txn) {
 async function getVAT(datetime = null) {
     if (datetime && !datetime.isValid) {
         throw new ValidationError(
-            ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'datetime must be valid DateTime objects');
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS, 'datetime must be valid DateTime object');
     }
 
     // Normalize lookup timestamp to UTC to avoid local timezone ambiguity.
@@ -1842,7 +1842,7 @@ async function getVAT(datetime = null) {
         const query_format = `
             SELECT *
             FROM vat_rates
-            WHERE effective_from <= $1::timestamptz
+            WHERE effective_from < $1::timestamptz
               AND (effective_to IS NULL OR effective_to > $1::timestamptz)
             ORDER BY effective_from DESC, id DESC
             LIMIT 1
@@ -1857,9 +1857,217 @@ async function getVAT(datetime = null) {
     }
 }
 
-module.exports = {
-    getVAT,
-};
+
+/**
+ * Retrieves all electricity prices ordered by valid_from descending.
+ *
+ * @async
+ * @returns {Promise<Array>} Array of electricity price records
+ */
+async function getAllElectricityPrices() {
+    const query = `
+        SELECT id, price_eur_kwh, valid_from, valid_till, created_at
+        FROM electricity_prices
+        ORDER BY valid_from DESC
+    `;
+    try {
+        const result = await pool.query(query);
+        return result.rows;
+    } catch (error) {
+        handleQueryError(error, 'getAllElectricityPrices');
+    }
+}
+
+
+/**
+ * Inserts a new electricity price starting at `valid_from`.
+ * Automatically closes the currently active price period to prevent gaps.
+ * Rejects if `valid_from` is at or before the latest existing price start date
+ * to preserve the audit trail.
+ *
+ * If a price is active at `valid_from`, its `valid_till` is set to `valid_from`
+ * so there is no gap or overlap.
+ *
+ * @async
+ * @param {number} price_eur_kwh - The price in EUR/kWh (netto)
+ * @param {DateTime} valid_from - Luxon DateTime when the new price takes effect
+ * @returns {Promise<Object>} The inserted price record
+ */
+async function setElectricityPrice(price_eur_kwh, valid_from) {
+    if (!isValidNumber(price_eur_kwh) || price_eur_kwh < 0) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            'price_eur_kwh must be a non-negative number',
+        );
+    }
+    if (!valid_from || !valid_from.isValid) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            'valid_from must be a valid DateTime',
+        );
+    }
+
+    const validFromJS = valid_from.toUTC().toJSDate();
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Reject if valid_from is at or before the latest existing record's start
+        // Also reject if the new price is the same as the latest active price
+        const latestResult = await client.query(`
+            SELECT price_eur_kwh, valid_from
+            FROM electricity_prices
+            ORDER BY valid_from DESC
+            LIMIT 1
+        `);
+        if (latestResult.rows.length > 0) {
+            const latestFrom = new Date(latestResult.rows[0].valid_from);
+            if (validFromJS <= latestFrom) {
+                throw new ValidationError(
+                    ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                    `valid_from must be after the latest price start date (${latestFrom.toISOString()})`,
+                );
+            }
+            if (latestResult.rows[0].price_eur_kwh === price_eur_kwh) {
+                throw new ValidationError(
+                    ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                    `New price (${price_eur_kwh} EUR/kWh) is identical to the current active price`,
+                );
+            }
+        }
+
+        // Close any price period that covers the new valid_from
+        await client.query(`
+            UPDATE electricity_prices
+            SET valid_till = $1::timestamptz
+            WHERE valid_from < $1::timestamptz
+              AND (valid_till IS NULL OR valid_till > $1::timestamptz)
+        `, [validFromJS]);
+
+        // Insert the new price (open-ended)
+        const result = await client.query(`
+            INSERT INTO electricity_prices (price_eur_kwh, valid_from, valid_till)
+            VALUES ($1, $2::timestamptz, NULL)
+            RETURNING *
+        `, [price_eur_kwh, validFromJS]);
+
+        await client.query('COMMIT');
+        return result.rows[0];
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'setElectricityPrice');
+    } finally {
+        client.release();
+    }
+}
+
+
+/**
+ * Retrieves all VAT rates ordered by effective_from descending.
+ *
+ * @async
+ * @returns {Promise<Array>} Array of VAT rate records
+ */
+async function getAllVATRates() {
+    const query = `
+        SELECT id, rate, description, effective_from, effective_to, created_at, updated_at
+        FROM vat_rates
+        ORDER BY effective_from DESC
+    `;
+    try {
+        const result = await pool.query(query);
+        return result.rows;
+    } catch (error) {
+        handleQueryError(error, 'getAllVATRates');
+    }
+}
+
+
+/**
+ * Inserts a new VAT rate starting at `effective_from`.
+ * Automatically closes the currently active VAT period to prevent gaps.
+ * Rejects if `effective_from` is at or before the latest existing rate start date
+ * to preserve the audit trail.
+ *
+ * If a rate is active at `effective_from`, its `effective_to` is set to `effective_from`
+ * so there is no gap or overlap.
+ *
+ * @async
+ * @param {number} rate - The VAT rate as integer percentage (e.g. 19 for 19%)
+ * @param {string} description - Description of the rate
+ * @param {DateTime} effective_from - Luxon DateTime when the new rate takes effect
+ * @returns {Promise<Object>} The inserted VAT rate record
+ */
+async function setVATRate(rate, description, effective_from) {
+    if (!Number.isSafeInteger(rate) || rate < 0 || rate > 100) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            'rate must be an integer between 0 and 100',
+        );
+    }
+    if (!effective_from || !effective_from.isValid) {
+        throw new ValidationError(
+            ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+            'effective_from must be a valid DateTime',
+        );
+    }
+
+    const effectiveFromJS = effective_from.toUTC().toJSDate();
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Reject if effective_from is at or before the latest existing record's start
+        // Also reject if the new rate is the same as the latest active rate
+        const latestResult = await client.query(`
+            SELECT rate, effective_from
+            FROM vat_rates
+            ORDER BY effective_from DESC
+            LIMIT 1
+        `);
+        if (latestResult.rows.length > 0) {
+            const latestFrom = new Date(latestResult.rows[0].effective_from);
+            if (effectiveFromJS <= latestFrom) {
+                throw new ValidationError(
+                    ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                    `effective_from must be after the latest VAT rate start date (${latestFrom.toISOString()})`,
+                );
+            }
+            if (latestResult.rows[0].rate === rate) {
+                throw new ValidationError(
+                    ErrorCodes.VALIDATION.INVALID_PARAMETERS,
+                    `New VAT rate (${rate}%) is identical to the current active rate`,
+                );
+            }
+        }
+
+        // Close any VAT rate period that covers the new effective_from
+        await client.query(`
+            UPDATE vat_rates
+            SET effective_to = $1::timestamptz,
+                updated_at   = NOW()
+            WHERE effective_from < $1::timestamptz
+              AND (effective_to IS NULL OR effective_to > $1::timestamptz)
+        `, [effectiveFromJS]);
+
+        // Insert the new rate (open-ended)
+        const result = await client.query(`
+            INSERT INTO vat_rates (rate, description, effective_from, effective_to)
+            VALUES ($1, $2, $3::timestamptz, NULL)
+            RETURNING *
+        `, [rate, description || null, effectiveFromJS]);
+
+        await client.query('COMMIT');
+        return result.rows[0];
+    } catch (error) {
+        await client.query('ROLLBACK');
+        handleQueryError(error, 'setVATRate');
+    } finally {
+        client.release();
+    }
+}
 
 
 module.exports = {
@@ -1900,6 +2108,11 @@ module.exports = {
         getOrdersByInvoiceId,
         getTransactionBySteveTxnId,
         getVAT,
+        // Pricing admin
+        getAllElectricityPrices,
+        setElectricityPrice,
+        getAllVATRates,
+        setVATRate,
     },
     normalizeRFID,
 };

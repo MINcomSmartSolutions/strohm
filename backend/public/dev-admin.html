@@ -27,7 +27,7 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #658f74;
             color: white;
             padding: 30px;
             text-align: center;
@@ -309,7 +309,6 @@
 <div class="container">
     <div class="header">
         <h1>Admin Panel</h1>
-        <p>User Management for SteVe, Odoo, and Backend Database</p>
     </div>
 
     <div class="warning">
@@ -368,6 +367,88 @@
         </div>
     </div>
 
+    <!-- Electricity Price Management Section -->
+    <div style="margin: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+        <h2 style="margin-bottom: 15px; color: #333;">Strompreisverwaltung</h2>
+
+        <div id="currentPrices" style="margin-bottom: 20px;">
+            <h3 style="font-size: 1.1em; color: #555;">Preisverlauf (netto)</h3>
+            <div id="priceList" style="color: #666;">Laden...</div>
+        </div>
+
+        <div style="border-top: 1px solid #dee2e6; padding-top: 15px;">
+            <h3 style="font-size: 1.1em; color: #555; margin-bottom: 10px;">Neuen Strompreis setzen</h3>
+            <form id="electricityPriceForm" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                <div style="flex: 0 0 auto;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Preis (EUR/kWh
+                        netto)</label>
+                    <input id="newPriceValue" min="0" placeholder="z.B. 0.30" step="0.01"
+                           style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 140px;"
+                           type="number">
+                </div>
+                <div style="flex: 0 0 auto;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Gültig
+                        ab</label>
+                    <input id="newPriceValidFrom" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;"
+                           type="datetime-local">
+                </div>
+                <div style="flex: 0 0 auto;">
+                    <button class="refresh-btn" style="background: #17a2b8; white-space: nowrap;" type="submit">
+                        Neuen Preis setzen
+                    </button>
+                </div>
+            </form>
+            <p style="font-size: 12px; color: #888; margin-top: 8px;">
+                Der vorherige Preis wird automatisch zum gewählten Zeitpunkt beendet. Es entstehen keine Lücken.
+            </p>
+        </div>
+    </div>
+
+    <!-- VAT Rate Management Section -->
+    <div style="margin: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+        <h2 style="margin-bottom: 15px; color: #333;">MWSt.-Verwaltung</h2>
+
+        <div id="currentVAT" style="margin-bottom: 20px;">
+            <h3 style="font-size: 1.1em; color: #555;">MWSt.-Verlauf</h3>
+            <div id="vatList" style="color: #666;">Laden...</div>
+        </div>
+
+        <div style="border-top: 1px solid #dee2e6; padding-top: 15px;">
+            <h3 style="font-size: 1.1em; color: #555; margin-bottom: 10px;">Neuen MWSt.-Satz setzen</h3>
+            <form id="vatRateForm" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                <div style="flex: 0 0 auto;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">MWSt.-Satz
+                        (%)</label>
+                    <input id="newVATRate" max="100" min="0" placeholder="z.B. 19" step="1"
+                           style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 100px;"
+                           type="number">
+                </div>
+                <div style="flex: 1 1 200px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Beschreibung
+                        (optional)</label>
+                    <input id="newVATDescription" placeholder="z.B. Standard MWSt."
+                           style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; width: 100%;"
+                           type="text">
+                </div>
+                <div style="flex: 0 0 auto;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Gültig
+                        ab</label>
+                    <input id="newVATEffectiveFrom"
+                           style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;"
+                           type="datetime-local">
+                </div>
+                <div style="flex: 0 0 auto;">
+                    <button class="refresh-btn" style="background: #fd7e14; white-space: nowrap;" type="submit">
+                        Neuen MWSt.-Satz setzen
+                    </button>
+                </div>
+            </form>
+            <p style="font-size: 12px; color: #888; margin-top: 8px;">
+                Der vorherige Satz wird automatisch zum gewählten Zeitpunkt beendet. Es entstehen keine Lücken.
+            </p>
+        </div>
+    </div>
+
     <div class="controls">
         <div class="search-box">
             <input id="searchInput" placeholder="Search by name, email, or RFID..." type="text"/>
@@ -413,6 +494,7 @@
 <script>
     let allUsers = [];
     let filteredUsers = [];
+    const locale = 'de-DE';
 
     // Load users on page load
     window.addEventListener('DOMContentLoaded', () => {
@@ -423,6 +505,18 @@
             filterUsers(e.target.value);
         });
     });
+
+
+    function _toLocaleString(date) {
+        if (!date) return 'N/A';
+        return new Date(date).toLocaleDateString(locale, {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+    }
 
     async function loadUsers() {
         showLoading();
@@ -761,7 +855,7 @@
                     return '<div style="padding: 8px 0; border-bottom: 1px solid #eee;">' +
                         typeBadge + ' <strong>v' + escapeHtml(r.version) + '</strong> - ' +
                         escapeHtml(r.title) + pdfLink + sizeKb +
-                        ' <span style="color: #888; font-size: 12px;">(' + new Date(r.created_at).toLocaleDateString('de-DE') + ')</span>' +
+                        ' <span style="color: #888; font-size: 12px;">(' + _toLocaleString(r.created_at) + ')</span>' +
                         '</div>';
                 }).join('');
             } else {
@@ -819,6 +913,239 @@
 
     // Load consents on page load
     loadConsents();
+
+    // --- Electricity Price Management ---
+    let latestPriceValidFrom = null; // tracks latest electricity price start date
+    let latestPriceValue = null; // tracks latest electricity price value
+
+    async function loadElectricityPrices() {
+        const listEl = document.getElementById('priceList');
+        try {
+            const response = await fetch('/api/dev/pricing/electricity');
+            const result = await response.json();
+
+            if (result.success && result.data.length > 0) {
+                // Data is ordered by valid_from DESC, so first entry is the latest
+                latestPriceValidFrom = new Date(result.data[0].valid_from);
+                latestPriceValue = result.data[0].price_eur_kwh;
+                // Set min on the datetime input (1 minute after latest)
+                const minDate = new Date(latestPriceValidFrom.getTime() + 60000);
+                document.getElementById('newPriceValidFrom').min = minDate.toISOString().slice(0, 16);
+                listEl.innerHTML = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">' +
+                    '<tr style="border-bottom: 2px solid #dee2e6;">' +
+                    '<th style="text-align: left; padding: 6px;">Preis (EUR/kWh)</th>' +
+                    '<th style="text-align: left; padding: 6px;">Gültig ab</th>' +
+                    '<th style="text-align: left; padding: 6px;">Gültig bis</th>' +
+                    '<th style="text-align: left; padding: 6px;">Status</th>' +
+                    '</tr>' +
+                    result.data.map(function (p) {
+                        const now = new Date();
+                        const from = new Date(p.valid_from);
+                        const till = p.valid_till ? new Date(p.valid_till) : null;
+                        const isActive = from <= now && (!till || till > now);
+                        const isFuture = from > now;
+                        const statusBadge = isActive
+                            ? '<span class="badge active">Aktiv</span>'
+                            : isFuture
+                                ? '<span class="badge has-service">Geplant</span>'
+                                : '<span class="badge inactive">Abgelaufen</span>';
+                        return '<tr style="border-bottom: 1px solid #eee;">' +
+                            '<td style="padding: 6px;"><strong>' + p.price_eur_kwh + ' EUR/kWh</strong></td>' +
+                            '<td style="padding: 6px;">' + _toLocaleString(p.valid_from) + '</td>' +
+                            '<td style="padding: 6px;">' + (p.valid_till ? _toLocaleString(p.valid_till) : '<em>unbegrenzt</em>') + '</td>' +
+                            '<td style="padding: 6px;">' + statusBadge + '</td>' +
+                            '</tr>';
+                    }).join('') +
+                    '</table>';
+            } else {
+                latestPriceValidFrom = null;
+                latestPriceValue = null;
+                document.getElementById('newPriceValidFrom').removeAttribute('min');
+                listEl.innerHTML = '<em>Keine Strompreise vorhanden.</em>';
+            }
+        } catch (error) {
+            listEl.innerHTML = '<span style="color: #dc3545;">Fehler beim Laden: ' + escapeHtml(error.message) + '</span>';
+        }
+    }
+
+    document.getElementById('electricityPriceForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const priceValue = document.getElementById('newPriceValue').value;
+        const validFrom = document.getElementById('newPriceValidFrom').value;
+        const validFromDate = new Date(validFrom);
+
+        if (!priceValue || !validFrom) {
+            showToast('Bitte Preis und Gültigkeitsdatum angeben.', 'error');
+            return;
+        }
+
+        const priceNum = parseFloat(priceValue);
+        if (isNaN(priceNum) || priceNum < 0) {
+            showToast('Preis muss eine positive Zahl sein.', 'error');
+            return;
+        }
+
+        // Prevent setting a date at or before the latest existing price
+        if (latestPriceValidFrom && validFromDate <= latestPriceValidFrom) {
+            showToast('Datum muss nach dem letzten Preisstartdatum liegen (' + _toLocaleString(latestPriceValidFrom) + ').', 'error');
+            return;
+        }
+
+        // Prevent setting the same price as the current active one
+        if (latestPriceValue !== null && priceNum === latestPriceValue) {
+            showToast('Der neue Preis (' + priceNum + ' EUR/kWh) ist identisch mit dem aktuellen Preis.', 'error');
+            return;
+        }
+
+        const validFromISO = validFromDate.toISOString();
+
+        if (!confirm('Neuen Strompreis ' + priceNum + ' EUR/kWh ab ' + _toLocaleString(validFrom) + ' setzen?\n\nDer vorherige Preis wird automatisch beendet.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/dev/pricing/electricity', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({price_eur_kwh: priceNum, valid_from: validFromISO}),
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                document.getElementById('newPriceValue').value = '';
+                document.getElementById('newPriceValidFrom').value = '';
+                await loadElectricityPrices();
+            } else {
+                showToast('Fehler: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Fehler: ' + error.message, 'error');
+        }
+    });
+
+    loadElectricityPrices();
+
+    // --- VAT Rate Management ---
+    let latestVATEffectiveFrom = null; // tracks latest VAT rate start date
+    let latestVATRate = null; // tracks latest VAT rate value
+
+    async function loadVATRates() {
+        const listEl = document.getElementById('vatList');
+        try {
+            const response = await fetch('/api/dev/pricing/vat');
+            const result = await response.json();
+
+            if (result.success && result.data.length > 0) {
+                // Data is ordered by effective_from DESC, so first entry is the latest
+                latestVATEffectiveFrom = new Date(result.data[0].effective_from);
+                latestVATRate = result.data[0].rate;
+                // Set min on the datetime input (1 minute after latest)
+                const minDate = new Date(latestVATEffectiveFrom.getTime() + 60000);
+                document.getElementById('newVATEffectiveFrom').min = minDate.toISOString().slice(0, 16);
+                listEl.innerHTML = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">' +
+                    '<tr style="border-bottom: 2px solid #dee2e6;">' +
+                    '<th style="text-align: left; padding: 6px;">Satz</th>' +
+                    '<th style="text-align: left; padding: 6px;">Beschreibung</th>' +
+                    '<th style="text-align: left; padding: 6px;">Gültig ab</th>' +
+                    '<th style="text-align: left; padding: 6px;">Gültig bis</th>' +
+                    '<th style="text-align: left; padding: 6px;">Status</th>' +
+                    '</tr>' +
+                    result.data.map(function (v) {
+                        const now = new Date();
+                        const from = new Date(v.effective_from);
+                        const to = v.effective_to ? new Date(v.effective_to) : null;
+                        const isActive = from <= now && (!to || to > now);
+                        const isFuture = from > now;
+                        const statusBadge = isActive
+                            ? '<span class="badge active">Aktiv</span>'
+                            : isFuture
+                                ? '<span class="badge has-service">Geplant</span>'
+                                : '<span class="badge inactive">Abgelaufen</span>';
+                        return '<tr style="border-bottom: 1px solid #eee;">' +
+                            '<td style="padding: 6px;"><strong>' + v.rate + '%</strong></td>' +
+                            '<td style="padding: 6px;">' + (v.description ? escapeHtml(v.description) : '-') + '</td>' +
+                            '<td style="padding: 6px;">' + _toLocaleString(v.effective_from) + '</td>' +
+                            '<td style="padding: 6px;">' + (v.effective_to ? _toLocaleString(v.effective_to) : '<em>unbegrenzt</em>') + '</td>' +
+                            '<td style="padding: 6px;">' + statusBadge + '</td>' +
+                            '</tr>';
+                    }).join('') +
+                    '</table>';
+            } else {
+                latestVATEffectiveFrom = null;
+                latestVATRate = null;
+                document.getElementById('newVATEffectiveFrom').removeAttribute('min');
+                listEl.innerHTML = '<em>Keine MWSt.-Sätze vorhanden.</em>';
+            }
+        } catch (error) {
+            listEl.innerHTML = '<span style="color: #dc3545;">Fehler beim Laden: ' + escapeHtml(error.message) + '</span>';
+        }
+    }
+
+    document.getElementById('vatRateForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const rate = document.getElementById('newVATRate').value;
+        const description = document.getElementById('newVATDescription').value.trim();
+        const effectiveFrom = document.getElementById('newVATEffectiveFrom').value;
+
+        if (!rate || !effectiveFrom) {
+            showToast('Bitte MWSt.-Satz und Gültigkeitsdatum angeben.', 'error');
+            return;
+        }
+
+        const rateNum = parseInt(rate, 10);
+        if (!isFinite(rateNum) || rateNum < 0 || rateNum > 100) {
+            showToast('MWSt.-Satz muss zwischen 0 und 100 liegen.', 'error');
+            return;
+        }
+
+        // Prevent setting a date at or before the latest existing VAT rate
+        if (latestVATEffectiveFrom && new Date(effectiveFrom) <= latestVATEffectiveFrom) {
+            showToast('Datum muss nach dem letzten MWSt.-Startdatum liegen (' + _toLocaleString(latestVATEffectiveFrom) + ').', 'error');
+            return;
+        }
+
+        // Prevent setting the same rate as the current active one
+        if (latestVATRate !== null && rateNum === latestVATRate) {
+            showToast('Der neue MWSt.-Satz (' + rateNum + '%) ist identisch mit dem aktuellen Satz.', 'error');
+            return;
+        }
+
+        const effectiveFromISO = new Date(effectiveFrom).toISOString();
+
+        if (!confirm('Neuen MWSt.-Satz ' + rateNum + '% ab ' + new _toLocaleString(effectiveFrom) + ' setzen?\n\nDer vorherige Satz wird automatisch beendet.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/dev/pricing/vat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    rate: rateNum,
+                    description: description || null,
+                    effective_from: effectiveFromISO
+                }),
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(result.message, 'success');
+                document.getElementById('newVATRate').value = '';
+                document.getElementById('newVATDescription').value = '';
+                document.getElementById('newVATEffectiveFrom').value = '';
+                await loadVATRates();
+            } else {
+                showToast('Fehler: ' + result.error, 'error');
+            }
+        } catch (error) {
+            showToast('Fehler: ' + error.message, 'error');
+        }
+    });
+
+    loadVATRates();
 </script>
 </body>
 </html>
