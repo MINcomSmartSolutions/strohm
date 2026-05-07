@@ -10,7 +10,7 @@ const odoo_controller = express();
 
 const Joi = require("joi");
 const {db} = require('#utils/queries');
-const {blockSteveUser} = require('#services/steve_user');
+const {blockSteveUser, unblockSteveUser} = require('#services/steve_user');
 const {verifyOdooApiKey} = require('#middlewares/auth');
 const logger = require('#services/logger');
 const {appErrorHandler} = require('#utils/errors');
@@ -116,6 +116,89 @@ odoo_controller.post('/internal/user/sync', verifyOdooApiKey, async (req, res) =
         }
 
         // Default success response
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+});
+
+/**
+ * POST /internal/user/suspend-charging
+ *
+ * Suspends a user's charging capability in SteVe (Mahnstufe 2).
+ * Called from Odoo dunning process when an invoice reaches 60 days overdue.
+ *
+ * @middleware verifyOdooApiKey
+ */
+odoo_controller.post('/internal/user/suspend-charging', verifyOdooApiKey, async (req, res) => {
+    try {
+        let {partner_id, partner_name, reason, timestamp} = req.body;
+
+        if (!isValidInteger(partner_id)) {
+            return res.status(400).json({error: 'Invalid or missing partner_id'});
+        }
+
+        const user = await db.getUserUnique({odoo_partner_id: partner_id});
+        if (!user) {
+            logger.warn(`Dunning suspend: no user found for odoo_partner_id=${partner_id} (${partner_name})`);
+            return res.status(404).json({error: 'User not found for given partner_id'});
+        }
+
+        if (!user.steve_id) {
+            logger.warn(`Dunning suspend: user ${user.user_id} has no SteVe account, skipping block`);
+            return res.status(200).json({success: true, message: 'User has no SteVe account, no action taken'});
+        }
+
+        if (reason && reason.length > 255) {
+            logger.warn(`Reason for reactivating charging is too long, truncating to 255 characters`);
+            reason = reason.substring(0, 255);
+        }
+
+        await blockSteveUser(user, reason);
+        logger.info(`Dunning: suspended charging for user ${user.user_id} (partner_id=${partner_id})`);
+
+        return res.status(200).json({success: true});
+    } catch (error) {
+        appErrorHandler(error, res);
+    }
+});
+
+/**
+ * POST /internal/user/reactivate-charging
+ *
+ * Reactivates a user's charging capability in SteVe after dunning is resolved.
+ * Called from Odoo when all overdue invoices for a partner are paid.
+ *
+ * @middleware verifyOdooApiKey
+ */
+odoo_controller.post('/internal/user/reactivate-charging', verifyOdooApiKey, async (req, res) => {
+    try {
+        let {partner_id, partner_name, reason, timestamp} = req.body;
+
+        if (!isValidInteger(partner_id)) {
+            return res.status(400).json({error: 'Invalid or missing partner_id'});
+        }
+
+        const user = await db.getUserUnique({odoo_partner_id: partner_id});
+        if (!user) {
+            logger.warn(`Dunning reactivate: no user found for odoo_partner_id=${partner_id} (${partner_name})`);
+            return res.status(404).json({error: 'User not found for given partner_id'});
+        }
+
+        if (!user.steve_id) {
+            logger.warn(`Dunning reactivate: user ${user.user_id} has no SteVe account, skipping unblock`);
+            return res.status(200).json({success: true, message: 'User has no SteVe account, no action taken'});
+        }
+
+        if (reason && reason.length > 255) {
+            logger.warn(`Reason for reactivating charging is too long, truncating to 255 characters`);
+            reason = reason.substring(0, 255);
+        }
+
+        await unblockSteveUser(user, reason);
+
+        logger.info(`Dunning: reactivated charging for user ${user.user_id} (partner_id=${partner_id})`);
+
         return res.status(200).json({success: true});
     } catch (error) {
         appErrorHandler(error, res);

@@ -203,10 +203,11 @@ const blockSteveUser = async (user, reason = null, expiredDate = null) => {
  *
  * @async
  * @param {Object} user - The user object (must include rfid and steve_id).
+ * @param reason - Optional reason for unblocking.
  * @returns {Promise<void>}
  * @throws {ValidationError|Error} If input is invalid or unblock fails.
  */
-const unblockSteveUser = async (user) => {
+const unblockSteveUser = async (user, reason = null) => {
     validateUserObjectForSteve(user);
 
     if (!STEVE_CONFIG.IS_HEALTHY) {
@@ -237,7 +238,7 @@ const unblockSteveUser = async (user) => {
         throw new SystemError(ErrorCodes.STEVE.USER_UNBLOCK_FAILED, `User with RFID ${user.rfid} could not be unblocked in SteVe`);
     }
 
-    await db.recordActivityLog(user.user_id, 'UNBLOCK USER', 'SteVe', user.rfid);
+    await db.recordActivityLog(user.user_id, 'UNBLOCK USER', 'SteVe', user.rfid, reason);
 };
 
 
