@@ -493,6 +493,40 @@ const getAllActiveConsentRevisions = async () => {
     }
 };
 
+const getAllActiveAndNotAgreedConsentRevisionsForUser = async (userId) => {
+    const client = await pool.connect();
+    try {
+        const result = await client.query(`
+            SELECT cr.id,
+                   cr.version,
+                   cr.title,
+                   cr.content,
+                   cr.consent_type,
+                   cr.pdf_filename,
+                   cr.pdf_size,
+                   cr.pdf_content_type,
+                   cr.privacy_policy_url,
+                   cr.terms_url,
+                   cr.created_at,
+                   cr.expires_at,
+                   cr.effective_from,
+                   cr.updated_at
+            FROM consent_revisions cr
+                     LEFT JOIN user_consents uc ON uc.consent_revision_id = cr.id
+                AND uc.user_id = $1::integer
+                AND uc.is_withdrawn = false
+            WHERE cr.is_active = true
+              AND (cr.expires_at IS NULL OR cr.expires_at > NOW())
+              AND uc.id IS NULL
+        `, [userId]);
+        return result.rows;
+    } catch (error) {
+        db.handleQueryError(error, 'getAllActiveAndNotAgreedConsentRevisionsForUser');
+    } finally {
+        client.release();
+    }
+};
+
 /**
  * Retrieves the PDF binary data for a consent revision.
  */
@@ -579,6 +613,7 @@ const validateAndSanitizePdf = async (buffer, filename) => {
 module.exports = {
     getActiveConsentRevision,
     getAllActiveConsentRevisions,
+    getAllActiveAndNotAgreedConsentRevisionsForUser,
     getConsentPdf,
     hasValidConsent,
     hasLatestConsent,

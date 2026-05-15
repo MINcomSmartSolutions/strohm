@@ -34,7 +34,7 @@ const {
     recordConsent,
     withdrawConsent,
     hasLatestConsent,
-    CONSENT_TYPES,
+    CONSENT_TYPES, getAllActiveAndNotAgreedConsentRevisionsForUser,
 } = require('#services/consent');
 const {appErrorHandler, SystemError, ErrorCodes, AuthError} = require('#utils/errors');
 const logger = require('#services/logger');
@@ -93,14 +93,13 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
     try {
         // Check if user already has latest consent
         if (req.user) {
-            const hasConsent = await hasLatestConsent(req.user);
-            if (hasConsent) {
+            if (await hasLatestConsent(req.user)) {
                 log.debug(`User ${req.user.user_id} already has latest consent`);
                 return res.redirect('/');
             }
         }
 
-        const activeConsents = await getAllActiveConsentRevisions();
+        let activeConsents = await getAllActiveConsentRevisions();
         if (!activeConsents || activeConsents.length === 0) {
             log.error('No active consent revisions found');
             return res.redirect('/logout?reason=consent_system_error');
@@ -111,6 +110,10 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
         // Read the HTML template file
         const templatePath = path.join(__dirname, '../../public/consent/consent.html');
         let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
+
+        if (req.user) {
+            activeConsents = await getAllActiveAndNotAgreedConsentRevisionsForUser(req.user.user_id);
+        }
 
         // Build consent documents data for the template
         const consentDocs = activeConsents.map(c => ({
@@ -229,7 +232,7 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
         }
 
         // Verify that the submitted IDs match the current active revisions
-        const activeConsents = await getAllActiveConsentRevisions();
+        const activeConsents = await getAllActiveAndNotAgreedConsentRevisionsForUser(user.user_id);
         const activeIds = activeConsents.map(c => c.id).sort((a, b) => a - b);
         const submittedIds = [...revisionIds].sort((a, b) => a - b);
 
