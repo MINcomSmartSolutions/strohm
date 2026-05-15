@@ -22,7 +22,7 @@ const ExceptionCodes = Object.freeze({
             code: 1020,
             status: 401,
             message: 'Leider ist für Ihren Account noch keine RFID eingetragen. Sie werden bis Ende 2025 einen' +
-                ' neuen RFID-Token (Dongle) erhalten, mit dem eine gültige RFID verknüpft ist. Sobald Sie diesen' +
+                ' neuen RFID-Token (Token) erhalten, mit dem eine gültige RFID verknüpft ist. Sobald Sie diesen' +
                 ' bekommen haben, loggen Sie sich bitte erneut in dieses Portal ein, um den Ladezugang zu aktivieren'
         },
     }),
