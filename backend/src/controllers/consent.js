@@ -44,6 +44,42 @@ const {userOperations} = require('#services/user_operations');
 const {ensureAuthenticated} = require("#middlewares/ensureAuthenticated");
 const {saveSession} = require("#utils/session");
 
+const READ_ONLY_CONSENT_TEMPLATE_PATH = path.join(__dirname, '../../public/consent/consent-read-only-view.html');
+
+const escapeHtml = (text = '') => String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+/**
+ * Render read-only consent content when a PDF is not available.
+ *
+ * @param {Object} params
+ * @param {Object} params.req - Express request
+ * @param {Object} params.res - Express response
+ * @param {Object} params.activeConsent - Active consent revision
+ * @param {string} params.consentLabel - Human-readable consent label for logs
+ * @returns {void}
+ */
+const renderConsentFallbackView = ({req, res, activeConsent, consentLabel}) => {
+    logger.debug(`Active ${consentLabel} consent revision has no PDF. Rendering read-only fallback for user:`, req.user ? req.user.user_id : ['new user']);
+
+    if (!fs.existsSync(READ_ONLY_CONSENT_TEMPLATE_PATH)) {
+        res.status(503).send('Vorlage nicht verfügbar');
+        return;
+    }
+
+    let htmlTemplate = fs.readFileSync(READ_ONLY_CONSENT_TEMPLATE_PATH, 'utf8');
+    htmlTemplate = htmlTemplate.replace(/{{TITLE}}/g, escapeHtml(activeConsent.title));
+    htmlTemplate = htmlTemplate.replace(/{{CONTENT}}/g, (activeConsent.content || '').replace(/\n/g, '<br>'));
+    htmlTemplate = htmlTemplate.replace(/{{VERSION}}/g, escapeHtml(activeConsent.version));
+    htmlTemplate = htmlTemplate.replace(/{{LAST_UPDATED}}/g, escapeHtml(new Date(activeConsent.updated_at).toLocaleDateString('de-DE')));
+
+    res.send(htmlTemplate);
+};
+
 
 /**
  * GET /consent - Display the consent page to users
@@ -100,7 +136,7 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
         }
 
         let activeConsents = await getAllActiveConsentRevisions();
-        if (!activeConsents || activeConsents.length === 0) {
+        if (!activeConsents || activeConsents.length === 0 || (activeConsents.content.length === 0 && activeConsents.pdf_data.length === 0)) {
             log.error('No active consent revisions found');
             return res.redirect('/logout?reason=consent_system_error');
         }
@@ -394,9 +430,11 @@ consent_controller.get('/agb', async (req, res) => {
 
         if (activeConsent.pdf_filename) {
             return res.redirect(`/consent/pdf/${activeConsent.id}`);
+        } else if (activeConsent.content) {
+            renderConsentFallbackView({req, res, activeConsent, consentLabel: 'AGB'});
         } else {
-            logger.warn('Active AGB consent revision has no PDF, redirecting to home page');
-            return res.redirect('/');
+            logger.warn('Active AGB consent revision has no PDF or content, redirecting to home page');
+            res.redirect('/logout?type=error&title=AGB nicht verfügbar&message=Die Allgemeinen Geschäftsbedingungen sind derzeit nicht verfügbar. Bitte versuchen Sie es später erneut.');
         }
     } catch (error) {
         logger.error('Error displaying AGB page:', error);
@@ -416,9 +454,11 @@ consent_controller.get('/datenschutz', async (req, res) => {
 
         if (activeConsent.pdf_filename) {
             return res.redirect(`/consent/pdf/${activeConsent.id}`);
+        } else if (activeConsent.content) {
+            renderConsentFallbackView({req, res, activeConsent, consentLabel: 'Datenschutz'});
         } else {
-            logger.warn('Active Datenschutz consent revision has no PDF, redirecting to home page');
-            return res.redirect('/');
+            logger.warn('Active Datenschutz consent revision has no PDF or content, redirecting to home page');
+            res.redirect('/logout?type=error&title=Datenschutz nicht verfügbar&message=Datenschutzerklärung sind derzeit nicht verfügbar. Bitte versuchen Sie es später erneut.');
         }
     } catch (error) {
         logger.error('Error displaying Datenschutz page:', error);

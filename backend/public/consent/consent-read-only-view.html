@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>{{TITLE}}</title>
+    <link href="/consent/consent.css" rel="stylesheet">
+    <link href="/assets/css/notifications.css" rel="stylesheet">
+    <link href="/assets/css/fonts.css" rel="stylesheet">
+    <link href="https://sso.hm.edu/idp/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://sso.hm.edu/idp/css/hm.css" rel="stylesheet">
+    <link href="https://mediapool.hm.edu/media/_technik/img/_technik_1/favicon.jpg" rel="icon" type="image/x-icon">
+    <script defer src="https://sso.hm.edu/idp/js/dark-mode-switch.min.js"></script>
+    <link href="/assets/css/fonts.css" rel="stylesheet">
+</head>
+<body>
+
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="d-flex col-md-7 col-lg-6 col-xl-5 justify-content-center">
+            <div id="logo"></div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <h1 class="mb-3">{{TITLE}}</h1>
+            <small class="text-muted d-block mb-1">Version: {{VERSION}}</small>
+            <small class="text-muted d-block mb-3">Zuletzt aktualisiert: {{LAST_UPDATED}}</small>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12 col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
+            <div style="max-height: 500px; overflow-y: auto; padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; font-size: 1rem; line-height: 1.4rem;">
+                {{CONTENT}}
+            </div>
+        </div>
+    </div>
+
+    <div id="error" style="display: none; color: #dc3545; margin-top: 10px; text-align: center;"></div>
+</div>
+<div style="position: fixed; bottom: 20px; right: 20px;">
+    <a class="btn btn-hm" href="/faq">FAQ</a>
+</div>
+
+<script src="/assets/js/notifications.js"></script>
+<script src="/consent/consent.js"></script>
+</body>
+</html>
