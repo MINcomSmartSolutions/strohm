@@ -930,7 +930,7 @@
                 latestPriceValue = result.data[0].price_eur_kwh;
                 // Set min on the datetime input (1 minute after latest)
                 const minDate = new Date(latestPriceValidFrom.getTime() + 60000);
-                document.getElementById('newPriceValidFrom').min = minDate.toISOString().slice(0, 16);
+                document.getElementById('newPriceValidFrom').min = new Date(minDate.getTime() - minDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                 listEl.innerHTML = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">' +
                     '<tr style="border-bottom: 2px solid #dee2e6;">' +
                     '<th style="text-align: left; padding: 6px;">Preis (EUR/kWh)</th>' +
@@ -1036,14 +1036,13 @@
         try {
             const response = await fetch('/api/dev/pricing/vat');
             const result = await response.json();
-
             if (result.success && result.data.length > 0) {
                 // Data is ordered by effective_from DESC, so first entry is the latest
                 latestVATEffectiveFrom = new Date(result.data[0].effective_from);
                 latestVATRate = result.data[0].rate;
                 // Set min on the datetime input (1 minute after latest)
                 const minDate = new Date(latestVATEffectiveFrom.getTime() + 60000);
-                document.getElementById('newVATEffectiveFrom').min = minDate.toISOString().slice(0, 16);
+                document.getElementById('newVATEffectiveFrom').min = new Date(minDate.getTime() - minDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                 listEl.innerHTML = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">' +
                     '<tr style="border-bottom: 2px solid #dee2e6;">' +
                     '<th style="text-align: left; padding: 6px;">Satz</th>' +
@@ -1115,7 +1114,7 @@
 
         const effectiveFromISO = new Date(effectiveFrom).toISOString();
 
-        if (!confirm('Neuen MWSt.-Satz ' + rateNum + '% ab ' + new _toLocaleString(effectiveFrom) + ' setzen?\n\nDer vorherige Satz wird automatisch beendet.')) {
+        if (!confirm('Neuen MWSt.-Satz ' + rateNum + '% ab ' + _toLocaleString(effectiveFrom) + ' setzen?\n\nDer vorherige Satz wird automatisch beendet.')) {
             return;
         }
 
