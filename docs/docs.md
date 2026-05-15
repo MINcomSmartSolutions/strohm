@@ -45,6 +45,10 @@ These endpoints are protected by Tailscale network authentication middleware.</p
 <dt><a href="#module_controllers/odoo">controllers/odoo</a></dt>
 <dd><p>Controller for handling Odoo internal user sync webhooks.</p>
 </dd>
+<dt><a href="#module_controllers/pricing_admin">controllers/pricing_admin</a></dt>
+<dd><p>Admin controller for electricity price and VAT rate management.
+Protected by Tailscale network authentication.</p>
+</dd>
 <dt><a href="#module_helpers/notifications">helpers/notifications</a></dt>
 <dd><p>Helper utilities for flash notifications</p>
 </dd>
@@ -448,6 +452,52 @@ creates new record; otherwise only updates existing orders.
 - <code>400</code> Invalid sale order data
 - <code>500</code> Database error
 
+<a name="module_controllers/pricing_admin"></a>
+
+## controllers/pricing\_admin
+Admin controller for electricity price and VAT rate management.
+Protected by Tailscale network authentication.
+
+
+* [controllers/pricing_admin](#module_controllers/pricing_admin)
+    * [~getElectricityPrices()](#module_controllers/pricing_admin..getElectricityPrices)
+    * [~createElectricityPrice()](#module_controllers/pricing_admin..createElectricityPrice)
+    * [~getVATRates()](#module_controllers/pricing_admin..getVATRates)
+    * [~createVATRate()](#module_controllers/pricing_admin..createVATRate)
+
+<a name="module_controllers/pricing_admin..getElectricityPrices"></a>
+
+### controllers/pricing_admin~getElectricityPrices()
+GET /api/dev/pricing/electricity - List all electricity prices
+
+**Kind**: inner method of [<code>controllers/pricing\_admin</code>](#module_controllers/pricing_admin)  
+<a name="module_controllers/pricing_admin..createElectricityPrice"></a>
+
+### controllers/pricing_admin~createElectricityPrice()
+POST /api/dev/pricing/electricity - Set a new electricity price
+
+Body (JSON):
+- price_eur_kwh: number (required, netto price in EUR/kWh)
+- valid_from: ISO 8601 datetime string (required)
+
+**Kind**: inner method of [<code>controllers/pricing\_admin</code>](#module_controllers/pricing_admin)  
+<a name="module_controllers/pricing_admin..getVATRates"></a>
+
+### controllers/pricing_admin~getVATRates()
+GET /api/dev/pricing/vat - List all VAT rates
+
+**Kind**: inner method of [<code>controllers/pricing\_admin</code>](#module_controllers/pricing_admin)  
+<a name="module_controllers/pricing_admin..createVATRate"></a>
+
+### controllers/pricing_admin~createVATRate()
+POST /api/dev/pricing/vat - Set a new VAT rate
+
+Body (JSON):
+- rate: integer (required, percentage e.g. 19 for 19%)
+- description: string (optional)
+- effective_from: ISO 8601 datetime string (required)
+
+**Kind**: inner method of [<code>controllers/pricing\_admin</code>](#module_controllers/pricing_admin)  
 <a name="module_helpers/notifications"></a>
 
 ## helpers/notifications
@@ -674,20 +724,20 @@ This approach provides:
 **Requires**: <code>module:services/db\_conn</code>, [<code>services/logger</code>](#module_services/logger), [<code>utils/queries</code>](#module_utils/queries)  
 
 * [services/consent](#module_services/consent)
-    * [~getActiveConsentRevision()](#module_services/consent..getActiveConsentRevision) ⇒ <code>Promise.&lt;(db\_consent\_revision\|null)&gt;</code>
+    * [~getActiveConsentRevision([consentType])](#module_services/consent..getActiveConsentRevision) ⇒ <code>Promise.&lt;(db\_consent\_revision\|null)&gt;</code>
     * [~hasValidConsent(userId)](#module_services/consent..hasValidConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~hasLatestConsent(user)](#module_services/consent..hasLatestConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod])](#module_services/consent..recordConsent) ⇒ <code>Promise.&lt;db\_user\_consent&gt;</code>
     * [~withdrawConsent(userId)](#module_services/consent..withdrawConsent) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~getUserConsentHistory(userId)](#module_services/consent..getUserConsentHistory) ⇒ <code>Promise.&lt;Array.&lt;db\_user\_consent&gt;&gt;</code> \| <code>number</code> \| <code>Date</code> \| <code>boolean</code> \| <code>Date</code> \| <code>null</code> \| <code>string</code> \| <code>string</code> \| <code>string</code>
-    * [~createConsentRevision(version, title, content, [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+    * [~createConsentRevision(version, title, [content], [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional])](#module_services/consent..createConsentRevision) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
     * [~getAllActiveConsentRevisions()](#module_services/consent..getAllActiveConsentRevisions)
     * [~getConsentPdf()](#module_services/consent..getConsentPdf)
     * [~validateAndSanitizePdf()](#module_services/consent..validateAndSanitizePdf)
 
 <a name="module_services/consent..getActiveConsentRevision"></a>
 
-### services/consent~getActiveConsentRevision() ⇒ <code>Promise.&lt;(db\_consent\_revision\|null)&gt;</code>
+### services/consent~getActiveConsentRevision([consentType]) ⇒ <code>Promise.&lt;(db\_consent\_revision\|null)&gt;</code>
 Query Logic:
 1. Filters for revisions marked as active (is_active = true)
 2. Excludes expired revisions (expires_at IS NULL OR expires_at > NOW())
@@ -743,13 +793,11 @@ Filtering Criteria for Latest Revision:
 <a name="module_services/consent..recordConsent"></a>
 
 ### services/consent~recordConsent(userId, consentRevisionId, ipAddress, userAgent, [consentMethod]) ⇒ <code>Promise.&lt;db\_user\_consent&gt;</code>
-Audit Trail Features:
-- **Immutable Records**: Consent records cannot be modified once created
-- **IP Address Tracking**: Records user's IP for geographical compliance
-- **Device Fingerprinting**: User agent helps identify consent device
-- **Method Tracking**: Records how consent was collected (web_form, api, etc.)
-- **Timestamp Precision**: Exact time of consent for legal requirements
-- **Transaction Safety**: Uses database transactions for data integrity
+Records a user's consent decision
+
+This function creates a permanent record of user consent including metadata
+for compliance and audit purposes. All consent records are immutable once
+created to maintain legal audit trail integrity.
 
 **Kind**: inner method of [<code>services/consent</code>](#module_services/consent)  
 **Returns**: <code>Promise.&lt;db\_user\_consent&gt;</code> - The created consent record with audit information  
@@ -804,15 +852,15 @@ History Data Includes:
 principle by providing complete documentation of consent lifecycle events.  
 <a name="module_services/consent..createConsentRevision"></a>
 
-### services/consent~createConsentRevision(version, title, content, [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
+### services/consent~createConsentRevision(version, title, [content], [consentType], [pdfData], [pdfFilename], [pdfSize], [pdfContentType], [privacyPolicyUrl], [termsUrl], [expiresAt], [optional]) ⇒ <code>Promise.&lt;db\_consent\_revision&gt;</code>
 Creation Process:
-1. **Transaction Start**: Begins database transaction for atomicity
+1. **Transaction Start**: Begins database transaction
 2. **Deactivation**: Sets all existing active revisions to inactive
 3. **Creation**: Creates new revision with is_active = true
 4. **Transaction Commit**: Ensures atomic activation switch
 
 **IMPORTANT**: This function automatically deactivates all existing active
-consent revisions before creating the new one. This ensures only one consent
+consent revisions of that type before creating the new one. This ensures only one consent
 revision is active at any given time, maintaining consistency for user consent
 validation throughout the application.
 
@@ -938,6 +986,11 @@ Run pending database migrations
 ## services/logger : <code>winston</code>
 Logger service using winston with file rotation and enhanced console output
 
+
+* [services/logger](#module_services/logger) : <code>winston</code>
+    * [~safeStringify(obj)](#module_services/logger..safeStringify) ⇒ <code>string</code>
+    * [~prettyPrint(value)](#module_services/logger..prettyPrint) ⇒ <code>string</code>
+
 <a name="module_services/logger..safeStringify"></a>
 
 ### services/logger~safeStringify(obj) ⇒ <code>string</code>
@@ -945,6 +998,12 @@ Safely stringify objects with circular references
 
 **Kind**: inner method of [<code>services/logger</code>](#module_services/logger)  
 **Returns**: <code>string</code> - JSON string or empty string if no metadata  
+<a name="module_services/logger..prettyPrint"></a>
+
+### services/logger~prettyPrint(value) ⇒ <code>string</code>
+Pretty-print a value for logs (safe for circular refs)
+
+**Kind**: inner method of [<code>services/logger</code>](#module_services/logger)  
 <a name="module_services/network"></a>
 
 ## services/network
@@ -1138,7 +1197,7 @@ Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/i
     * [~fetchTxnsSince([since])](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
     * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code>
     * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
     * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
 
 <a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
@@ -1186,7 +1245,7 @@ Run incremental fetch: fetch and record transactions since last watermark
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
-### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
+### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
 Fetches all transactions from Steve, processes them, and updates the high-water mark.
 Use for a full sync (no time filter).
 
@@ -1215,7 +1274,7 @@ All functions validate input and handle errors using custom error types.
     * [~createSteveUser(user, [blocked], [reason], [failIfExists])](#module_services/steve_user..createSteveUser) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
     * [~getSteveUser(user_rfid)](#module_services/steve_user..getSteveUser) ⇒ <code>Promise.&lt;(steve\_user\|null)&gt;</code>
     * [~blockSteveUser(user, [reason], [expiredDate])](#module_services/steve_user..blockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
-    * [~unblockSteveUser(user)](#module_services/steve_user..unblockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~unblockSteveUser(user, reason)](#module_services/steve_user..unblockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~deleteSteveUser(user)](#module_services/steve_user..deleteSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~changeRFIDofSteveUser(user, old_rfid)](#module_services/steve_user..changeRFIDofSteveUser)
 
@@ -1260,7 +1319,7 @@ Validates input, updates the user, checks the block status, and logs the action.
 
 <a name="module_services/steve_user..unblockSteveUser"></a>
 
-### services/steve_user~unblockSteveUser(user) ⇒ <code>Promise.&lt;void&gt;</code>
+### services/steve_user~unblockSteveUser(user, reason) ⇒ <code>Promise.&lt;void&gt;</code>
 Unblocks a user in SteVe by setting their maxActiveTransactionCount to 1.
 Validates input, updates the user, checks the unblock status, and logs the action.
 
@@ -1383,7 +1442,7 @@ Global database queries
     * [~linkOrderToInvoice(orderIds, invoiceId)](#module_utils/queries..linkOrderToInvoice) ⇒ <code>Promise.&lt;Array&gt;</code>
     * [~getOrdersByInvoiceId(invoice_id)](#module_utils/queries..getOrdersByInvoiceId) ⇒ <code>Promise.&lt;Array&gt;</code>
     * [~getElectricityPrice(specified_datetime)](#module_utils/queries..getElectricityPrice) ⇒ <code>Promise.&lt;({price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}\|null)&gt;</code>
-    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+    * [~getElectricityPriceOrDefault([specified_datetime])](#module_utils/queries..getElectricityPriceOrDefault) ⇒ <code>Promise.&lt;{for\_timestamp:DateTime, price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
     * [~getUsersCount(filters)](#module_utils/queries..getUsersCount) ⇒ <code>Promise.&lt;number&gt;</code>
     * [~updateUser(userId, updates)](#module_utils/queries..updateUser) ⇒ <code>Promise.&lt;object&gt;</code>
     * [~activateUser(user)](#module_utils/queries..activateUser)
@@ -1391,6 +1450,10 @@ Global database queries
     * [~deleteUser(user)](#module_utils/queries..deleteUser)
     * [~getUnbilledTransactions(options)](#module_utils/queries..getUnbilledTransactions) ⇒ <code>Promise.&lt;Array.&lt;Object.&lt;db\_txn&gt;&gt;&gt;</code>
     * [~tryAssociateUserToTransaction(db_txn)](#module_utils/queries..tryAssociateUserToTransaction) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
+    * [~getAllElectricityPrices()](#module_utils/queries..getAllElectricityPrices) ⇒ <code>Promise.&lt;Array&gt;</code>
+    * [~setElectricityPrice(price_eur_kwh, valid_from)](#module_utils/queries..setElectricityPrice) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [~getAllVATRates()](#module_utils/queries..getAllVATRates) ⇒ <code>Promise.&lt;Array&gt;</code>
+    * [~setVATRate(rate, description, effective_from)](#module_utils/queries..setVATRate) ⇒ <code>Promise.&lt;Object&gt;</code>
 
 <a name="module_utils/queries..normalizeRFID"></a>
 
@@ -1622,7 +1685,7 @@ If no price is found, it returns null.
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 <a name="module_utils/queries..getElectricityPriceOrDefault"></a>
 
-### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
+### utils/queries~getElectricityPriceOrDefault([specified_datetime]) ⇒ <code>Promise.&lt;{for\_timestamp:DateTime, price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code>
 Retrieves the current electricity price or falls back to a default price if none is found.
 
 This function attempts to fetch the electricity price for a specified datetime
@@ -1630,7 +1693,7 @@ or the current time if no datetime is provided. If no price is found or the pric
 is invalid, it falls back to a default price defined in the global configuration.
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;{price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in cents eur/kWh.  
+**Returns**: <code>Promise.&lt;{for\_timestamp:DateTime, price\_eur\_kwh: Number, valid\_from: DateTime, valid\_till: DateTime}&gt;</code> - - The electricity price in EUR/kWh.  
 **Throws**:
 
 - <code>ValidationError</code> - If the specified datetime is invalid.
@@ -1719,6 +1782,46 @@ This is useful for retroactively associating users who registered after their tr
 
 - <code>DatabaseError</code><code>ValidationError</code> On query error
 
+<a name="module_utils/queries..getAllElectricityPrices"></a>
+
+### utils/queries~getAllElectricityPrices() ⇒ <code>Promise.&lt;Array&gt;</code>
+Retrieves all electricity prices ordered by valid_from descending.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Array&gt;</code> - Array of electricity price records  
+<a name="module_utils/queries..setElectricityPrice"></a>
+
+### utils/queries~setElectricityPrice(price_eur_kwh, valid_from) ⇒ <code>Promise.&lt;Object&gt;</code>
+Inserts a new electricity price starting at `valid_from`.
+Automatically closes the currently active price period to prevent gaps.
+Rejects if `valid_from` is at or before the latest existing price start date
+to preserve the audit trail.
+
+If a price is active at `valid_from`, its `valid_till` is set to `valid_from`
+so there is no gap or overlap.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - The inserted price record  
+<a name="module_utils/queries..getAllVATRates"></a>
+
+### utils/queries~getAllVATRates() ⇒ <code>Promise.&lt;Array&gt;</code>
+Retrieves all VAT rates ordered by effective_from descending.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Array&gt;</code> - Array of VAT rate records  
+<a name="module_utils/queries..setVATRate"></a>
+
+### utils/queries~setVATRate(rate, description, effective_from) ⇒ <code>Promise.&lt;Object&gt;</code>
+Inserts a new VAT rate starting at `effective_from`.
+Automatically closes the currently active VAT period to prevent gaps.
+Rejects if `effective_from` is at or before the latest existing rate start date
+to preserve the audit trail.
+
+If a rate is active at `effective_from`, its `effective_to` is set to `effective_from`
+so there is no gap or overlap.
+
+**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
+**Returns**: <code>Promise.&lt;Object&gt;</code> - The inserted VAT rate record  
 <a name="module_utils/steve"></a>
 
 ## utils/steve

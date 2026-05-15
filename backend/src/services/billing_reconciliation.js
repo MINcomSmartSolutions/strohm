@@ -127,7 +127,6 @@ async function runBillingReconciliation(options = {}) {
     };
 
     try {
-        // Get unbilled transactions
         const unbilledTxns = await db.getUnbilledTransactions({limit});
 
         if (unbilledTxns.length === 0) {

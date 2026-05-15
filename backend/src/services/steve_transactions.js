@@ -254,7 +254,7 @@ async function runIncremental() {
  * Fetches all transactions from Steve, processes them, and updates the high-water mark.
  * Use for a full sync (no time filter).
  * @async
- * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime, completedTxnCount: number}>}
+ * @returns {Promise<{high_water_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
  */
 async function runFull() {
     logger.info('Running daily full transaction fetch');
