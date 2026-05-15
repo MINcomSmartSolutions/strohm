@@ -487,7 +487,7 @@ describe('Steve User Service', () => {
             });
         });
 
-        it('should unblock user successfully', async () => {
+        it('should unblock user successfully (without reason)', async () => {
             steveAxios.put.mockResolvedValueOnce({
                 status: 200,
                 data: {
@@ -510,6 +510,35 @@ describe('Steve User Service', () => {
                 'UNBLOCK USER',
                 'SteVe',
                 fullQualifiedUser.rfid,
+                null // reason
+            );
+        });
+
+        it('should unblock user successfully (with reason)', async () => {
+            steveAxios.put.mockResolvedValueOnce({
+                status: 200,
+                data: {
+                    ocppTagPk: 999,
+                    idTag: 'test_rfid',
+                    maxActiveTransactionCount: 1,
+                    blocked: false,
+                },
+            });
+            const reason = "User has resolved the issue";
+            await unblockSteveUser(fullQualifiedUser, reason);
+            expect(steveAxios.put).toHaveBeenCalledWith(
+                `${STEVE_CONFIG.OCPP_TAGS_URI}/${fullQualifiedUser.steve_id}`,
+                {
+                    idTag: fullQualifiedUser.rfid,
+                    maxActiveTransactionCount: 1,
+                },
+            );
+            expect(db.recordActivityLog).toHaveBeenCalledWith(
+                fullQualifiedUser.user_id,
+                'UNBLOCK USER',
+                'SteVe',
+                fullQualifiedUser.rfid,
+                reason
             );
         });
     });
