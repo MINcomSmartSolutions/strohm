@@ -1,4 +1,4 @@
-# Ladeabrechnung (Charging Billing in German)
+# Ladeabrechnung
 
 This repository is designed work with SteVe and Odoo to bill and manage users' car charging without going cloud. Only
 SteVe instance is should be configured independently and provided credentials to this system as environment variables,
@@ -8,6 +8,8 @@ Odoo.
 Authentication is done using OpenID Connect (OIDC) and the system can be integrated with any OIDC provider like
 Keycloak, Auth0, Okta, Google Identity Platform etc. only requirement is that the provider should support RFID as a
 scope to OIDC.
+
+The admin panel is at /dev-admin.html route
 
 ## ENVIRONMENT VARIABLES
 
@@ -31,19 +33,21 @@ If no default is provided below, the variable is required to be set.
 - SERVER_OIDC_SECRET
 - SERVER_OIDC_CLIENT_ID
 - SERVER_OIDC_ISSUER_BASE_URL
-- SERVER_OIDC_BASE_URL: The servers base url (e.g. http://localhost:3000, https://domain.com). This has to be
-  whitelisted at OIDC IdP.
+- SERVER_OIDC_BASE_URL: The servers base url. This has to be whitelisted at OIDC IdP.
 - SERVER_OIDC_CLIENT_SECRET
 
 #### ODOO
 
+The image ghcr.io/mincomsmartsolutions/odoo:18 is used for the odoo image since it is custom and
+includes [Strohm Addon](https://github.com/MINcomSmartSolutions/strohm_addon). But you can use vanilla odoo and install
+the addon yourself as well
+
 - ODOO_API_SECRET: This is used to authenticate and secure the communication between server and Odoo.
 - ODOO_HOST: (default: "odoo") Used for making calls by internal docker network
 - ODOO_PORT: (default: 8069) Used for making calls by internal docker network
-- ODOO_EXTERNAL_BASE_URL: The full base URL used to access Odoo from outside the docker network (
-  e.g. https://odoo.domain.com). For
-  redirects.
-- WEBHOOK_API_KEY: This api key is used to secure the endpoint when server makes calls to Odoo
+- ODOO_EXTERNAL_BASE_URL: The full base URL used to access Odoo from outside the docker network.
+- WEBHOOK_API_KEY: This api key is used to secure the endpoint when server makes calls to Odoo. Even tough the calls
+  goes inside the docker network
 
 #### Database (PostgreSQL 16.6)
 
@@ -55,8 +59,7 @@ If no default is provided below, the variable is required to be set.
 
 #### SteVe
 
-in production and dev/test the environments slightly differ. In production we send it by preffered header and api key in
-dev/test we use basic auth.
+Specifically the branch 3.8.0 71bd4394c94dd9ca3a3870f5cf6678ae1da99c0d.
 
 - STEVE_BASE_URL
 - STEVE_AUTH_USERNAME: (default: "admin")
@@ -83,8 +86,8 @@ in default, but not specified here.
   all" to avoid loading demo data.
 - PROXY_MODE: [boolean] (default: "false") Whether to enable proxy mode. This should be enabled if Odoo is behind a
   reverse proxy.
-- ADMIN_PASSWORD: (default: "admin") Password for the admin user created by doodba. FYI somereason it is always "admin"
-  even if we set it to something else.
+- ADMIN_PASSWORD: (default: "admin") Password for the admin user created by doodba. TO NOTE: For somereason it is
+  always "admin" even if we set it to something else.
 
 ###### SMTP (To be used for sending emails from Odoo)
 
@@ -98,7 +101,7 @@ in default, but not specified here.
 
 Same instance of database used with the Server but with different user and database.
 
-- PGHOST
+- PGHOST: PostgreSQL Host
 - PGDATABASE: (default: "odoo")
 - PGUSER
 - PGPASSWORD
@@ -110,7 +113,7 @@ Same instance of database used with the Server but with different user and datab
 - WEBHOOK_API_KEY: To be the same as SERVER --> ODOO --> WEBHOOK_API_KEY
 - BACKEND_HOST
 - BACKEND_PORT: (default: 3000) To be the same as SERVER --> General --> SERVER_PORT
-- BACKEND_EXTERNAL_URL: The servers external reachable base url (e.g. http://localhost:3000, https://domain.com).
+- BACKEND_EXTERNAL_URL: The servers external reachable base url
 
 ----
 

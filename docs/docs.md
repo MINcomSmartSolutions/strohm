@@ -339,6 +339,12 @@ service that bypass the centralized queries.js mechanism:
 - [services/consent](#module_services/consent) For underlying consent operations
 - [middlewares/consent](#module_middlewares/consent) For consent enforcement middleware
 
+<a name="module_controllers/consent..renderConsentFallbackView"></a>
+
+### controllers/consent~renderConsentFallbackView(params) ⇒ <code>void</code>
+Render read-only consent content when a PDF is not available.
+
+**Kind**: inner method of [<code>controllers/consent</code>](#module_controllers/consent)  
 <a name="module_controllers/dev_admin"></a>
 
 ## controllers/dev\_admin
