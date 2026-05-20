@@ -1,5 +1,5 @@
 /**
- * @file Controller for handling user authentication and logout.
+ * @file Controller for handling user logout.
  *
  * @module controllers/auth
  * @exports auth_controller
@@ -26,67 +26,57 @@ auth_controller.get('/logout', async (req, res) => {
         }
     }
 
-    // TODO: HERE NEEDS A REFACTOR TO AVOID THIS HUGE IF-ELSE CHAIN
-    if (reason === 'consent_declined') {
-        notificationData = {
+    const reasonNotifications = {
+        consent_declined: {
             message: 'Sie müssen den Nutzungsbedingungen zustimmen, um fortzufahren.',
             type: 'warning',
             title: 'Zustimmung erforderlich'
-        };
-    } else if (reason === 'consent_withdrawn') {
-        notificationData = {
+        },
+        consent_withdrawn: {
             message: 'Ihre Zustimmung wurde erfolgreich widerrufen.',
             type: 'success',
             title: 'Zustimmung widerrufen'
-        };
-    } else if (reason === 'session_expired') {
-        notificationData = {
+        },
+        session_expired: {
             message: 'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.',
             type: 'info',
             title: 'Sitzung abgelaufen'
-        };
-    } else if (reason === 'invalid_session') {
-        notificationData = {
+        },
+        invalid_session: {
             message: 'Ihre Sitzung ist ungültig. Bitte melden Sie sich erneut an.',
             type: 'warning',
             title: 'Ungültige Sitzung'
-        };
-    } else if (reason === 'account_deactivated') {
-        notificationData = {
+        },
+        account_deactivated: {
             message: 'Ihr Konto wurde deaktiviert. Bitte kontaktieren Sie den Support.',
             type: 'error',
             title: 'Konto deaktiviert'
-        };
-    } else if (reason === 'consent_system_error') {
-        notificationData = {
+        },
+        consent_system_error: {
             message: 'Das Zustimmungssystem ist derzeit nicht verfügbar. Bitte versuchen Sie es später erneut.',
             type: 'error',
             title: 'Systemfehler'
-        };
-    } else if (reason === 'consent_validation_error') {
-        notificationData = {
+        },
+        consent_validation_error: {
             message: 'Bei der Überprüfung Ihrer Zustimmung ist ein Fehler aufgetreten. Bitte melden Sie sich erneut an.',
             type: 'error',
             title: 'Validierungsfehler'
-        };
-    } else if (reason === 'odoo_conflict') {
-        notificationData = {
+        },
+        odoo_conflict: {
             message: 'Es besteht ein Konflikt mit Ihrem Odoo-Konto. Bitte kontaktieren Sie den Support.',
             type: 'error',
             title: 'Odoo-Konflikt'
-        };
-    } else if (reason === 'odoo_login_error') {
-        notificationData = {
+        },
+        odoo_login_error: {
             message: 'Die Anmeldung beim Portal ist fehlgeschlagen. Bitte versuchen Sie es erneut.',
             type: 'error',
             title: 'Anmeldefehler'
-        };
-    } else if (reason === 'error') {
-        notificationData = {
-            message: 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.',
-            type: 'error',
-            title: 'Fehler'
-        };
+        },
+        error: {message: 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', type: 'error', title: 'Fehler'},
+    };
+
+    if (reason && reasonNotifications[reason]) {
+        notificationData = reasonNotifications[reason];
     }
 
     // If we have a notification, we need to pass it through the OIDC logout redirect

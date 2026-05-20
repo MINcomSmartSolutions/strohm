@@ -161,7 +161,6 @@ app.get('/welcome', async (req, res) => {
         if (req.session.user) {
             return res.redirect('/');
         }
-        // Serve the modern welcome page
         return res.sendFile('welcome.html', {root: 'public'});
     } catch (error) {
         appErrorHandler(error, res);

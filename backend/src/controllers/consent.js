@@ -10,14 +10,7 @@
  * **ARCHITECTURAL INTEGRATION**: This controller heavily relies on the consent service
  * which implements direct database queries instead of the standard `db.[query]` pattern
  * used throughout the rest of the application. The consent service provides specialized
- * transaction handling and enhanced audit capabilities required for GDPR compliance.
- *
- * **SERVICE DEPENDENCIES**: The controller uses several key functions from the consent
- * service that bypass the centralized queries.js mechanism:
- * - `getActiveConsentRevision()` - Direct database query for active consent
- * - `recordConsent()` - Specialized audit trail recording with transactions
- * - `withdrawConsent()` - GDPR-compliant consent withdrawal with preservation
- * - `hasLatestConsent()` - Optimized consent validation queries
+ * transaction handling and audit capabilities required for GDPR compliance.
  *
  * @module controllers/consent
  * @exports consent_controller
@@ -43,15 +36,9 @@ const path = require('path');
 const {userOperations} = require('#services/user_operations');
 const {ensureAuthenticated} = require("#middlewares/ensureAuthenticated");
 const {saveSession} = require("#utils/session");
+const {escapeHtml} = require("#utils/misc");
 
 const READ_ONLY_CONSENT_TEMPLATE_PATH = path.join(__dirname, '../../public/consent/consent-read-only-view.html');
-
-const escapeHtml = (text = '') => String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 
 /**
  * Render read-only consent content when a PDF is not available.
@@ -87,11 +74,7 @@ const renderConsentFallbackView = ({req, res, activeConsent, consentLabel}) => {
  * This route handler renders the consent page with dynamic content from the active
  * consent revision. It validates user authentication, checks for existing consent,
  * and serves a customized HTML page based on the current consent requirements.
- *
- * **SERVICE INTEGRATION**: Uses `getActiveConsentRevision()` and `hasLatestConsent()`
- * from the consent service, which implement direct database queries rather than the
- * standard `db.[query]` pattern. This ensures optimal performance for consent validation.
- *
+
  * @async
  * @function
  * @param {Object} req - Express request object
@@ -181,15 +164,6 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
  * This route handler processes consent form submissions, validates the consent
  * decision, creates or updates user records, and establishes user sessions.
  * It leverages the consent service's specialized audit trail capabilities.
- *
- * **SERVICE INTEGRATION**: Uses `getActiveConsentRevision()` and `recordConsent()`
- * from the consent service. These functions implement direct database queries with
- * specialized transaction handling, bypassing the standard `db.[query]` pattern
- * for enhanced GDPR compliance and audit trail capabilities.
- *
- * One thing to consider in future is that, what if
- * - user opens two tabs with different consent versions and submits both?
- * - user submitted consent that is not the latest version?
  *
  * @async
  * @function
@@ -313,12 +287,6 @@ consent_controller.post('/consent', ensureAuthenticated, async (req, res) => {
  * This route handler allows authenticated users to withdraw their previously
  * given consent, terminates their session, and prepares for logout. It uses
  * the consent service's GDPR-compliant withdrawal mechanism.
- *
- * **SERVICE INTEGRATION**: Uses `withdrawConsent()` from the consent service,
- * which implements specialized database operations that preserve audit trails
- * while marking consent as withdrawn. This bypasses the standard `db.[query]`
- * pattern to ensure GDPR Article 7(3) compliance.
- *
  * @async
  * @function
  * @param {Object} req - Express request object

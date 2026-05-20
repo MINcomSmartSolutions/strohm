@@ -16,7 +16,7 @@ const logger = require('#services/logger');
 const {appErrorHandler} = require('#utils/errors');
 const {saleOrderStateChangeEventSchema, invoiceStateChangeEventSchema} = require("#utils/joi");
 const {DateTime} = require("luxon");
-const {isValidInteger, isValidNumber} = require("#helpers/validators");
+const {isValidInteger} = require("#helpers/validators");
 
 
 /**
@@ -96,22 +96,9 @@ odoo_controller.post('/internal/user/sync', verifyOdooApiKey, async (req, res) =
             }
         } else if (event === 'user_changed' || event === 'partner_changed') {
             logger.info(`Handling user change for user ${user.user_id}`);
-            // TODO: Handle user update, the main details comes from partner_updated event
             const {record_id, old_data, new_data} = data;
             Joi.assert(old_data, Joi.object().required());
             Joi.assert(new_data, Joi.object().required());
-            return res.status(200).json({success: true});
-
-        } else if (event === 'payment_validity_changed') {
-            // TODO: Update user's payment method validity
-            logger.info(`Payment validity change for user ${user.user_id}`);
-            const {has_valid_payment_method} = data;
-            Joi.assert(has_valid_payment_method, Joi.boolean());
-            return res.status(200).json({success: true});
-
-        } else if (event === 'payment_rejected') {
-            // TODO: Handle payment_rejected event
-            logger.info(`Payment rejected for user ${user.user_id}`);
             return res.status(200).json({success: true});
         }
 
@@ -206,13 +193,28 @@ odoo_controller.post('/internal/user/reactivate-charging', verifyOdooApiKey, asy
 });
 
 /**
- * Odoo invoice sync webhook.
+ * Odoo invoice sync webhooks.
  * Handles creation, update, and deletion of invoices.
  */
 odoo_controller.post('/internal/invoice', verifyOdooApiKey, async (req, res) => {
     return handleInvoiceSync(req, res);
 });
-
+/**
+ * PUT /internal/invoice/:id
+ *
+ * Handles updates to an invoice
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {string} req.params.id - Odoo invoice ID to delete
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with success status
+ * @throws {400} Invalid invoice ID format
+ * @throws {500} Database error
+ *
+ * @middleware verifyOdooApiKey - Validates API key authentication
+ */
 odoo_controller.put('/internal/invoice/:id', verifyOdooApiKey, async (req, res) => {
     return handleInvoiceSync(req, res);
 });
@@ -250,13 +252,29 @@ odoo_controller.delete('/internal/invoice/:id', verifyOdooApiKey, async (req, re
 });
 
 /**
- * Odoo sale order sync webhook.
+ * Odoo sale order sync webhooks.
  * Handles creation, update, and deletion of sale orders.
  */
 odoo_controller.post('/internal/sale', verifyOdooApiKey, async (req, res) => {
     return handleSaleOrderSync(req, res);
 });
 
+/**
+ * PUT /internal/sale/:id
+ *
+ * Handles updates to a sale order.
+ *
+ * @async
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {string} req.params.id - Odoo sale order ID to delete
+ * @param {Object} res - Express response object
+ * @returns {Object} JSON response with success status
+ * @throws {400} Invalid sale order ID format
+ * @throws {500} Database error
+ *
+ * @middleware verifyOdooApiKey - Validates API key authentication
+ */
 odoo_controller.put('/internal/sale/:id', verifyOdooApiKey, async (req, res) => {
     return handleSaleOrderSync(req, res);
 });
