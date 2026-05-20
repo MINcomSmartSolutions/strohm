@@ -2,7 +2,7 @@
 
 <dl>
 <dt><a href="#module_controllers/auth">controllers/auth</a></dt>
-<dd><p>Controller for handling user authentication and logout.</p>
+<dd><p>Controller for handling user logout.</p>
 </dd>
 <dt><a href="#module_controllers/charging">controllers/charging</a></dt>
 <dd><p>Controller for handling charging session operations.</p>
@@ -23,15 +23,7 @@ Protected by Tailscale network authentication.</p>
 <p><strong>ARCHITECTURAL INTEGRATION</strong>: This controller heavily relies on the consent service
 which implements direct database queries instead of the standard <code>db.[query]</code> pattern
 used throughout the rest of the application. The consent service provides specialized
-transaction handling and enhanced audit capabilities required for GDPR compliance.</p>
-<p><strong>SERVICE DEPENDENCIES</strong>: The controller uses several key functions from the consent
-service that bypass the centralized queries.js mechanism:</p>
-<ul>
-<li><code>getActiveConsentRevision()</code> - Direct database query for active consent</li>
-<li><code>recordConsent()</code> - Specialized audit trail recording with transactions</li>
-<li><code>withdrawConsent()</code> - GDPR-compliant consent withdrawal with preservation</li>
-<li><code>hasLatestConsent()</code> - Optimized consent validation queries</li>
-</ul>
+transaction handling and audit capabilities required for GDPR compliance.</p>
 </dd>
 <dt><a href="#module_controllers/dev_admin">controllers/dev_admin</a></dt>
 <dd><p>Dev Admin Controller</p>
@@ -143,13 +135,10 @@ Handles database migrations programmatically using node-pg-migrate</p>
 <dd><p>SteVe Transactions Service</p>
 <p>Responsible for fetching and recording transactions from the external SteVe API.
 This service does NOT handle billing - all billing logic is in billing_reconciliation service.</p>
-<p>Incremental fetch strategy using high-water mark (T0):
-We persist the timestamp of the latest processed transaction (the &quot;high-water mark&quot; or T0).
-On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
-After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
-  • No overlap or reprocessing of already handled transactions.
-  • No gaps: even if a transaction ends just after T0, it will be fetched next run.
-  • Linear, efficient incremental retrieval without maintaining complex windows.</p>
+<p>Sliding window fetch strategy:
+On each run, we fetch all transactions from the last N minutes (default 3).
+Since recordTransaction uses upsert (ON CONFLICT), re-fetching the same transaction is safe.
+This eliminates watermark drift bugs and ensures no transactions are missed.</p>
 <p>Steve API docs: Steve <a href="http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html">http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html</a></p>
 </dd>
 <dt><a href="#module_services/steve_user">services/steve_user</a></dt>
@@ -275,7 +264,7 @@ Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
 <a name="module_controllers/auth"></a>
 
 ## controllers/auth
-Controller for handling user authentication and logout.
+Controller for handling user logout.
 
 <a name="module_controllers/charging"></a>
 
@@ -325,14 +314,7 @@ This controller manages the complete consent workflow including:
 **ARCHITECTURAL INTEGRATION**: This controller heavily relies on the consent service
 which implements direct database queries instead of the standard `db.[query]` pattern
 used throughout the rest of the application. The consent service provides specialized
-transaction handling and enhanced audit capabilities required for GDPR compliance.
-
-**SERVICE DEPENDENCIES**: The controller uses several key functions from the consent
-service that bypass the centralized queries.js mechanism:
-- `getActiveConsentRevision()` - Direct database query for active consent
-- `recordConsent()` - Specialized audit trail recording with transactions
-- `withdrawConsent()` - GDPR-compliant consent withdrawal with preservation
-- `hasLatestConsent()` - Optimized consent validation queries
+transaction handling and audit capabilities required for GDPR compliance.
 
 **See**
 
@@ -1186,13 +1168,10 @@ SteVe Transactions Service
 Responsible for fetching and recording transactions from the external SteVe API.
 This service does NOT handle billing - all billing logic is in billing_reconciliation service.
 
-Incremental fetch strategy using high-water mark (T0):
-We persist the timestamp of the latest processed transaction (the "high-water mark" or T0).
-On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
-After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
-  • No overlap or reprocessing of already handled transactions.
-  • No gaps: even if a transaction ends just after T0, it will be fetched next run.
-  • Linear, efficient incremental retrieval without maintaining complex windows.
+Sliding window fetch strategy:
+On each run, we fetch all transactions from the last N minutes (default 3).
+Since recordTransaction uses upsert (ON CONFLICT), re-fetching the same transaction is safe.
+This eliminates watermark drift bugs and ensures no transactions are missed.
 
 Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html
 
@@ -1201,10 +1180,10 @@ Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/i
     * [~TEMPORARY_STOP_REASONS](#module_services/steve_transactions..TEMPORARY_STOP_REASONS)
     * [~PERMANENT_STOP_REASONS](#module_services/steve_transactions..PERMANENT_STOP_REASONS)
     * [~fetchTxnsSince([since])](#module_services/steve_transactions..fetchTxnsSince) ⇒ <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code>
-    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code>
-    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
-    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
-    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
+    * [~processTxns(txns)](#module_services/steve_transactions..processTxns) ⇒ <code>Promise.&lt;{processedTxnCount: number, completedTxnCount: number}&gt;</code>
+    * [~runIncremental()](#module_services/steve_transactions..runIncremental) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+    * [~runFull()](#module_services/steve_transactions..runFull) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+    * [~runToday()](#module_services/steve_transactions..runToday) ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
 
 <a name="module_services/steve_transactions..TEMPORARY_STOP_REASONS"></a>
 
@@ -1234,32 +1213,33 @@ If no timestamp is provided, fetch all transactions
 **Returns**: <code>Promise.&lt;Array.&lt;{steve\_txn}&gt;&gt;</code> - Array of transactions  
 <a name="module_services/steve_transactions..processTxns"></a>
 
-### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+### services/steve_transactions~processTxns(txns) ⇒ <code>Promise.&lt;{processedTxnCount: number, completedTxnCount: number}&gt;</code>
 Record all transactions in the database.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
-**Returns**: <code>Promise.&lt;{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}&gt;</code> - The new high-water mark and count of processed transactions  
+**Returns**: <code>Promise.&lt;{processedTxnCount: number, completedTxnCount: number}&gt;</code> - count of transactions  
 **Throws**:
 
 - <code>ValidationError</code> If any transaction does not match the expected schema
 
 <a name="module_services/steve_transactions..runIncremental"></a>
 
-### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
-Run incremental fetch: fetch and record transactions since last watermark
+### services/steve_transactions~runIncremental() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+Run incremental fetch: fetch transactions from the last N minutes (sliding window).
+Re-fetching duplicates is safe due to upsert in recordTransaction.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runFull"></a>
 
-### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{high\_water\_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
-Fetches all transactions from Steve, processes them, and updates the high-water mark.
+### services/steve_transactions~runFull() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+Fetches all transactions from Steve and processes them.
 Use for a full sync (no time filter).
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_transactions..runToday"></a>
 
-### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, high\_water\_mark: DateTime, completedTxnCount: number}&gt;</code>
-Fetch and process all of today's transactions and updates the high-water mark.
+### services/steve_transactions~runToday() ⇒ <code>Promise.&lt;{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}&gt;</code>
+Fetch and process all of today's transactions.
 
 **Kind**: inner method of [<code>services/steve\_transactions</code>](#module_services/steve_transactions)  
 <a name="module_services/steve_user"></a>
@@ -1434,8 +1414,6 @@ Global database queries
     * [~recordActivityLog(user_id, event_type, target, rfid, reason)](#module_utils/queries..recordActivityLog) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~userCrossCheckForTxn(client, ocppTagPk, ocppIdTag, txn_steve_id)](#module_utils/queries..userCrossCheckForTxn) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
     * [~recordSteveTxn(steve_txn)](#module_utils/queries..recordSteveTxn) ⇒ <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code>
-    * [~setLastStopTimestamp(new_watermark)](#module_utils/queries..setLastStopTimestamp) ⇒ <code>Promise.&lt;void&gt;</code>
-    * [~getLastStopTimestamp()](#module_utils/queries..getLastStopTimestamp) ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
     * ~~[~saveInvoiceId(txn, invoice_id)](#module_utils/queries..saveInvoiceId) ⇒ <code>Promise.&lt;void&gt;</code>~~
     * [~getTransactionBySteveTxnId(steve_txn_id)](#module_utils/queries..getTransactionBySteveTxnId) ⇒ <code>Promise.&lt;(Object\|null)&gt;</code>
     * [~upsertTxnOdooOrder(txn_id, orderDetails)](#module_utils/queries..upsertTxnOdooOrder) ⇒ <code>Promise.&lt;db\_odoo\_txn\_order&gt;</code>
@@ -1574,21 +1552,6 @@ Otherwise, inserts a new record with proper user association or updates existing
 
 **Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
 **Returns**: <code>Promise.&lt;Object.&lt;db\_txn&gt;&gt;</code> - db_txn - The transaction record from database  
-<a name="module_utils/queries..setLastStopTimestamp"></a>
-
-### utils/queries~setLastStopTimestamp(new_watermark) ⇒ <code>Promise.&lt;void&gt;</code>
-Sets the last stop timestamp watermark.
-Inserts or updates the `watermark` table with the given timestamp.
-
-**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-<a name="module_utils/queries..getLastStopTimestamp"></a>
-
-### utils/queries~getLastStopTimestamp() ⇒ <code>Promise.&lt;(DateTime\|null)&gt;</code>
-Retrieves the most recent `last_stop_timestamp` aka watermark from the watermark table.
-Returns a Luxon DateTime if found, otherwise null.
-
-**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Returns**: <code>Promise.&lt;(DateTime\|null)&gt;</code> - The latest stop timestamp or null if not found or error on watermark fetch.  
 <a name="module_utils/queries..saveInvoiceId"></a>
 
 ### ~~utils/queries~saveInvoiceId(txn, invoice_id) ⇒ <code>Promise.&lt;void&gt;</code>~~

@@ -56,7 +56,6 @@ const clearTestData = async (pool) => {
         odoo_apikeys, 
         charging_transactions, 
         activity_log,
-        watermark,
         electricity_prices
       CASCADE
     `);

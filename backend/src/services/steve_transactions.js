@@ -4,13 +4,10 @@
  * Responsible for fetching and recording transactions from the external SteVe API.
  * This service does NOT handle billing - all billing logic is in billing_reconciliation service.
  *
- * Incremental fetch strategy using high-water mark (T0):
- * We persist the timestamp of the latest processed transaction (the "high-water mark" or T0).
- * On each run, we only fetch transactions whose stopTimestamp is strictly greater than T0.
- * After processing, we update T0 to the maximum stopTimestamp seen. This ensures:
- *   • No overlap or reprocessing of already handled transactions.
- *   • No gaps: even if a transaction ends just after T0, it will be fetched next run.
- *   • Linear, efficient incremental retrieval without maintaining complex windows.
+ * Sliding window fetch strategy:
+ * On each run, we fetch all transactions from the last N minutes (default 3).
+ * Since recordTransaction uses upsert (ON CONFLICT), re-fetching the same transaction is safe.
+ * This eliminates watermark drift bugs and ensures no transactions are missed.
  *
  * Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html
  *
@@ -27,7 +24,6 @@ const {
 const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const {db} = require('#utils/queries');
 const logger = require('#services/logger');
-const {isValidInteger} = require("#helpers/validators");
 
 
 // Transaction fetch parameters according to Steve API
@@ -120,8 +116,6 @@ async function fetchTxnsSince(since) {
     return [...stoppedTxns, ...activeTxns];
 }
 
-
-// TODO: If TEMPORARY_STOP_REASON IS set for too long (e.g., >24h), consider alerting or processing it anyway.
 /**
  * Stop reasons that indicate a transaction is temporarily stopped/paused
  * and should not be billed yet (may resume later).
@@ -159,7 +153,7 @@ const PERMANENT_STOP_REASONS = new Set([
  *
  * @async
  * @param {Array<Object<steve_txn>>} txns - Array of transactions from SteVe API
- * @returns {Promise<{maxStop: DateTime, processedTxnCount: number, completedTxnCount: number}>} The new high-water mark and count of processed transactions
+ * @returns {Promise<{processedTxnCount: number, completedTxnCount: number}>} count of transactions
  * @throws {ValidationError} If any transaction does not match the expected schema
  */
 async function processTxns(txns) {
@@ -188,62 +182,35 @@ async function processTxns(txns) {
         await db.recordTransaction(txn);
     }
 
-    // Determine new high-water mark: max stopTimestamp of all transactions
-    let maxStop;
-    const transactionsWithStop = unique.filter(txn => txn.stopTimestamp);
-    if (transactionsWithStop.length > 0) {
-        maxStop = transactionsWithStop.reduce((max, txn) => {
-            const stop = DateTime.fromISO(txn.stopTimestamp, {zone: 'utc'});
-            return stop > max ? stop : max;
-        }, DateTime.fromMillis(0));
-    } else {
-        // No stopped transactions, use current time
-        maxStop = DateTime.now();
-    }
-
-    return {maxStop, processedTxnCount: unique.length, completedTxnCount: completedCount};
+    return {processedTxnCount: unique.length, completedTxnCount: completedCount};
 }
 
 /**
- * Run incremental fetch: fetch and record transactions since last watermark
+ * Run incremental fetch: fetch transactions from the last N minutes (sliding window).
+ * Re-fetching duplicates is safe due to upsert in recordTransaction.
  * @async
- * @returns {Promise<{high_water_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
  */
 async function runIncremental() {
-    logger.verbose('Running incremental transaction fetch');
+    const lookbackMinutes = parseInt(process.env.STEVE_FETCH_LOOKBACK_MINUTES) || 3;
+    const since = DateTime.now().toUTC().minus({minutes: lookbackMinutes});
 
-    const since = await db.getLastStopTimestamp();
+    logger.verbose(`Running incremental transaction fetch (last ${lookbackMinutes} minutes)`);
 
-    // add 1 second to the last high water mark to prevent overlapping and fetching the same transaction
-    const last_high_water = since ? since.plus(1) : null;
-    let new_watermark = since ? since : DateTime.now().toUTC();
-
-    const new_txns = await fetchTxnsSince(last_high_water);
+    const new_txns = await fetchTxnsSince(since);
     let fetchedCount = new_txns.length;
     let processedCount = 0;
     let completedCount = 0;
 
     if (fetchedCount > 0) {
-        try {
-            const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
-            new_watermark = maxStop;
-            processedCount = processed;
-            completedCount = completed;
-
-            // Only update high-water mark after successful processing to prevent transaction miss
-            await db.setLastStopTimestamp(new_watermark);
-        } catch (e) {
-            logger.error('Failed to record transactions, high-water mark not updated', e);
-            throw e;
-        }
-    } else {
-        // No new transactions, but still update the high-water mark to current time
-        await db.setLastStopTimestamp(new_watermark);
+        const {processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
+        processedCount = processed;
+        completedCount = completed;
     }
-    logger.info(`Incremental run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} was completed, ${processedCount - completedCount} was active.`);
+
+    logger.info(`Incremental run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} completed, ${processedCount - completedCount} active.`);
 
     return {
-        high_water_mark: new_watermark,
         fetchedTxnCount: fetchedCount,
         processedTxnCount: processedCount,
         completedTxnCount: completedCount,
@@ -251,15 +218,13 @@ async function runIncremental() {
 }
 
 /**
- * Fetches all transactions from Steve, processes them, and updates the high-water mark.
+ * Fetches all transactions from Steve and processes them.
  * Use for a full sync (no time filter).
  * @async
- * @returns {Promise<{high_water_mark: DateTime, fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
  */
 async function runFull() {
     logger.info('Running daily full transaction fetch');
-
-    let watermark = DateTime.now().toUTC();
 
     const new_txns = await fetchTxnsSince();
     let fetchedCount = new_txns.length;
@@ -268,52 +233,46 @@ async function runFull() {
 
     if (fetchedCount > 0) {
         try {
-            const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
-            watermark = maxStop;
+            const {processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
             processedCount = processed;
             completedCount = completed;
         } catch (e) {
-            logger.error('Failed to record transactions during full fetch, high-water mark not updated', e);
+            logger.error('Failed to record transactions during full fetch', e);
         }
     }
 
-    logger.info(`Daily full run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} was completed, ${processedCount - completedCount} was active.`);
+    logger.info(`Daily full run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} completed, ${processedCount - completedCount} active.`);
 
     return {
-        high_water_mark: watermark,
         fetchedTxnCount: fetchedCount,
         processedTxnCount: processedCount,
-        completedTxnCount: completedCount
+        completedTxnCount: completedCount,
     };
 }
 
 
 /**
- * Fetch and process all of today's transactions and updates the high-water mark.
+ * Fetch and process all of today's transactions.
  * @async
- * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, high_water_mark: DateTime, completedTxnCount: number}>}
+ * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
  */
 async function runToday() {
-    // Get today's date and set it to midnight
-    let watermark = DateTime.utc().startOf('day');
+    const since = DateTime.utc().startOf('day');
 
-    const new_txns = await fetchTxnsSince(watermark);
+    const new_txns = await fetchTxnsSince(since);
     let processedCount = 0;
     let completedCount = 0;
 
-
     if (new_txns.length > 0) {
-        const {maxStop, processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
-        watermark = maxStop;
+        const {processedTxnCount: processed, completedTxnCount: completed} = await processTxns(new_txns);
         processedCount = processed;
         completedCount = completed;
     }
-    await db.setLastStopTimestamp(watermark);
+
     return {
-        high_water_mark: watermark,
         fetchedTxnCount: new_txns.length,
         processedTxnCount: processedCount,
-        completedTxnCount: completedCount
+        completedTxnCount: completedCount,
     };
 }
 

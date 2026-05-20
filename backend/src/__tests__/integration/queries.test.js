@@ -851,63 +851,6 @@ describe('Database Queries Integration Tests', () => {
         });
     });
 
-    describe('Watermark', () => {
-        test('setLastStopTimestamp and getLastStopTimestamp should work', async () => {
-            const testDate = DateTime.now().minus({hours: 2});
-
-            // Set watermark
-            await db.setLastStopTimestamp(testDate);
-
-            // Get watermark
-            const watermark = await db.getLastStopTimestamp();
-
-            expect(watermark).toBeDefined();
-            expect(watermark.toJSDate().getTime()).toBeCloseTo(testDate.toJSDate().getTime()); // Allow small difference due to DB conversion
-        });
-
-        test('getLastStopTimestamp should return null when no watermark exists', async () => {
-            // Clear watermarks if any exist
-            const client = await pool.connect();
-            try {
-                await client.query('TRUNCATE watermark');
-
-                // Get watermark when none exists
-                const watermark = await db.getLastStopTimestamp();
-                expect(watermark).toBeNull();
-            } finally {
-                client.release();
-            }
-        });
-
-        test('setLastStopTimestamp should update existing timestamp', async () => {
-            // Set initial watermark
-            const initialDate = DateTime.now();
-
-            await db.setLastStopTimestamp(initialDate);
-
-            await db.setLastStopTimestamp(initialDate);
-
-            await db.setLastStopTimestamp(initialDate);
-
-            const watermark = await db.getLastStopTimestamp();
-
-            expect(watermark.toJSDate().getTime()).toBeCloseTo(initialDate.toJSDate().getTime(), -3);
-
-            // Check that there's only one record
-            const client = await pool.connect();
-            try {
-                const result = await client.query('SELECT * FROM watermark');
-                const count = await client.query('SELECT COUNT(*) FROM watermark');
-                expect(parseInt(result.rows.length)).toBe(1);
-                expect(parseInt(result.rows[0].id)).toBeGreaterThan(1);
-                expect(parseInt(count.rows[0].count)).toBe(1);
-
-            } finally {
-                client.release();
-            }
-        });
-    });
-
     describe('Activity Log', () => {
         test('recordActivityLog should record an activity', async () => {
             await db.recordActivityLog(testUser.user_id, 'TEST_EVENT', 'TEST_TARGET', testUser.rfid);
@@ -1414,19 +1357,6 @@ describe('Database Queries Integration Tests', () => {
             await expect(db.setSteveUserParamaters(fakeUser, 5555))
                 .rejects.toThrow(DatabaseError);
 
-        });
-    });
-
-    describe('setLastStopTimestamp edge cases', () => {
-        test('setLastStopTimestamp should throw when watermark is invalid', async () => {
-            await expect(db.setLastStopTimestamp(null))
-                .rejects.toThrow(ValidationError);
-
-            await expect(db.setLastStopTimestamp(DateTime.invalid('invalid')))
-                .rejects.toThrow(ValidationError);
-
-            await expect(db.setLastStopTimestamp('not a datetime'))
-                .rejects.toThrow(ValidationError);
         });
     });
 

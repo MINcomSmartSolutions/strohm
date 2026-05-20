@@ -19,8 +19,6 @@ jest.mock('#services/network', () => ({
 
 jest.mock('#utils/queries', () => ({
     db: {
-        getLastStopTimestamp: jest.fn(),
-        setLastStopTimestamp: jest.fn(),
         recordTransaction: jest.fn(),
     },
 }));
@@ -90,9 +88,7 @@ describe('Steve Transactions Service', () => {
     });
 
     describe('runIncremental', () => {
-        it('should fetch and process new transactions since last high-water mark', async () => {
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
-
+        it('should fetch and process new transactions using sliding window', async () => {
             // Mock fetching new transactions
             steveAxios.get.mockResolvedValue({
                 status: 200,
@@ -103,9 +99,6 @@ describe('Steve Transactions Service', () => {
             db.recordTransaction.mockResolvedValue(sampleDbTransaction);
 
             const result = await runIncremental();
-
-            // Verify getLastStopTimestamp was called
-            expect(db.getLastStopTimestamp).toHaveBeenCalled();
 
             expect(steveAxios.get).toHaveBeenCalledWith(
                 STEVE_CONFIG.TRANSACTIONS_URI,
@@ -133,69 +126,14 @@ describe('Steve Transactions Service', () => {
             // Verify recordTransaction was called with the transaction data
             expect(db.recordTransaction).toHaveBeenCalledWith(sampleTransaction);
 
-            // Verify setLastStopTimestamp was called with new high-water mark
-            expect(db.setLastStopTimestamp).toHaveBeenCalled();
-
             expect(result).toEqual({
                 completedTxnCount: 2,
                 fetchedTxnCount: 2, // active and stopped for some txn
                 processedTxnCount: 1,
-                high_water_mark: expect.any(DateTime),
-            });
-        });
-
-        it('should handle the case of no previous high-water mark', async () => {
-            // Mock getLastStopTimestamp to return null (no previous high-water mark)
-            db.getLastStopTimestamp.mockResolvedValue(null);
-
-            // Mock fetching new transactions (empty array - no transactions)
-            steveAxios.get.mockResolvedValue({
-                status: 200,
-                data: [],
-            });
-
-            const result = await runIncremental();
-
-            // Verify getLastStopTimestamp was called
-            expect(db.getLastStopTimestamp).toHaveBeenCalled();
-
-            // Verify axios get was called with null since parameter
-            expect(steveAxios.get).toHaveBeenCalledWith(
-                STEVE_CONFIG.TRANSACTIONS_URI,
-                {
-                    params: {
-                        type: TxnType.ACTIVE,
-                        periodType: TxnPeriodType.ALL,
-                    },
-                },
-            );
-
-            expect(steveAxios.get).toHaveBeenCalledWith(
-                STEVE_CONFIG.TRANSACTIONS_URI,
-                {
-                    params: {
-                        type: TxnType.STOPPED,
-                        periodType: TxnPeriodType.ALL,
-                    },
-                },
-            );
-
-            // Verify setLastStopTimestamp was called with the current time
-            expect(db.setLastStopTimestamp).toHaveBeenCalled();
-
-            // Verify returned result matches expected format for no transactions
-            expect(result).toEqual({
-                completedTxnCount: 0,
-                fetchedTxnCount: 0,
-                processedTxnCount: 0,
-                high_water_mark: expect.any(DateTime),
             });
         });
 
         it('should handle transactions without user_id', async () => {
-            // Mock getLastStopTimestamp to return a timestamp
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
-
             // Mock fetching new transactions
             steveAxios.get.mockResolvedValue({
                 status: 200,
@@ -211,21 +149,11 @@ describe('Steve Transactions Service', () => {
 
             const result = await runIncremental();
 
-            // Verify getLastStopTimestamp was called
-            expect(db.getLastStopTimestamp).toHaveBeenCalled();
-
             // Verify recordTransaction was called with the transaction data
             expect(db.recordTransaction).toHaveBeenCalledWith(sampleTransaction);
-
-
-            // Verify setLastStopTimestamp was called
-            expect(db.setLastStopTimestamp).toHaveBeenCalled();
         });
 
         it('should handle duplicate transactions (ensure unique processing)', async () => {
-            // Mock getLastStopTimestamp to return a timestamp
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
-
             // Mock fetching new transactions with a duplicate (same ID)
             const duplicateTransaction = {...sampleTransaction};
             steveAxios.get.mockResolvedValue({
@@ -255,7 +183,6 @@ describe('Steve Transactions Service', () => {
         });
 
         it('should count all unique transactions (no duplicates)', async () => {
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
             const tx2 = {...sampleTransaction, id: 54321};
             steveAxios.get.mockResolvedValue({
                 status: 200,
@@ -269,7 +196,6 @@ describe('Steve Transactions Service', () => {
         });
 
         it('should return 0 fetched if no transactions', async () => {
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
             steveAxios.get.mockResolvedValue({status: 200, data: []});
             const result = await runIncremental();
             expect(result.fetchedTxnCount).toBe(0);
@@ -277,7 +203,6 @@ describe('Steve Transactions Service', () => {
         });
 
         it('should throw error if transaction format is invalid', async () => {
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
             const invalidTransaction = {id: 12345};
             steveAxios.get.mockResolvedValue({status: 200, data: [invalidTransaction]});
             // Patch the schema validate to always return error
@@ -285,11 +210,7 @@ describe('Steve Transactions Service', () => {
             await expect(runIncremental()).rejects.toThrow();
         });
 
-        it('should update high-water mark even with no transactions', async () => {
-            // Mock getLastStopTimestamp to return a timestamp
-            db.getLastStopTimestamp.mockResolvedValue(oneHourAgo);
-
-            // Mock fetching new transactions (empty array - no transactions)
+        it('should return 0 counts when no transactions in window', async () => {
             steveAxios.get.mockResolvedValue({
                 status: 200,
                 data: [],
@@ -297,15 +218,10 @@ describe('Steve Transactions Service', () => {
 
             const result = await runIncremental();
 
-            // Verify getLastStopTimestamp was called
-            expect(db.getLastStopTimestamp).toHaveBeenCalled();
-
-            // Verify setLastStopTimestamp was still called even though no transactions were processed
-            expect(db.setLastStopTimestamp).toHaveBeenCalled();
-
             // Verify result shows 0 transactions
             expect(result.fetchedTxnCount).toBe(0);
             expect(result.processedTxnCount).toBe(0);
+            expect(result.completedTxnCount).toBe(0);
         });
     });
 });

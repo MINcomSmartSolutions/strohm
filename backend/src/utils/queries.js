@@ -670,87 +670,6 @@ async function recordSteveTxn(steve_txn) {
 
 
 /**
- * Sets the last stop timestamp watermark.
- * Inserts or updates the `watermark` table with the given timestamp.
- *
- * @async
- * @param {DateTime} new_watermark - The new last stop timestamp (watermark).
- * @returns {Promise<void>}
- */
-async function setLastStopTimestamp(new_watermark) {
-    if (!new_watermark || !new_watermark.isValid) {
-        throw new ValidationError(
-            ErrorCodes.VALIDATION.MISSING_PARAMETERS,
-            `Invalid or missing new watermark timestamp.`,
-        );
-    }
-
-
-    const query = `
-        INSERT INTO watermark (last_stop_timestamp)
-        VALUES ($1::timestamptz)
-        ON CONFLICT (last_stop_timestamp)
-            DO UPDATE SET iterated_at = NOW()
-    `;
-    const value = [new_watermark];
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        await client.query(query, value);
-        await client.query('COMMIT');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        handleQueryError(error, 'setLastStopTimestamp');
-    } finally {
-        client.release();
-    }
-}
-
-
-/**
- * Retrieves the most recent `last_stop_timestamp` aka watermark from the watermark table.
- * Returns a Luxon DateTime if found, otherwise null.
- *
- * @async
- * @returns {Promise<DateTime|null>} The latest stop timestamp or null if not found or error on watermark fetch.
- */
-async function getLastStopTimestamp() {
-    const query = `SELECT last_stop_timestamp, iterated_at
-                   FROM watermark
-                   ORDER BY created_at DESC
-                   LIMIT 1;`;
-
-    let last_stop_timestamp = null;
-
-    const client = await pool.connect();
-    try {
-        const result = await client.query(query);
-        const row = result.rows[0];
-
-        if (row) {
-            const lastStopTs = row.last_stop_timestamp ? DateTime.fromJSDate(row.last_stop_timestamp) : null;
-            const iteratedAt = row.iterated_at ? DateTime.fromJSDate(row.iterated_at) : null;
-
-            // If iterated_at exists and is greater than last_stop_timestamp, use iterated_at
-            if (iteratedAt && lastStopTs && iteratedAt > lastStopTs) {
-                last_stop_timestamp = iteratedAt;
-            } else {
-                last_stop_timestamp = lastStopTs;
-            }
-        }
-    } catch (error) {
-        // Silently log the error as we dont want to break functionality if watermark is missing
-        handleQueryError(error, 'getLastStopTimestamp', true);
-    } finally {
-        client.release();
-    }
-    logger.verbose('Fetched last stop timestamp watermark:', {last_stop_timestamp: last_stop_timestamp ? last_stop_timestamp.toISO() : 'N/A'});
-    return last_stop_timestamp;
-}
-
-
-/**
  * Updates the `invoice_ref` field for a transaction in `charging_transactions`.
  * This is used to link a transaction to an invoice in Odoo.
  *
@@ -2082,8 +2001,6 @@ module.exports = {
         setSteveUserParamaters,
         recordActivityLog,
         recordTransaction: recordSteveTxn,
-        setLastStopTimestamp,
-        getLastStopTimestamp,
         saveInvoiceId,
         getElectricityPrice,
         getElectricityPriceOrDefault,
