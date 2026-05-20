@@ -418,23 +418,19 @@ async function handleSaleOrderSync(req, res) {
             cancelled: odoo_saleorder.state === 'cancel'
         };
 
-        // Check for transaction ID that have been sent when creating the invoice session_backend_refs
-        let transactionExists = false;
         let db_txn = null;
 
-        if (odoo_saleorder.session_backend_refs && odoo_saleorder.session_backend_refs.length > 0) {
-            const odoo_steve_txnId = odoo_saleorder.session_backend_refs[0];
+        if (odoo_saleorder.session_backend_ref && odoo_saleorder.session_backend_ref.length > 0) {
+            const odoo_steve_txnId = odoo_saleorder.session_backend_ref;
             db_txn = await db.getTransactionBySteveTxnId(odoo_steve_txnId);
-            if (db_txn) {
-                transactionExists = true;
-            } else {
-                logger.warn(`Steve Transaction ID ${odoo_steve_txnId} from Odoo sale order ${odoo_saleorder.id} not found in database.`);
+            if (!db_txn) {
+                logger.error(`Steve Transaction ID ${odoo_steve_txnId} from Odoo sale order ${odoo_saleorder.id} not found in database.`);
             }
         }
 
         logger.info(`Syncing sale order ${odoo_saleorder.id} (${odoo_saleorder.name})`);
 
-        if (transactionExists) {
+        if (db_txn) {
             // If we have a valid txnId, we can upsert (create or update)
             await db.upsertTxnOdooOrder(db_txn.id, orderData);
         } else {
