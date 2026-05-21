@@ -119,7 +119,7 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
         }
 
         let activeConsents = await getAllActiveConsentRevisions();
-        if (!activeConsents || activeConsents.length === 0 || (activeConsents.content.length === 0 && activeConsents.pdf_data.length === 0)) {
+        if (!activeConsents || (activeConsents && activeConsents.length === 0)) {
             log.error('No active consent revisions found');
             return res.redirect('/logout?reason=consent_system_error');
         }
