@@ -245,14 +245,27 @@ function getIP(req, ensureProxyHeaders = true) {
         }
     }
 
+    if (req.connection && req.connection.remoteAddress && !ensureProxyHeaders) {
+        const remoteIP = req.connection.remoteAddress;
+        const isRemoteIPValid = isIP(remoteIP) !== 0;
+        if (isRemoteIPValid) {
+            return cleanIPV6MappedIPv4(remoteIP);
+        }
+    }
+
     return null;
 }
 
 
 function cleanIPV6MappedIPv4(ip) {
+    if (!ip) return ip;
+    ip = ip.trim();
+
     if (ip.startsWith('::ffff:')) {
-        return ip.substring(7);
+        return ip.substring(7)
     }
+
+    logger.debug(`Received IP address: ${ip}`);
     return ip;
 }
 
