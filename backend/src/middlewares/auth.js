@@ -15,6 +15,7 @@ const verifyOdooApiKey = (req, res, next) => {
 
     if (!api_key || api_key !== expected_api_key) {
         return res.status(401).json({
+            success: false,
             error: 'Unauthorized',
             message: 'Invalid or missing API key',
         });
@@ -123,7 +124,29 @@ const scimAuth = (req, res, next) => {
     }
 };
 
+// CSRF protection: require custom header that cannot be sent by plain HTML forms
+const requireAdminHeader = (req, res, next) => {
+    if (req.method === 'GET') return next();
+    if (req.headers['x-admin-request'] !== 'true') {
+        logger.warn(`Admin API request missing X-Admin-Request header from IP: ${req.headers['x-forwarded-for'] || req.connection.remoteAddress}`);
+        return res.status(403).json({success: false, error: 'Forbidden: missing required header'});
+    }
+    next();
+};
+
+// Validate :user_id param is a positive integer
+const validateUserIdParam = (req, res, next) => {
+    const {user_id} = req.params;
+    if (!user_id || !/^\d+$/.test(user_id)) {
+        return res.status(400).json({success: false, error: 'Invalid user_id parameter'});
+    }
+    next();
+};
+
+
 module.exports = {
     verifyOdooApiKey,
-    scimAuth
+    scimAuth,
+    requireAdminHeader,
+    validateUserIdParam,
 };

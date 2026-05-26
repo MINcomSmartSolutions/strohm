@@ -2,7 +2,8 @@
  * @file Tests for Tailscale Authentication Middleware
  */
 
-const {ensureTailscaleAccess, isIPInCIDR} = require('../../../middlewares/tailscaleAuth');
+const {isIPInCIDR} = require('../../../services/network');
+const {ensureTailscaleAccess} = require('../../../middlewares/tailscaleAuth');
 const {GLOBAL_CONFIG} = require('../../../config');
 
 describe('Tailscale Authentication Middleware', () => {
@@ -96,7 +97,6 @@ describe('Tailscale Authentication Middleware', () => {
             expect(res.status).toHaveBeenCalledWith(403);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: 'Access denied: Not from Tailscale network'
             });
         });
 
@@ -163,7 +163,6 @@ describe('Tailscale Authentication Middleware', () => {
             expect(res.status).toHaveBeenCalledWith(403);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                error: 'Access denied: Invalid request headers'
             });
 
             GLOBAL_CONFIG.ENV.IS_PRODUCTION = originalEnv;

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Dev Admin - User Management</title>
+    <title>Admin Panel</title>
     <style>
         * {
             margin: 0;
@@ -216,15 +216,6 @@
             background: #5a161d;
         }
 
-        .btn-revoke-odoo {
-            background: #fd7e14;
-            color: white;
-        }
-
-        .btn-revoke-odoo:hover:not(:disabled) {
-            background: #e86b04;
-        }
-
         .btn-change-rfid {
             background: #6f42c1;
             color: white;
@@ -259,19 +250,6 @@
             }
         }
 
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 4px;
-            color: white;
-            font-weight: 500;
-            z-index: 1000;
-            animation: slideIn 0.3s ease-out;
-            max-width: 400px;
-        }
-
         @keyframes slideIn {
             from {
                 transform: translateX(400px);
@@ -281,14 +259,6 @@
                 transform: translateX(0);
                 opacity: 1;
             }
-        }
-
-        .toast.success {
-            background: #28a745;
-        }
-
-        .toast.error {
-            background: #dc3545;
         }
 
         .empty-state {
@@ -309,11 +279,6 @@
 <div class="container">
     <div class="header">
         <h1>Admin Panel</h1>
-    </div>
-
-    <div class="warning">
-        <strong>⚠️ Development Only</strong>
-        This panel provides dangerous operations. Use with extreme caution! All actions are logged.
     </div>
 
     <!-- Consent Management Section -->
@@ -449,6 +414,11 @@
         </div>
     </div>
 
+    <div class="warning">
+        <strong>⚠️ Caution!</strong>
+        This section provides dangerous operations. Use with extreme caution!
+    </div>
+
     <div class="controls">
         <div class="search-box">
             <input id="searchInput" placeholder="Search by name, email, or RFID..." type="text"/>
@@ -496,6 +466,14 @@
     let filteredUsers = [];
     const locale = 'de-DE';
 
+    // Helper: wrap fetch to always include admin CSRF header
+    const adminFetch = (url, options = {}) => {
+        options.headers = options.headers || {};
+        options.headers['X-Admin-Request'] = 'true';
+
+        return fetch(url, options);
+    };
+
     // Load users on page load
     window.addEventListener('DOMContentLoaded', () => {
         loadUsers();
@@ -522,7 +500,7 @@
         showLoading();
 
         try {
-            const response = await fetch('/api/dev/users');
+            const response = await adminFetch('/api/dev/users');
             const result = await response.json();
 
             if (result.success) {
@@ -600,9 +578,6 @@
                                 <button class="btn btn-delete-steve" onclick="deleteUserFromSteve(${user.user_id}, '${escapeHtml(user.name)}')">Delete SteVe</button>
                                 <button class="btn btn-change-rfid" onclick="changeUserRFID(${user.user_id}, '${escapeHtml(user.name)}', '${escapeHtml(user.rfid)}')">Change RFID</button>
                             ` : ''}
-                            ${user.has_odoo ? `
-                                <button class="btn btn-revoke-odoo" onclick="revokeOdooCredentials(${user.user_id}, '${escapeHtml(user.name)}')">Revoke Odoo</button>
-                            ` : ''}
                             ${user.is_active ? `
                                 <button class="btn btn-deactivate" onclick="deactivateUserInDB(${user.user_id}, '${escapeHtml(user.name)}')">Deactivate DB</button>
                             ` : `
@@ -619,7 +594,7 @@
         if (!confirm(`Block ${userName} in SteVe?`)) return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/steve/block`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/steve/block`, {
                 method: 'POST'
             });
             const result = await response.json();
@@ -639,7 +614,7 @@
         if (!confirm(`Unblock ${userName} in SteVe?`)) return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/steve/unblock`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/steve/unblock`, {
                 method: 'POST'
             });
             const result = await response.json();
@@ -660,7 +635,7 @@
                       from SteVe? This will remove their RFID tag.`)) return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/steve`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/steve`, {
                 method: 'DELETE'
             });
             const result = await response.json();
@@ -695,7 +670,7 @@
         if (!confirm(`Confirm changing RFID for ${userName} from "${currentRFID}" to "${trimmedRFID}"?`)) return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/steve/change-rfid`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/steve/change-rfid`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -715,31 +690,11 @@
         }
     }
 
-    async function revokeOdooCredentials(userId, userName) {
-        if (!confirm(`Revoke Odoo credentials for ${userName}?`)) return;
-
-        try {
-            const response = await fetch(`/api/dev/users/${userId}/odoo/revoke`, {
-                method: 'POST'
-            });
-            const result = await response.json();
-
-            if (result.success) {
-                showToast(result.message, 'success');
-                await loadUsers();
-            } else {
-                showToast('Error: ' + result.error, 'error');
-            }
-        } catch (error) {
-            showToast('Error: ' + error.message, 'error');
-        }
-    }
-
     async function deactivateUserInDB(userId, userName) {
         if (!confirm(`Deactivate ${userName} in database? They won't be able to login.`)) return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/db/deactivate`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/db/deactivate`, {
                 method: 'POST'
             });
             const result = await response.json();
@@ -759,7 +714,7 @@
         if (!confirm(`Activate ${userName} in database?`)) return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/db/activate`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/db/activate`, {
                 method: 'POST'
             });
             const result = await response.json();
@@ -779,8 +734,8 @@
         const confirmed = prompt(
             `⚠️ DANGER: Permanently delete ${userName} from database?\n\n` +
             `This will:\n` +
-            `- Delete all user data\n` +
-            `- Delete all transactions\n` +
+            `- Delete user's all data\n` +
+            `- Delete (if not possible, unlink) user's all transactions\n` +
             `- This action CANNOT be undone\n\n` +
             `Type "DELETE" to confirm:`
         );
@@ -788,7 +743,7 @@
         if (confirmed !== 'DELETE') return;
 
         try {
-            const response = await fetch(`/api/dev/users/${userId}/db`, {
+            const response = await adminFetch(`/api/dev/users/${userId}/db`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json'
@@ -839,7 +794,7 @@
     async function loadConsents() {
         const listEl = document.getElementById('consentList');
         try {
-            const response = await fetch('/api/dev/consent/revisions');
+            const response = await adminFetch('/api/dev/consent/revisions');
             const result = await response.json();
 
             if (result.success && result.data.length > 0) {
@@ -891,7 +846,7 @@
         formData.append('title', title);
 
         try {
-            const response = await fetch('/api/dev/consent/upload', {
+            const response = await adminFetch('/api/dev/consent/upload', {
                 method: 'POST',
                 body: formData,
             });
@@ -921,7 +876,7 @@
     async function loadElectricityPrices() {
         const listEl = document.getElementById('priceList');
         try {
-            const response = await fetch('/api/dev/pricing/electricity');
+            const response = await adminFetch('/api/dev/pricing/electricity');
             const result = await response.json();
 
             if (result.success && result.data.length > 0) {
@@ -1005,7 +960,7 @@
         }
 
         try {
-            const response = await fetch('/api/dev/pricing/electricity', {
+            const response = await adminFetch('/api/dev/pricing/electricity', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({price_eur_kwh: priceNum, valid_from: validFromISO}),
@@ -1034,7 +989,7 @@
     async function loadVATRates() {
         const listEl = document.getElementById('vatList');
         try {
-            const response = await fetch('/api/dev/pricing/vat');
+            const response = await adminFetch('/api/dev/pricing/vat');
             const result = await response.json();
             if (result.success && result.data.length > 0) {
                 // Data is ordered by effective_from DESC, so first entry is the latest
@@ -1119,7 +1074,7 @@
         }
 
         try {
-            const response = await fetch('/api/dev/pricing/vat', {
+            const response = await adminFetch('/api/dev/pricing/vat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({

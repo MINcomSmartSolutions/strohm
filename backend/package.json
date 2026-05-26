@@ -6,16 +6,16 @@
     "clean": "rm -rf node_modules && rm -rf package-lock.json && npm cache clean --force",
     "start": "node ./server.js",
     "debug": "node --watch ./server.js",
-    "test": "node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/",
-    "test:file": "node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns",
-    "test coverage": "node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --coverage",
+    "test": "export NODE_ENV=test && node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/",
+    "test:file": "export NODE_ENV=test && node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --testPathPatterns",
+    "test coverage": "export NODE_ENV=test && node --env-file=.env.test ./node_modules/.bin/jest --config=jest.config.js --testPathIgnorePatterns=src/__tests__/helpers/ --coverage",
     "docs": "npx jsdoc2md -c jsdoc.config.json -p package.json  src/**/*.js > ../docs/docs.md",
     "migrate": "node-pg-migrate",
     "migrate:up": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
     "migrate:create": "node-pg-migrate create",
-    "test:db:migrate": "node --env-file=.env.test ./src/__tests__/helpers/migrate-test-db.js",
-    "test:db:reset": "node --env-file=.env.test ./src/__tests__/helpers/reset-test-db.js"
+    "test:db:migrate": "export NODE_ENV=test && node --env-file=.env.test ./src/__tests__/helpers/migrate-test-db.js",
+    "test:db:reset": "export NODE_ENV=test && node --env-file=.env.test ./src/__tests__/helpers/reset-test-db.js"
   },
   "imports": {
     "#utils/*": "./src/utils/*.js",

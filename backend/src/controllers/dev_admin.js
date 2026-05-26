@@ -19,6 +19,8 @@ const {
 const logger = require('#services/logger');
 const {GLOBAL_CONFIG} = require("#config");
 const {ValidationError, ErrorCodes} = require("#utils/errors");
+const {safeErrorMessage} = require("#utils/misc");
+const {getIP} = require('#services/network');
 
 /**
  * Get all users with their status across all systems
@@ -48,7 +50,7 @@ async function getAllUsers(req, res) {
         logger.error('Error fetching users:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to fetch users'
+            error: safeErrorMessage(error, 'Failed to fetch users')
         });
     }
 }
@@ -71,6 +73,7 @@ async function blockUserInSteve(req, res) {
 
         await blockSteveUser(user);
 
+        logger.info(`[ADMIN AUDIT] User ${user.name} (${user_id}) blocked in SteVe by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `User ${user.name} blocked in SteVe`
@@ -79,7 +82,7 @@ async function blockUserInSteve(req, res) {
         logger.error('Error blocking user in SteVe:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to block user in SteVe'
+            error: safeErrorMessage(error, 'Failed to block user in SteVe')
         });
     }
 }
@@ -102,6 +105,7 @@ async function unblockUserInSteve(req, res) {
 
         await unblockSteveUser(user);
 
+        logger.info(`[ADMIN AUDIT] User ${user.name} (${user_id}) unblocked in SteVe by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `User ${user.name} unblocked in SteVe`
@@ -110,7 +114,7 @@ async function unblockUserInSteve(req, res) {
         logger.error('Error unblocking user in SteVe:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to unblock user in SteVe'
+            error: safeErrorMessage(error, 'Failed to unblock user in SteVe')
         });
     }
 }
@@ -136,6 +140,7 @@ async function deleteUserFromSteve(req, res) {
         // Clear steve_id from database
         await db.updateUser(user.user_id, {steve_id: null});
 
+        logger.info(`[ADMIN AUDIT] User ${user.name} (${user_id}) deleted from SteVe by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `User ${user.name} deleted from SteVe`
@@ -144,7 +149,7 @@ async function deleteUserFromSteve(req, res) {
         logger.error('Error deleting user from SteVe:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to delete user from SteVe'
+            error: safeErrorMessage(error, 'Failed to delete user from SteVe')
         });
     }
 }
@@ -182,6 +187,7 @@ async function changeRFIDofUser(req, res) {
             throw e;
         }
 
+        logger.info(`[ADMIN AUDIT] RFID for user ${user.name} (${user_id}) changed by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `RFID for user ${user.name} changed to ${new_rfid}`
@@ -190,7 +196,7 @@ async function changeRFIDofUser(req, res) {
         logger.error('Error changing RFID of user:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to change RFID of user'
+            error: safeErrorMessage(error, 'Failed to change RFID of user')
         });
     }
 }
@@ -213,6 +219,7 @@ async function deactivateUserInDB(req, res) {
 
         await db.deactivateUser(user);
 
+        logger.info(`[ADMIN AUDIT] User ${user.name} (${user_id}) deactivated by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `User ${user.name} deactivated in database`
@@ -221,7 +228,7 @@ async function deactivateUserInDB(req, res) {
         logger.error('Error deactivating user in DB:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to deactivate user in database'
+            error: safeErrorMessage(error, 'Failed to deactivate user in database')
         });
     }
 }
@@ -244,6 +251,7 @@ async function activateUserInDB(req, res) {
 
         await db.activateUser(user);
 
+        logger.info(`[ADMIN AUDIT] User ${user.name} (${user_id}) activated by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `User ${user.name} activated in database`
@@ -252,7 +260,7 @@ async function activateUserInDB(req, res) {
         logger.error('Error activating user in DB:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to activate user in database'
+            error: safeErrorMessage(error, 'Failed to activate user in database')
         });
     }
 }
@@ -280,6 +288,7 @@ async function deleteUserFromDB(req, res) {
 
         await db.deleteUser(user);
 
+        logger.warn(`[ADMIN AUDIT] User ${user.name} (${user_id}) PERMANENTLY DELETED by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `User ${user.name} permanently deleted from database`
@@ -288,7 +297,7 @@ async function deleteUserFromDB(req, res) {
         logger.error('Error deleting user from DB:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to delete user from database'
+            error: safeErrorMessage(error, 'Failed to delete user from database')
         });
     }
 }
@@ -311,6 +320,7 @@ async function revokeOdooCredentials(req, res) {
 
         await db.revokeUserOdooCredentials(user);
 
+        logger.info(`[ADMIN AUDIT] Odoo credentials revoked for user ${user.name} (${user_id}) by IP: ${getIP(req)}`);
         res.json({
             success: true,
             message: `Odoo credentials revoked for user ${user.name}`
@@ -319,7 +329,7 @@ async function revokeOdooCredentials(req, res) {
         logger.error('Error revoking Odoo credentials:', error);
         res.status(500).json({
             success: false,
-            error: error.message || 'Failed to revoke Odoo credentials'
+            error: safeErrorMessage(error, 'Failed to revoke Odoo credentials')
         });
     }
 }

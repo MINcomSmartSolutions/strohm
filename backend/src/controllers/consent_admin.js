@@ -14,6 +14,7 @@ const {
     CONSENT_TYPES,
     MAX_PDF_SIZE,
 } = require('#services/consent');
+const {getIP} = require("#services/network");
 
 // Multer config: memory storage, 10MB limit, PDF only
 const upload = multer({
@@ -48,7 +49,7 @@ async function getConsentRevisions(req, res) {
         });
     } catch (error) {
         logger.error('Error fetching consent revisions:', error);
-        res.status(500).json({success: false, error: error.message || 'Failed to fetch consent revisions'});
+        res.status(500).json({success: false, error: 'Failed to fetch consent revisions'});
     }
 }
 
@@ -129,7 +130,7 @@ async function uploadConsentPdf(req, res) {
                 'application/pdf',
             );
 
-            logger.info(`Admin uploaded new consent PDF: type=${consent_type}, version=${version}, file=${safeFileName}`);
+            logger.info(`[ADMIN AUDIT] New consent PDF uploaded: type=${consent_type}, version=${version}, file=${safeFileName} by IP: ${getIP(req)}`);
 
             res.json({
                 success: true,
@@ -146,7 +147,7 @@ async function uploadConsentPdf(req, res) {
             logger.error('Error uploading consent PDF:', error);
             res.status(error.statusCode || 500).json({
                 success: false,
-                error: error.message || 'Fehler beim Hochladen der PDF',
+                error: 'Fehler beim Hochladen der PDF',
             });
         }
     });

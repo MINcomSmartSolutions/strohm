@@ -8,6 +8,7 @@
 const {DateTime} = require('luxon');
 const logger = require('#services/logger');
 const {db} = require('#utils/queries');
+const {getIP} = require("#services/network");
 
 /**
  * GET /api/dev/pricing/electricity - List all electricity prices
@@ -18,7 +19,7 @@ async function getElectricityPrices(req, res) {
         res.json({success: true, data: prices});
     } catch (error) {
         logger.error('Error fetching electricity prices:', error);
-        res.status(500).json({success: false, error: error.message || 'Failed to fetch electricity prices'});
+        res.status(500).json({success: false, error: 'Failed to fetch electricity prices'});
     }
 }
 
@@ -52,7 +53,7 @@ async function createElectricityPrice(req, res) {
         }
 
         const record = await db.setElectricityPrice(priceNum, validFromDT);
-        logger.info(`Admin set new electricity price: ${priceNum} EUR/kWh from ${validFromDT.toISO()}`);
+        logger.info(`[ADMIN AUDIT] New electricity price: ${priceNum} EUR/kWh from ${validFromDT.toISO()} set by IP: ${getIP(req)}`);
 
         res.json({
             success: true,
@@ -63,7 +64,7 @@ async function createElectricityPrice(req, res) {
         logger.error('Error setting electricity price:', error);
         res.status(error.statusCode || 500).json({
             success: false,
-            error: error.message || 'Failed to set electricity price'
+            error: 'Failed to set electricity price'
         });
     }
 }
@@ -77,7 +78,7 @@ async function getVATRates(req, res) {
         res.json({success: true, data: rates});
     } catch (error) {
         logger.error('Error fetching VAT rates:', error);
-        res.status(500).json({success: false, error: error.message || 'Failed to fetch VAT rates'});
+        res.status(500).json({success: false, error: 'Failed to fetch VAT rates'});
     }
 }
 
@@ -117,7 +118,7 @@ async function createVATRate(req, res) {
         }
 
         const record = await db.setVATRate(rateNum, descStr, effectiveFromDT);
-        logger.info(`Admin set new VAT rate: ${rateNum}% from ${effectiveFromDT.toISO()}`);
+        logger.info(`[ADMIN AUDIT] New VAT rate: ${rateNum}% from ${effectiveFromDT.toISO()} set by IP: ${getIP(req)}`);
 
         res.json({
             success: true,
@@ -126,7 +127,7 @@ async function createVATRate(req, res) {
         });
     } catch (error) {
         logger.error('Error setting VAT rate:', error);
-        res.status(error.statusCode || 500).json({success: false, error: error.message || 'Failed to set VAT rate'});
+        res.status(error.statusCode || 500).json({success: false, error: 'Failed to set VAT rate'});
     }
 }
 

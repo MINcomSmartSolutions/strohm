@@ -4,34 +4,36 @@
  */
 
 const express = require('express');
+const path = require('path');
 const app = express();
-// const cors = require('cors');
 const hpp = require('hpp');
 const helmet = require('helmet');
 // const swaggerUi = require('swagger-ui-express');
 // const swaggerSpec = require('./helpers/swaggerConfig');
 const {auth} = require('express-openid-connect');
-const oidc_config = require('./utils/oidc_config');
-const {appErrorHandler} = require('./utils/errors');
 const axios = require('axios');
-const {getOdooPortalLogin} = require('./services/odoo');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session);
-const logger = require('./services/logger');
 const {startCronWithHealthCheck} = require('./services/cron');
 const {Settings} = require('luxon');
+
+const {GLOBAL_CONFIG} = require("./config");
+const logger = require('./services/logger');
 const {morganMiddleware} = require('./services/logger');
+const {getOdooPortalLogin} = require('./services/odoo');
 const auth_controller = require('./controllers/auth');
 const odoo_controller = require('./controllers/odoo');
 const scim_controller = require('./controllers/scim');
 const consent_controller = require('./controllers/consent');
 const charging_controller = require('./controllers/charging');
-const electricity_price_controller = require("#controllers/electricity_price");
+const electricity_price_controller = require("./controllers/electricity_price");
 const {ensureAuthenticated} = require('./middlewares/ensureAuthenticated');
 const {requireConsent} = require('./middlewares/consent');
 const {ensureTailscaleAccess} = require('./middlewares/tailscaleAuth');
-const {GLOBAL_CONFIG} = require("#config");
-const {AuthError, ErrorCodes, SystemError} = require("#utils/errors");
+const {validateUserIdParam, requireAdminHeader} = require("./middlewares/auth");
+const {AuthError, ErrorCodes, SystemError} = require("./utils/errors");
+const oidc_config = require('./utils/oidc_config');
+const {appErrorHandler} = require('./utils/errors');
 
 Settings.defaultZoneName = 'utc';
 Settings.defaultLocale = 'de-DE';
@@ -101,6 +103,7 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline and unsafe-eval for inline scripts
+            scriptSrcAttr: ["'self'", "'unsafe-inline'",], // Allow inline event handlers and javascript: URLs
             scriptSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu"], // External scripts + inline scripts
             styleSrc: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"],
             styleSrcElem: ["'self'", "'unsafe-inline'", "https://sso.hm.edu", "https://assets.hm.edu"], // External stylesheets
@@ -201,22 +204,24 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
         logger.info(`Allowed specific IPs: ${GLOBAL_CONFIG.TAILSCALE.ALLOWED_IPS.join(', ')}`);
     }
 
-    // Apply Tailscale authentication to all admin routes
-    app.use('/api/dev/{*any}', ensureTailscaleAccess);
+    // Apply Tailscale auth + CSRF header to all admin API routes
+    app.use('/api/dev/{*any}', ensureTailscaleAccess, requireAdminHeader);
+
+    // Serve admin HTML from non-public directory (not accessible via express.static)
     app.get('/dev-admin.html', ensureTailscaleAccess, (req, res) => {
-        res.sendFile('dev-admin.html', {root: 'public'});
+        res.sendFile(path.join(__dirname, 'views/admin/dev-admin.html'));
     });
 
-    // API routes
+    // API routes (user_id routes get param validation)
     app.get('/api/dev/users', dev_admin_controller.getAllUsers);
-    app.post('/api/dev/users/:user_id/steve/block', dev_admin_controller.blockUserInSteve);
-    app.post('/api/dev/users/:user_id/steve/unblock', dev_admin_controller.unblockUserInSteve);
-    app.delete('/api/dev/users/:user_id/steve', dev_admin_controller.deleteUserFromSteve);
-    app.post('/api/dev/users/:user_id/steve/change-rfid', dev_admin_controller.changeRFIDofUser);
-    app.post('/api/dev/users/:user_id/db/deactivate', dev_admin_controller.deactivateUserInDB);
-    app.post('/api/dev/users/:user_id/db/activate', dev_admin_controller.activateUserInDB);
-    app.delete('/api/dev/users/:user_id/db', dev_admin_controller.deleteUserFromDB);
-    app.post('/api/dev/users/:user_id/odoo/revoke', dev_admin_controller.revokeOdooCredentials);
+    app.post('/api/dev/users/:user_id/steve/block', validateUserIdParam, dev_admin_controller.blockUserInSteve);
+    app.post('/api/dev/users/:user_id/steve/unblock', validateUserIdParam, dev_admin_controller.unblockUserInSteve);
+    app.delete('/api/dev/users/:user_id/steve', validateUserIdParam, dev_admin_controller.deleteUserFromSteve);
+    app.post('/api/dev/users/:user_id/steve/change-rfid', validateUserIdParam, dev_admin_controller.changeRFIDofUser);
+    app.post('/api/dev/users/:user_id/db/deactivate', validateUserIdParam, dev_admin_controller.deactivateUserInDB);
+    app.post('/api/dev/users/:user_id/db/activate', validateUserIdParam, dev_admin_controller.activateUserInDB);
+    app.delete('/api/dev/users/:user_id/db', validateUserIdParam, dev_admin_controller.deleteUserFromDB);
+    app.post('/api/dev/users/:user_id/odoo/revoke', validateUserIdParam, dev_admin_controller.revokeOdooCredentials);
 
     // Consent management admin routes
     app.get('/api/dev/consent/revisions', consent_admin_controller.getConsentRevisions);

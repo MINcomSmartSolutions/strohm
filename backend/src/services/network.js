@@ -8,8 +8,9 @@
  */
 const axios = require('axios');
 const logger = require('./logger');
-const {STEVE_CONFIG, ODOO_CONFIG, GLOBAL_CONFIG} = require('#config');
+const {STEVE_CONFIG, ODOO_CONFIG} = require('#config');
 const {SystemError, ErrorCodes} = require("#utils/errors");
+const {isIP} = require("node:net");
 
 
 // Track SteVe health status
@@ -196,6 +197,104 @@ odooAuthedAxios.get('/internal/admin/connection-check')
     });
 
 
+/**
+ * Helper function to send a standardized unsuccessful response.
+ * @param {object} res
+ * @param {number} statusCode
+ * @param {object|null} responseData Optional additional data to include in the response
+ * @returns {*}
+ */
+function unsuccessfulResponse(res, statusCode, responseData = null) {
+    if (responseData) {
+        return res.status(statusCode).json({
+            success: false,
+            responseData,
+        });
+    }
+
+    return res.status(statusCode).json({
+        success: false,
+    });
+}
+
+
+/**
+ * Helper function to extract the client's IP address from the request
+ * @param req
+ * @param ensureProxyHeaders
+ * @returns {string|null}
+ */
+function getIP(req, ensureProxyHeaders = true) {
+    // Any of the following headers may contain the client's real IP address, depending on the proxy setup.
+    // And they can also be tampered with by the client if the server port is reachable directly! nginx conf ensures they can not be spoofed
+
+    let forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+        const trimmed = forwarded.split(',')[0].trim(); // Get the first IP in the list (the original client IP)
+        const isForwardedIPValid = isIP(trimmed) !== 0;
+        if (isForwardedIPValid && !ensureProxyHeaders) {
+            return cleanIPV6MappedIPv4(trimmed);
+        }
+    }
+
+    let realIP = req.headers['x-real-ip']; // nginx sets this, so it should be present in production behind nginx
+    if (realIP) {
+        const isRealIPValid = isIP(realIP) !== 0;
+        if (isRealIPValid) {
+            return cleanIPV6MappedIPv4(realIP);
+        }
+    }
+
+    return null;
+}
+
+
+function cleanIPV6MappedIPv4(ip) {
+    if (ip.startsWith('::ffff:')) {
+        return ip.substring(7);
+    }
+    return ip;
+}
+
+/**
+ * Check if an IP address is within a CIDR range
+ * @param {string} ip - IP address to check
+ * @param {string} cidr - CIDR range (e.g., '100.64.0.0/10')
+ * @returns {boolean}
+ */
+function isIPInCIDR(ip, cidr) {
+    if (!ip || !cidr) return false;
+    if (isIP(ip) === 0) return false; // Not an IP address
+
+    const [range, bits] = cidr.split('/');
+    const mask = ~(2 ** (32 - parseInt(bits)) - 1);
+
+    const ipNum = ip.split('.').reduce((num, octet) => (num << 8) + parseInt(octet), 0) >>> 0;
+    const rangeNum = range.split('.').reduce((num, octet) => (num << 8) + parseInt(octet), 0) >>> 0;
+
+    return (ipNum & mask) === (rangeNum & mask);
+}
+
+// Helper: detect private/local IPv4 (RFC1918 + loopback) for development convenience
+function isPrivateDevIP(ip) {
+    if (!ip) return false;
+    const ip_cat = isIP(ip)
+    if (ip_cat === 0) return false; // Not an IP address
+
+    let normalizedIp = ip;
+
+    // Normalize IPv6-mapped IPv4
+    if (ip.startsWith('::ffff:')) normalizedIp = ip.substring(7);
+    if (normalizedIp === '127.0.0.1' || normalizedIp === '::1') return true;
+    const parts = normalizedIp.split('.');
+    if (parts.length !== 4) return false;
+    const [a, b] = parts.map(p => parseInt(p, 10));
+    if (a === 10) return true; // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 (covers docker default 172.17.x.x)
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    return false;
+}
+
 module.exports = {
     odooAuthedAxios,
     odooPlainAxios,
@@ -203,4 +302,8 @@ module.exports = {
     getSteveHealth,
     checkSteveHealth,
     updateSteveHealth,
+    unsuccessfulResponse,
+    getIP,
+    isIPInCIDR,
+    isPrivateDevIP,
 };

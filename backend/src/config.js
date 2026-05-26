@@ -56,7 +56,7 @@ const GLOBAL_CONFIG = {
         // Enable admin panel access from Tailscale network
         ENABLE_ADMIN: process.env.TAILSCALE_ENABLE_ADMIN === 'true',
         // Tailscale CGNAT IP range: 100.64.0.0/10
-        // You can also use your specific Tailnet range from tailscale status
+        // We can also use your specific Tailnet range
         // No default - must be explicitly configured
         ALLOWED_RANGES: process.env.TAILSCALE_ALLOWED_RANGES
             ? process.env.TAILSCALE_ALLOWED_RANGES.split(',').map(r => r.trim())

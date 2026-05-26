@@ -259,6 +259,9 @@ Implements HTTP Basic authentication for SCIM endpoints as specified in RFC 7617
 <dt><a href="#appErrorHandler">appErrorHandler()</a></dt>
 <dd><p>Express error handler for AppErrors</p>
 </dd>
+<dt><a href="#safeErrorMessage">safeErrorMessage()</a></dt>
+<dd><p>Return a safe error message for the client (never expose internal details)</p>
+</dd>
 </dl>
 
 <a name="module_controllers/auth"></a>
@@ -448,11 +451,18 @@ Protected by Tailscale network authentication.
 
 
 * [controllers/pricing_admin](#module_controllers/pricing_admin)
+    * [~getIP()](#module_controllers/pricing_admin..getIP)
     * [~getElectricityPrices()](#module_controllers/pricing_admin..getElectricityPrices)
     * [~createElectricityPrice()](#module_controllers/pricing_admin..createElectricityPrice)
     * [~getVATRates()](#module_controllers/pricing_admin..getVATRates)
     * [~createVATRate()](#module_controllers/pricing_admin..createVATRate)
 
+<a name="module_controllers/pricing_admin..getIP"></a>
+
+### controllers/pricing_admin~getIP()
+Get the admin source IP from the request for audit logging
+
+**Kind**: inner method of [<code>controllers/pricing\_admin</code>](#module_controllers/pricing_admin)  
 <a name="module_controllers/pricing_admin..getElectricityPrices"></a>
 
 ### controllers/pricing_admin~getElectricityPrices()
@@ -630,17 +640,6 @@ Tailscale Authentication Middleware
 Restricts access to endpoints based on Tailscale network membership.
 Checks if the request originates from a Tailscale IP address.
 
-
-* [middlewares/tailscaleAuth](#module_middlewares/tailscaleAuth)
-    * [~isIPInCIDR(ip, cidr)](#module_middlewares/tailscaleAuth..isIPInCIDR) ⇒ <code>boolean</code>
-    * [~ensureTailscaleAccess(req, res, next)](#module_middlewares/tailscaleAuth..ensureTailscaleAccess)
-
-<a name="module_middlewares/tailscaleAuth..isIPInCIDR"></a>
-
-### middlewares/tailscaleAuth~isIPInCIDR(ip, cidr) ⇒ <code>boolean</code>
-Check if an IP address is within a CIDR range
-
-**Kind**: inner method of [<code>middlewares/tailscaleAuth</code>](#module_middlewares/tailscaleAuth)  
 <a name="module_middlewares/tailscaleAuth..ensureTailscaleAccess"></a>
 
 ### middlewares/tailscaleAuth~ensureTailscaleAccess(req, res, next)
@@ -1009,6 +1008,9 @@ Network service module for external API clients.
     * [~updateSteveHealth(isHealthy, error)](#module_services/network..updateSteveHealth)
     * [~checkSteveHealth()](#module_services/network..checkSteveHealth) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~createOdooAxios([includeAuth])](#module_services/network..createOdooAxios) ⇒ <code>AxiosInstance</code>
+    * [~unsuccessfulResponse(res, statusCode, responseData)](#module_services/network..unsuccessfulResponse) ⇒ <code>\*</code>
+    * [~getIP(req, ensureProxyHeaders)](#module_services/network..getIP) ⇒ <code>string</code>
+    * [~isIPInCIDR(ip, cidr)](#module_services/network..isIPInCIDR) ⇒ <code>boolean</code>
 
 <a name="module_services/network..odooAuthedAxios"></a>
 
@@ -1065,6 +1067,24 @@ Creates a pre-configured Axios instance for interacting with the Odoo API.
 
 - <code>SystemError</code> If `includeAuth` is true and the Odoo admin API key is not set in the environment variables.
 
+<a name="module_services/network..unsuccessfulResponse"></a>
+
+### services/network~unsuccessfulResponse(res, statusCode, responseData) ⇒ <code>\*</code>
+Helper function to send a standardized unsuccessful response.
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
+<a name="module_services/network..getIP"></a>
+
+### services/network~getIP(req, ensureProxyHeaders) ⇒ <code>string</code>
+Helper function to extract the client's IP address from the request
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
+<a name="module_services/network..isIPInCIDR"></a>
+
+### services/network~isIPInCIDR(ip, cidr) ⇒ <code>boolean</code>
+Check if an IP address is within a CIDR range
+
+**Kind**: inner method of [<code>services/network</code>](#module_services/network)  
 <a name="module_services/odoo"></a>
 
 ## services/odoo
@@ -2208,5 +2228,11 @@ Create an application error with standard format
 
 ## appErrorHandler()
 Express error handler for AppErrors
+
+**Kind**: global function  
+<a name="safeErrorMessage"></a>
+
+## safeErrorMessage()
+Return a safe error message for the client (never expose internal details)
 
 **Kind**: global function  

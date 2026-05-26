@@ -63,6 +63,7 @@ services:
     container_name: strohm_odoo
     build:
       context: ./doodba/odoo
+      network: host
       args:
         DB_VERSION: "16"
         ODOO_VERSION: "18.0"
@@ -85,9 +86,11 @@ services:
       SMTP_PORT: "1025"
       ODOO_API_SECRET: anothersecret
       INITIAL_LANG: "de_DE"
-      BACKEND_HOST: server
+      BACKEND_HOST: host.docker.internal # change it to "server" if we run odoo container on the same docker network as the backend
       BACKEND_PORT: ${SERVER_PORT:-3000}
       BACKEND_EXTERNAL_URL: ${SERVER_BASE_URL}
+      HM_PAYMENT_GATEWAY_API_USER: ${HM_PAYMENT_TEST_GATEWAY_API_USER}
+      HM_PAYMENT_GATEWAY_API_TOKEN: ${HM_PAYMENT_TEST_GATEWAY_API_TOKEN}
       WEBHOOK_API_KEY: webhook-api-key
       WITHOUT_DEMO: "all"
       PROXY_MODE: "false"
@@ -106,12 +109,13 @@ services:
         condition: service_healthy
     command:
       - odoo
+      - --log-level=debug
       - --limit-memory-soft=0
       - --limit-time-real-cron=9999999
       - --limit-time-real=9999999
       - --workers=0
-      - --dev=reload,qweb,werkzeug,xml,po,pot
-      - -i strohm_addon
+      - --dev=reload,all,werkzeug
+
   steve-db:
     container_name: steve_sim_db
     image: mariadb:10.4.30
