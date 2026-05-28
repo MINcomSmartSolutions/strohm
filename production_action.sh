@@ -323,7 +323,7 @@ deploy() {
 
         # Start services
         echo "Starting services..."
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
        # Wait for services to be healthy
        wait_for_database
@@ -354,6 +354,13 @@ deploy() {
         echo "Stopping existing containers..."
         docker compose -f "$COMPOSE_FILE" down
 
+        # Update odoo module
+        echo "Updating Odoo module..."
+        if ! docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm odoo odoo -d "$ODOO_DB" -u strohm_addon --stop-after-init --workers=0; then
+            echo -e "${RED}Odoo module update failed! Aborting.${NC}"
+            return 1
+        fi
+
         # Start services
         echo "Starting services..."
         docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
@@ -376,10 +383,17 @@ check_health() {
     
     for service in "${services[@]}"; do
         echo -n "Checking $service... "
-        if docker compose -f "$COMPOSE_FILE" ps "$service" | grep -q "Up"; then
-            echo -e "${GREEN} Running${NC}"
+        local state=$(docker compose -f "$COMPOSE_FILE" ps "$service" --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "")
+        local health=$(docker compose -f "$COMPOSE_FILE" ps "$service" --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d'"' -f4 || echo "")
+
+        if [ "$state" = "running" ]; then
+            if [ -n "$health" ] && [ "$health" != "healthy" ]; then
+                echo -e "${YELLOW} Running (health: $health)${NC}"
+            else
+                echo -e "${GREEN} Running${NC}"
+            fi
         else
-            echo -e "${RED} Not running${NC}"
+            echo -e "${RED} Not running (state: ${state:-unknown})${NC}"
             docker compose -f "$COMPOSE_FILE" logs --tail=20 "$service"
         fi
     done
@@ -460,10 +474,21 @@ case "${1:-deploy}" in
         read -p "> " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            create_backup
+            if ! create_backup; then
+                echo -e "${RED}Backup failed! Aborting update.${NC}"
+                exit 1
+            fi
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+            echo "Updating Odoo module..."
+            if ! docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm odoo odoo -d "$ODOO_DB" -u strohm_addon --stop-after-init --workers=0; then
+                echo -e "${RED}Odoo module update failed! Aborting.${NC}"
+                exit 1
+            fi
             docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+            wait_for_database
+            wait_for_service_health "server"
+            wait_for_service_health "odoo"
             check_health
             echo -e "${GREEN} Update completed successfully!${NC}"
         fi
