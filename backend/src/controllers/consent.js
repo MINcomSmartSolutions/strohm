@@ -142,6 +142,7 @@ consent_controller.get('/consent', ensureAuthenticated, async (req, res) => {
             version: c.version,
             hasPdf: !!c.pdf_filename,
             pdfFilename: c.pdf_filename,
+            content: !c.pdf_filename ? (c.content || null) : null,
             updatedAt: new Date(c.updated_at).toLocaleDateString('de-DE'),
         }));
 

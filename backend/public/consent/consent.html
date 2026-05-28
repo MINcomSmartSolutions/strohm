@@ -165,6 +165,8 @@
             if (doc.hasPdf) {
                 contentHtml = '<iframe class="consent-pdf-frame" src="/consent/pdf/' + doc.id +
                     '" title="' + typeLabel + '"></iframe>';
+            } else if (doc.content) {
+                contentHtml = '<div class="consent-text-content">' + doc.content.replace(/\n/g, '<br>') + '</div>';
             } else {
                 contentHtml = '<div class="consent-text-content">Dokument nicht verfügbar</div>';
             }
