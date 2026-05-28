@@ -49,7 +49,7 @@ const handleQueryError = (error, operation, silent = false) => {
 
 
 const createUser = async (oauth_id, name, email, rfid) => {
-    //TODO: Only req.oidc can be porided
+    //Only req.oidc can be provided
 
     const inputsValid = ![oauth_id, name, email, rfid].some(param => !param || param === '');
     if (!inputsValid) {

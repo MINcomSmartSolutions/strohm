@@ -118,7 +118,7 @@ async function getOdooPortalLogin(user) {
 
     const odoo_credentials = await db.getUserOdooCredentials(user.user_id);
     if (!odoo_credentials || !odoo_credentials.key || !odoo_credentials.key_salt) {
-        // TODO: Instead of throwing an error, trigger a key rotation process
+        // NOTE: throwing an error, or key rotation
         throw new ValidationError(ErrorCodes.USER.ODOO_NO_CREDENTIALS);
     }
     const {key, key_salt} = odoo_credentials;
@@ -257,7 +257,6 @@ async function rotateOdooUserAuth(user) {
  * @throws {ValidationError|SystemError} On validation or Odoo errors.
  */
 async function sendTxnToOdooProcessing(db_txn) {
-    // TODO: Needs refactoring, function seperation
     const {error} = qualifiedTransactionSchema.validate(db_txn);
     if (error) {
         throw new ValidationError(ErrorCodes.VALIDATION.INVALID_FORMAT,
@@ -346,9 +345,6 @@ async function sendTxnToOdooProcessing(db_txn) {
 
     const order = details.sale_order;
     const invoice = details.invoice || null;
-
-    // TODO: Check if `unit_price` from Odoo matches sent `unit_price_eur`
-    // TODO: Check if `qty` from Odoo matches sent `quantity`
 
     // Create order record
     const db_created_order = await db.upsertTxnOdooOrder(db_txn.id, {

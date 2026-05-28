@@ -20,7 +20,7 @@ const isAuth0 = process.env.SERVER_OIDC_ISSUER_BASE_URL.includes('auth0');
 const oidc_config = {
     authRequired: false, // Allow unauthenticated access to some routes not all
     auth0Logout: isAuth0, // Set to issuer URL for Auth0, false for custom IdP
-    // idpLogout: true, // FIXME: Sometimes some users log out from the portal but do not sign out from HM, so they are stuck in that state
+    // idpLogout: true,
     secret: process.env.SERVER_OIDC_SECRET,
     baseURL: process.env.SERVER_OIDC_BASE_URL,
     clientID: process.env.SERVER_OIDC_CLIENT_ID,

@@ -35,9 +35,8 @@ const {isValidInteger} = require("#helpers/validators");
  * }
  *
  * - For 'user_deleted' or 'partner_deleted': deactivates user and blocks in Steve.
- * - For 'user_changed' or 'partner_changed': (TODO) update user details.
- * - For 'payment_rejected': (TODO) handle payment rejection logic.
- * - For 'payment_validity_changed': (TODO) handle payment validity changes.
+ * - For 'user_changed' or 'partner_changed':
+ * - For 'payment_rejected':
  * Responds with 200 on success, 400 on invalid input or user not found.
  * Requires API key authentication via verifyOdooApiKey middleware.
  */

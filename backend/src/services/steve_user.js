@@ -18,7 +18,6 @@ const logger = require('./logger');
 const {db} = require('#utils/queries');
 const {STEVE_CONFIG, GLOBAL_CONFIG} = require('#config');
 const {DateTime} = require("luxon");
-//TODO: Check everything even the response returned 200 or 201
 
 
 const validateUserObjectForSteve = (user) => {

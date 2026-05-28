@@ -348,7 +348,6 @@ SECURITY: Access is restricted to requests originating from Tailscale IP address
     * [~deleteUserFromSteve()](#module_controllers/dev_admin..deleteUserFromSteve)
     * [~deactivateUserInDB()](#module_controllers/dev_admin..deactivateUserInDB)
     * [~activateUserInDB()](#module_controllers/dev_admin..activateUserInDB)
-    * [~deleteUserFromDB()](#module_controllers/dev_admin..deleteUserFromDB)
     * [~revokeOdooCredentials()](#module_controllers/dev_admin..revokeOdooCredentials)
 
 <a name="module_controllers/dev_admin..getAllUsers"></a>
@@ -385,12 +384,6 @@ Deactivate user in database
 
 ### controllers/dev_admin~activateUserInDB()
 Activate user in database
-
-**Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
-<a name="module_controllers/dev_admin..deleteUserFromDB"></a>
-
-### controllers/dev_admin~deleteUserFromDB()
-Delete user from database (PERMANENT - USE WITH CAUTION)
 
 **Kind**: inner method of [<code>controllers/dev\_admin</code>](#module_controllers/dev_admin)  
 <a name="module_controllers/dev_admin..revokeOdooCredentials"></a>
@@ -451,18 +444,11 @@ Protected by Tailscale network authentication.
 
 
 * [controllers/pricing_admin](#module_controllers/pricing_admin)
-    * [~getIP()](#module_controllers/pricing_admin..getIP)
     * [~getElectricityPrices()](#module_controllers/pricing_admin..getElectricityPrices)
     * [~createElectricityPrice()](#module_controllers/pricing_admin..createElectricityPrice)
     * [~getVATRates()](#module_controllers/pricing_admin..getVATRates)
     * [~createVATRate()](#module_controllers/pricing_admin..createVATRate)
 
-<a name="module_controllers/pricing_admin..getIP"></a>
-
-### controllers/pricing_admin~getIP()
-Get the admin source IP from the request for audit logging
-
-**Kind**: inner method of [<code>controllers/pricing\_admin</code>](#module_controllers/pricing_admin)  
 <a name="module_controllers/pricing_admin..getElectricityPrices"></a>
 
 ### controllers/pricing_admin~getElectricityPrices()
@@ -1009,7 +995,7 @@ Network service module for external API clients.
     * [~checkSteveHealth()](#module_services/network..checkSteveHealth) ⇒ <code>Promise.&lt;boolean&gt;</code>
     * [~createOdooAxios([includeAuth])](#module_services/network..createOdooAxios) ⇒ <code>AxiosInstance</code>
     * [~unsuccessfulResponse(res, statusCode, responseData)](#module_services/network..unsuccessfulResponse) ⇒ <code>\*</code>
-    * [~getIP(req, ensureProxyHeaders)](#module_services/network..getIP) ⇒ <code>string</code>
+    * [~getIP(req, ensureProxyHeaders)](#module_services/network..getIP) ⇒ <code>string</code> \| <code>null</code>
     * [~isIPInCIDR(ip, cidr)](#module_services/network..isIPInCIDR) ⇒ <code>boolean</code>
 
 <a name="module_services/network..odooAuthedAxios"></a>
@@ -1075,7 +1061,7 @@ Helper function to send a standardized unsuccessful response.
 **Kind**: inner method of [<code>services/network</code>](#module_services/network)  
 <a name="module_services/network..getIP"></a>
 
-### services/network~getIP(req, ensureProxyHeaders) ⇒ <code>string</code>
+### services/network~getIP(req, ensureProxyHeaders) ⇒ <code>string</code> \| <code>null</code>
 Helper function to extract the client's IP address from the request
 
 **Kind**: inner method of [<code>services/network</code>](#module_services/network)  
@@ -1451,7 +1437,6 @@ Global database queries
     * [~updateUser(userId, updates)](#module_utils/queries..updateUser) ⇒ <code>Promise.&lt;object&gt;</code>
     * [~activateUser(user)](#module_utils/queries..activateUser)
     * [~getUserOpenChargingSession(user_id)](#module_utils/queries..getUserOpenChargingSession) ⇒ <code>Promise.&lt;(db\_txn\|null)&gt;</code>
-    * [~deleteUser(user)](#module_utils/queries..deleteUser)
     * [~getUnbilledTransactions(options)](#module_utils/queries..getUnbilledTransactions) ⇒ <code>Promise.&lt;Array.&lt;Object.&lt;db\_txn&gt;&gt;&gt;</code>
     * [~tryAssociateUserToTransaction(db_txn)](#module_utils/queries..tryAssociateUserToTransaction) ⇒ <code>Promise.&lt;(number\|null)&gt;</code>
     * [~getAllElectricityPrices()](#module_utils/queries..getAllElectricityPrices) ⇒ <code>Promise.&lt;Array&gt;</code>
@@ -1731,18 +1716,6 @@ An open charging session is one where stop_timestamp is NULL.
 
 - <code>ValidationError</code> If user_id is invalid.
 - <code>DatabaseError</code> If database operation fails.
-
-<a name="module_utils/queries..deleteUser"></a>
-
-### utils/queries~deleteUser(user)
-Deletes a user from the database (hard delete).
-WARNING: This permanently removes the user and all associated records.
-
-**Kind**: inner method of [<code>utils/queries</code>](#module_utils/queries)  
-**Throws**:
-
-- <code>ValidationError</code> If required parameters are missing.
-- <code>DatabaseError</code> If deletion fails.
 
 <a name="module_utils/queries..getUnbilledTransactions"></a>
 

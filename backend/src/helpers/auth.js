@@ -49,7 +49,6 @@ function generateSalt(bytes = 16) {
  * @returns {boolean} - True if authentication is valid, false otherwise
  */
 async function validateOIDCProperties(req) {
-    //FIXME: TypeError: refresh_token not present in TokenSet
     if (!req) {
         logger.warn('Request object is missing in OIDC validation');
         return false;

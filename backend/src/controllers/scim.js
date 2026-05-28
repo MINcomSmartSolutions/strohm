@@ -236,8 +236,6 @@ class SCIMUserHandler {
             const updates = {};
 
             // Only process allowed fields
-            //FIXME: Username can be email or username?
-            // This is error prone
             if (validResource.userName && typeof validResource.userName === 'string') {
                 // Validate email format for userName
                 updates.email = validResource.userName.toLowerCase().trim();

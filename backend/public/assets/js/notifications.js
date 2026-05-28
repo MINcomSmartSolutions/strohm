@@ -1,7 +1,6 @@
 /**
  * Notification System
  * Displays toast-style notifications to users
- * TODO: Needs through review
  * e.g. /welcome?message=Hello&type=success&title=Welcome
  */
 

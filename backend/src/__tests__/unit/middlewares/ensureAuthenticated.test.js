@@ -269,7 +269,6 @@ describe('ensureAuthenticated Middleware - Unit Tests', () => {
         });
     });
 
-//FIXME: Not deterministic
     describe('Complete Authentication Flow', () => {
         it('should complete full authentication flow for existing user', async () => {
             const mockUser = {
