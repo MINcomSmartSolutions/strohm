@@ -207,15 +207,6 @@
             background: #138496;
         }
 
-        .btn-delete-db {
-            background: #721c24;
-            color: white;
-        }
-
-        .btn-delete-db:hover:not(:disabled) {
-            background: #5a161d;
-        }
-
         .btn-change-rfid {
             background: #6f42c1;
             color: white;
@@ -583,7 +574,6 @@
                             ` : `
                                 <button class="btn btn-activate" onclick="activateUserInDB(${user.user_id}, '${escapeHtml(user.name)}')">Activate DB</button>
                             `}
-                            <button class="btn btn-delete-db" onclick="deleteUserFromDB(${user.user_id}, '${escapeHtml(user.name)}')">Delete DB</button>
                         </div>
                     </td>
                 </tr>
@@ -716,39 +706,6 @@
         try {
             const response = await adminFetch(`/api/dev/users/${userId}/db/activate`, {
                 method: 'POST'
-            });
-            const result = await response.json();
-
-            if (result.success) {
-                showToast(result.message, 'success');
-                await loadUsers();
-            } else {
-                showToast('Error: ' + result.error, 'error');
-            }
-        } catch (error) {
-            showToast('Error: ' + error.message, 'error');
-        }
-    }
-
-    async function deleteUserFromDB(userId, userName) {
-        const confirmed = prompt(
-            `⚠️ DANGER: Permanently delete ${userName} from database?\n\n` +
-            `This will:\n` +
-            `- Delete user's all data\n` +
-            `- Delete (if not possible, unlink) user's all transactions\n` +
-            `- This action CANNOT be undone\n\n` +
-            `Type "DELETE" to confirm:`
-        );
-
-        if (confirmed !== 'DELETE') return;
-
-        try {
-            const response = await adminFetch(`/api/dev/users/${userId}/db`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({confirm: 'DELETE'})
             });
             const result = await response.json();
 

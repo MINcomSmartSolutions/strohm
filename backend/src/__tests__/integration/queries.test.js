@@ -1139,33 +1139,6 @@ describe('Database Queries Integration Tests', () => {
                 .rejects.toThrow(ValidationError);
         });
 
-        test('deleteUser should permanently delete a user', async () => {
-            // Create a user to delete
-            const userToDelete = await db.createUser('delete_me', 'Delete Me', 'delete@test.com', 'delete_rfid');
-
-            // Delete the user
-            await db.deleteUser(userToDelete);
-
-            // Verify user is gone
-            const deletedUser = await db.getUserUnique({user_id: userToDelete.user_id});
-            expect(deletedUser).toBeNull();
-        });
-
-        test('deleteUser should throw when trying to delete non-existent user', async () => {
-            const fakeUser = {user_id: 999999, rfid: 'fake'};
-
-            await expect(db.deleteUser(fakeUser))
-                .rejects.toThrow();
-        });
-
-        test('deleteUser should throw when user parameter is missing', async () => {
-            await expect(db.deleteUser(null))
-                .rejects.toThrow(ValidationError);
-
-            await expect(db.deleteUser({name: 'No user_id'}))
-                .rejects.toThrow(ValidationError);
-        });
-
         test('getUsersCount should return correct count with no filters', async () => {
             // Create some users
             await db.createUser('count_user1', 'Count User 1', 'count1@test.com', 'count_rfid1');

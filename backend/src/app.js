@@ -220,7 +220,6 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
     app.post('/api/dev/users/:user_id/steve/change-rfid', validateUserIdParam, dev_admin_controller.changeRFIDofUser);
     app.post('/api/dev/users/:user_id/db/deactivate', validateUserIdParam, dev_admin_controller.deactivateUserInDB);
     app.post('/api/dev/users/:user_id/db/activate', validateUserIdParam, dev_admin_controller.activateUserInDB);
-    app.delete('/api/dev/users/:user_id/db', validateUserIdParam, dev_admin_controller.deleteUserFromDB);
     app.post('/api/dev/users/:user_id/odoo/revoke', validateUserIdParam, dev_admin_controller.revokeOdooCredentials);
 
     // Consent management admin routes

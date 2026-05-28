@@ -265,42 +265,6 @@ async function activateUserInDB(req, res) {
     }
 }
 
-/**
- * Delete user from database (PERMANENT - USE WITH CAUTION)
- */
-async function deleteUserFromDB(req, res) {
-    try {
-        const {user_id} = req.params;
-        const {confirm} = req.body;
-
-        if (confirm !== 'DELETE') {
-            return res.status(400).json({
-                success: false,
-                error: 'Confirmation required. Send {confirm: "DELETE"} in request body'
-            });
-        }
-
-        const user = await db.getUserUnique({user_id: parseInt(user_id)});
-
-        if (!user) {
-            return res.status(404).json({success: false, error: 'User not found'});
-        }
-
-        await db.deleteUser(user);
-
-        logger.warn(`[ADMIN AUDIT] User ${user.name} (${user_id}) PERMANENTLY DELETED by IP: ${getIP(req)}`);
-        res.json({
-            success: true,
-            message: `User ${user.name} permanently deleted from database`
-        });
-    } catch (error) {
-        logger.error('Error deleting user from DB:', error);
-        res.status(500).json({
-            success: false,
-            error: safeErrorMessage(error, 'Failed to delete user from database')
-        });
-    }
-}
 
 /**
  * Revoke Odoo credentials for user
@@ -341,7 +305,6 @@ module.exports = {
     deleteUserFromSteve,
     deactivateUserInDB,
     activateUserInDB,
-    deleteUserFromDB,
     revokeOdooCredentials,
     changeRFIDofUser
 };
