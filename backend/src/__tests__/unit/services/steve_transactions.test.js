@@ -88,7 +88,7 @@ describe('Steve Transactions Service', () => {
     });
 
     describe('runIncremental', () => {
-        it('should fetch and process new transactions using sliding window', async () => {
+        it('should fetch and process all transactions', async () => {
             // Mock fetching new transactions
             steveAxios.get.mockResolvedValue({
                 status: 200,
@@ -105,9 +105,7 @@ describe('Steve Transactions Service', () => {
                 {
                     params: {
                         type: TxnType.ACTIVE,
-                        periodType: TxnPeriodType.FROM_TO,
-                        from: expect.any(String),
-                        to: expect.any(String),
+                        periodType: TxnPeriodType.ALL,
                     },
                 },
             );
@@ -116,9 +114,7 @@ describe('Steve Transactions Service', () => {
                 {
                     params: {
                         type: TxnType.STOPPED,
-                        periodType: TxnPeriodType.FROM_TO,
-                        from: expect.any(String),
-                        to: expect.any(String),
+                        periodType: TxnPeriodType.ALL,
                     },
                 },
             );

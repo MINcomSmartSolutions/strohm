@@ -4,10 +4,12 @@
  * Responsible for fetching and recording transactions from the external SteVe API.
  * This service does NOT handle billing - all billing logic is in billing_reconciliation service.
  *
- * Sliding window fetch strategy:
- * On each run, we fetch all transactions from the last N minutes (default 3).
+ * Fetch strategy:
+ * On each run, we fetch ALL transactions from Steve and upsert them.
  * Since recordTransaction uses upsert (ON CONFLICT), re-fetching the same transaction is safe.
- * This eliminates watermark drift bugs and ensures no transactions are missed.
+ * This is simple and reliable for low-volume systems — no watermarks or time windows needed.
+ * The Steve API's FROM_TO filter applies to transaction start time (not stop time),
+ * so time-windowed approaches miss transactions that started before the window but stopped within it.
  *
  * Steve API docs: Steve http://instance:port/steve/manager/swagger-ui/swagger-ui/index.html
  *
@@ -186,18 +188,18 @@ async function processTxns(txns) {
 }
 
 /**
- * Run incremental fetch: fetch transactions from the last N minutes (sliding window).
+ * Run incremental fetch: fetch all transactions and upsert them.
  * Re-fetching duplicates is safe due to upsert in recordTransaction.
+ * For low-volume systems this is simpler and more reliable than time-windowed fetching,
+ * since the Steve API filters by start time (not stop time), which would miss
+ * transactions that started before the window but stopped within it.
  * @async
  * @returns {Promise<{fetchedTxnCount: number, processedTxnCount: number, completedTxnCount: number}>}
  */
 async function runIncremental() {
-    const lookbackMinutes = parseInt(process.env.STEVE_FETCH_LOOKBACK_MINUTES) || 3;
-    const since = DateTime.now().toUTC().minus({minutes: lookbackMinutes});
+    logger.verbose('Running incremental transaction fetch');
 
-    logger.verbose(`Running incremental transaction fetch (last ${lookbackMinutes} minutes)`);
-
-    const new_txns = await fetchTxnsSince(since);
+    const new_txns = await fetchTxnsSince();
     let fetchedCount = new_txns.length;
     let processedCount = 0;
     let completedCount = 0;
