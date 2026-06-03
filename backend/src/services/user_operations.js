@@ -13,7 +13,6 @@ const logger = require('#services/logger');
 const {AuthError, ErrorCodes} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {GLOBAL_CONFIG} = require("#config");
-const {getRFIDFromFile} = require("#helpers/user");
 
 /**
  * Handles user creation and linking with external systems.
@@ -47,14 +46,11 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
         // New user
         let rfid = null;
         if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            const file_rfid = await getRFIDFromFile(oidc_user.email); // Primary check: read from RFID file
-            if (file_rfid) {
-                rfid = file_rfid;
-            } else if (oidc_user.hmMifareSerial) {
+            if (oidc_user.hmMifareSerial) {
                 // Fallback: use hmMifareSerial if file lookup fails
                 rfid = oidc_user.hmMifareSerial;
             } else {
-                logger.error('RFID couldnt be found neither in file mapping nor in OIDC for email: ' + oidc_user.email);
+                logger.error('RFID couldnt be found in OIDC for email: ' + oidc_user.email);
                 throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
             }
         } else {

@@ -36,25 +36,4 @@ const identifyUser = async (identifier, options = {}) => {
     return user;
 };
 
-
-async function getRFIDFromFile(email) {
-    const fs = require('node:fs');
-    const path = require('path');
-    try {
-        const csv_path = path.join(__dirname, '../../rfid_mapping.csv');
-        const data = fs.readFileSync(csv_path, 'utf8');
-        const lines = data.trim().split('\n');
-        for (const line of lines) {
-            const [lineEmail, rfid] = line.split(',').map(item => item.trim());
-            if (lineEmail === email) {
-                return rfid;
-            }
-        }
-        return null;
-    } catch (e) {
-        logger.error('Error reading RFID mapping file:', e);
-        return null;
-    }
-}
-
-module.exports = {identifyUser, getRFIDFromFile};
+module.exports = {identifyUser};

@@ -58,7 +58,6 @@ services:
     ports:
       - "127.0.0.1:${SERVER_PORT:-3000}:${SERVER_PORT:-3000}"
     volumes:
-      - ./backend/rfid_mapping.csv:/usr/src/app/rfid_mapping.csv
       - ./backend/logs:/usr/src/app/logs
     networks:
       - strohm-network-prod
