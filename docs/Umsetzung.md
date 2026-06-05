@@ -67,18 +67,13 @@ Uses Odooʼs portal module for frontend. Most confusing part would be the this p
 and the whole system when developing looks like as monolith after cloning strohm repo
 
 ```
-
 ├── backend
 ├── backups
-├── debug_action.sh
-├── debug-docker-compose.yml
-├── devel_backup_system.sh
 ├── devel-docker-compose.yml
 ├── docker-compose.yml -> devel-docker-compose.yml
 ├── docs
 ├── doodba // doodba repo
 ├── LICENSE
-├── monitoring-docker-compose.yml
 ├── nginx.host.conf
 ├── ocpp-wallbox-sim // ocppwalbox sim repo
 ├── prod-docker-compose.yml
