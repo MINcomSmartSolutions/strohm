@@ -9,7 +9,7 @@ Authentication is done using OpenID Connect (OIDC) and the system can be integra
 Keycloak, Auth0, Okta, Google Identity Platform etc. only requirement is that the provider should support RFID as a
 scope to OIDC.
 
-The admin panel is at /dev-admin.html route
+The admin panel is at /dev-admin.html route and it is exposed in development environment default.
 
 ## ENVIRONMENT VARIABLES
 
@@ -89,7 +89,9 @@ in default, but not specified here.
 - ADMIN_PASSWORD: (default: "admin") Password for the admin user created by doodba. TO NOTE: For somereason it is
   always "admin" even if we set it to something else.
 
-###### SMTP (To be used for sending emails from Odoo)
+##### SMTP (To be used for sending emails from Odoo)
+
+Prefer configuring these variables using Odoo GUI rather than environment variables.
 
 - SMTP_SERVER
 - SMTP_PORT: (default: 25)
