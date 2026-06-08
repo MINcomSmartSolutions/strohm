@@ -127,3 +127,5 @@ Postgresql 16.6
 - POSTGRES_USER: (default: "postgres")
 - POSTGRES_PASSWORD
 - POSTGRES_PORT: (default: 5432)
+
+STROHM_DB_USER, STROHM_DB_PASSWORD, PGUSER, PGPASSWORD needs to be created manually.

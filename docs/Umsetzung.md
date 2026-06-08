@@ -100,6 +100,7 @@ Notes:
 - If the compose command fails for package read error. You need to get a read:packages token
   from github and login with docker login or you need to build your own images.
 - The images are build with github actions.
+- STROHM_DB_USER, STROHM_DB_PASSWORD; Odoo's PGUSER, PGPASSWORD needs to be created manually.
 
 #### Backup/Restore
 
