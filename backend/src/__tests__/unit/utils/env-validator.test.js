@@ -28,7 +28,6 @@ describe('Environment Variable Validation', () => {
         SERVER_OIDC_CLIENT_SECRET: 'client-secret',
 
         // ODOO
-        ODOO_ADMIN_API_KEY: 'admin-api-key',
         ODOO_API_SECRET: 'odoo-api-secret',
         ODOO_HOST: 'odoo',
         ODOO_PORT: '8069',

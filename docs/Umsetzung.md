@@ -16,7 +16,7 @@ and roughly looks like this
 
 Ladeabrechnung site only responsible for Backend, Odoo, and PostgreSQL but needs 4 and 5 for to function properly.
 
-Backend uses node.js 22-24, Express server. It does the heavy lifting and communicates with all the other components.
+Backend uses node.js 22 or 24, Express server. It does the heavy lifting and communicates with all the other components.
 
 Auth: The user authentication is done by OIDC that has RFID in the scope.
 
@@ -100,7 +100,8 @@ Notes:
 - If the compose command fails for package read error. You need to get a read:packages token
   from github and login with docker login or you need to build your own images.
 - The images are build with github actions.
-- STROHM_DB_USER, STROHM_DB_PASSWORD; Odoo's PGUSER, PGPASSWORD needs to be created manually.
+- STROHM_DB_USER with STROHM_DB_PASSWORD; Odoo's PGUSER with PGPASSWORD needs to be created manually with at least
+  CREATEDB, LOGIN privileges for the user. The database is created automatically by odoo when it starts from zero.
 
 #### Backup/Restore
 
@@ -108,4 +109,12 @@ The scripts at automation is tailored for a speficic remote restic system, but f
 restic remote can be changed. Its restic adress to be used by SFTP are configured in the productions ssh auth system
 file with alias and key.
 
-System takes a full backup including odoo file store and db, backend db (not SteVe) every night. 
+System takes a full backup including odoo file store and db, backend db (not SteVe) every night.
+
+#### Network
+
+We do not have a container as a reverse proxy, instead we run nginx on the host machine and proxy the requests to the
+backend and odoo containers. This is done to avoid the complexity of running a reverse proxy in a container and to have
+more control over the nginx configuration. The nginx configuration is
+at [strohm/nginx.host.conf](https://github.com/MINcomSmartSolutions/strohm/blob/main/nginx.host.conf). It requieres SSL
+certs, we have used Certbot.

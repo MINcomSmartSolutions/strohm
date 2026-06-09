@@ -30,7 +30,7 @@ If no default is provided below, the variable is required to be set.
 
 #### OIDC
 
-- SERVER_OIDC_SECRET
+- SERVER_OIDC_SECRET: At least 8 characters long and self generated.
 - SERVER_OIDC_CLIENT_ID
 - SERVER_OIDC_ISSUER_BASE_URL
 - SERVER_OIDC_BASE_URL: The servers base url. This has to be whitelisted at OIDC IdP.
@@ -88,6 +88,12 @@ in default, but not specified here.
   reverse proxy.
 - ADMIN_PASSWORD: (default: "admin") Password for the admin user created by doodba. TO NOTE: For somereason it is
   always "admin" even if we set it to something else.
+- DB_FILTER: (default: "^odoo") This is used to filter the databases that are shown in the Odoo database manager or to
+  be selected automatically when odoo is initializing. To prevent deploying to "postgres" or another database.
+- WORKERS: (default: 4) Number of worker processes for handling requests. In production, this should be set to a value
+  greater than 0 for better performance.
+- MAX_CRON_THREADS: (default: 2) Number of threads for Odoo's cron jobs. In production, this can be increased for better
+  performance.
 
 ##### SMTP (To be used for sending emails from Odoo)
 
@@ -117,6 +123,11 @@ Same instance of database used with the Server but with different user and datab
 - BACKEND_PORT: (default: 3000) To be the same as SERVER --> General --> SERVER_PORT
 - BACKEND_EXTERNAL_URL: The servers external reachable base url
 
+#### Payment by EPS-Bayern
+
+- HM_PAYMENT_GATEWAY_API_USER
+- HM_PAYMENT_GATEWAY_API_TOKEN: Bearer token for authentication with the payment gateway.
+
 ----
 
 ### Database Container
@@ -128,4 +139,10 @@ Postgresql 16.6
 - POSTGRES_PASSWORD
 - POSTGRES_PORT: (default: 5432)
 
-STROHM_DB_USER, STROHM_DB_PASSWORD, PGUSER, PGPASSWORD needs to be created manually.
+Even tough the postgres database is not used directly, it is safe to keep the postgres db and change the default
+credentials.
+
+---- 
+
+STROHM_DB_USER with STROHM_DB_PASSWORD; Odoo's PGUSER with PGPASSWORD needs to be created manually with at least
+CREATEDB, LOGIN privileges for the user. The database is created automatically by odoo when it starts from zero.

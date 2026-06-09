@@ -92,7 +92,7 @@ function createOdooAxios(includeAuth = true) {
     };
 
     if (includeAuth) {
-        const apiKey = process.env.ODOO_ADMIN_API_KEY || process.env.ODOO_API_SECRET;
+        const apiKey = process.env.ODOO_API_SECRET;
         if (!apiKey) {
             throw new SystemError(
                 ErrorCodes.VALIDATION.MISSING_REQUIRED_FIELD,
