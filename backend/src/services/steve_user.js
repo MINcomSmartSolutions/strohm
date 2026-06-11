@@ -15,7 +15,7 @@ const {ValidationError, ErrorCodes, SystemError} = require('#utils/errors');
 const {steveAxios} = require('./network');
 const {validateSteveUser} = require('#utils/steve');
 const logger = require('./logger');
-const {db} = require('#utils/queries');
+const {db, normalizeRFID} = require('#utils/queries');
 const {STEVE_CONFIG, GLOBAL_CONFIG} = require('#config');
 const {DateTime} = require("luxon");
 
@@ -283,16 +283,21 @@ const deleteSteveUser = async (user) => {
  * Changes the RFID of an existing SteVe user.
  * Should run after the RFID is changed in the local DB.
  * @async
- * @param {Object} user - The user object (must include new `rfid` and may include `user_id`).
+ * @param {Object} user - The user object.
  * @param {string} old_rfid - The old RFID of the user to be changed.
+ * @param {string} new_rfid - The new RFID to assign.
  */
-async function changeRFIDofSteveUser(user, old_rfid) {
+async function changeRFIDofSteveUser(user, old_rfid, new_rfid) {
     validateUserObjectForSteve(user);
 
     if (!STEVE_CONFIG.IS_HEALTHY) {
         throw new SystemError(ErrorCodes.STEVE.UNHEALTHY);
     }
-    const new_rfid = user.rfid;
+
+    // Normalize both RFIDs for consistent SteVe lookups
+    old_rfid = normalizeRFID(old_rfid);
+    new_rfid = normalizeRFID(new_rfid);
+
     const existing_user = await getSteveUser(old_rfid);
     if (!existing_user) {
         throw new SystemError(ErrorCodes.STEVE.USER_NOT_FOUND, `User with RFID ${old_rfid} not found in SteVe for RFID change`);
@@ -302,12 +307,15 @@ async function changeRFIDofSteveUser(user, old_rfid) {
     const user_with_old_rfid = {...user, rfid: old_rfid};
     await blockSteveUser(user_with_old_rfid, `Blocked in favor of ${new_rfid}`, DateTime.now());
 
+    // Create a user object with the new RFID for creation
+    const user_with_new_rfid = {...user, rfid: new_rfid};
+
     try {
         //
         // CAUTION!!!
         //
         // If failIfExists is not set and new RFID matches someone else's RFID, it will replace the existing user with someone else's RFID.
-        await createSteveUser(user, user.deactivated_at, `Created as replacement for ${old_rfid}`, true);
+        await createSteveUser(user_with_new_rfid, user.deactivated_at, `Created as replacement for ${old_rfid}`, true);
     } catch (error) {
         // Rollback: unblock the old RFID if creating the new one failed
         logger.error(`Failed to create new RFID ${new_rfid}, rolling back block on ${old_rfid}`, error);

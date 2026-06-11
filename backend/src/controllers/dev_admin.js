@@ -179,11 +179,11 @@ async function changeRFIDofUser(req, res) {
         }
         const old_rfid = user.rfid;
         try {
-            const updated_user = await db.updateUser(user.user_id, {rfid: normalizeRFID(new_rfid)});
-            await changeRFIDofSteveUser(updated_user, user.rfid);
+            await db.updateUser(user.user_id, {rfid: new_rfid});
+            await changeRFIDofSteveUser(user, old_rfid, new_rfid);
         } catch (e) {
             // Rollback in case of error
-            await db.updateUser(user.user_id, {rfid: normalizeRFID(old_rfid)});
+            await db.updateUser(user.user_id, {rfid: old_rfid});
             throw e;
         }
 
