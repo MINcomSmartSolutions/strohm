@@ -48,7 +48,7 @@ async function processSingleUnbilledTransaction(txn) {
 
         // If no user is associated, try to find and associate one
         if (!user_id) {
-            logger.info(`Attempting to associate user for transaction ${txn.id}`);
+            logger.verbose(`Attempting to associate user for transaction ${txn.id}`);
             user_id = await db.tryAssociateUserToTransaction(txn);
 
             if (user_id) {

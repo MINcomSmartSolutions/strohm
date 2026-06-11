@@ -237,5 +237,22 @@ if (GLOBAL_CONFIG.TAILSCALE?.ENABLE_ADMIN) {
 
 startCronWithHealthCheck();
 
+// Global error handler - catches errors thrown in OIDC afterCallback and other middleware
+// noinspection JSUnusedLocalSymbols
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+    if (err instanceof AuthError) {
+        const message = err.toResponse().msg;
+        const params = new URLSearchParams({
+            message: encodeURIComponent(message),
+            type: 'error',
+            title: encodeURIComponent('Zugriff verweigert'),
+            persistent: 'true',
+        });
+        return res.redirect(`/welcome?${params.toString()}`);
+    }
+
+    logger.error('Unhandled error:', err);
+    return res.redirect('/welcome?message=' + encodeURIComponent('Ein unerwarteter Fehler ist aufgetreten.') + '&type=error');
+});
 
 module.exports = app;

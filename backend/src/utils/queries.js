@@ -1676,7 +1676,7 @@ async function tryAssociateUserToTransaction(db_txn) {
         const userLookupResult = await client.query(userLookupQuery, [db_txn.ocpp_id_tag]);
 
         if (userLookupResult.rowCount === 0) {
-            logger.info(`No user found with RFID '${db_txn.ocpp_id_tag}' for transaction ${db_txn.id}`);
+            logger.verbose(`No user found with RFID '${db_txn.ocpp_id_tag}' for transaction ${db_txn.id}`);
             await client.query('COMMIT');
             return null;
         }
