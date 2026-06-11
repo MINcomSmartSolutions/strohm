@@ -1451,7 +1451,7 @@ async function updateUser(userId, updates) {
         }
 
         if (value !== undefined) {
-            // Normalize RFID to uppercase if it's being updated
+            // Normalize RFID
             const normalizedValue = key === 'rfid' ? normalizeRFID(value) : value;
             setClause.push(`${key} = $${valueIndex}`);
             values.push(normalizedValue);
