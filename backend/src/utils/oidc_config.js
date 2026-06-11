@@ -9,12 +9,13 @@
  * @exports {Object} oidc_config - Configuration object for OIDC authentication.
  */
 
-const {SystemError, ErrorCodes} = require("#utils/errors");
+const {SystemError, ErrorCodes, AuthError} = require('#utils/errors');
 const axios = require('axios');
-const {getOidcDiscovery} = require("#helpers/auth");
+const {getOidcDiscovery, hasStudentAffiliation} = require('#helpers/auth');
 const logger = require("#services/logger");
 const {userOperations} = require("#services/user_operations");
-const {saveSession} = require("#utils/session");
+const {saveSession, clearSession} = require('#utils/session');
+const {db} = require('#utils/queries');
 
 const isAuth0 = process.env.SERVER_OIDC_ISSUER_BASE_URL.includes('auth0');
 const oidc_config = {
@@ -47,8 +48,6 @@ const oidc_config = {
                     throw new SystemError(ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE, 'Failed to fetch userinfo', error);
                 });
 
-            // TODO: Validate userInfo properties here if needed
-
             // Try to get user from database (don't create yet - that happens in consent flow)
             const user = await userOperations(userInfo, false);
 
@@ -69,10 +68,13 @@ const oidc_config = {
                 user: userInfo, // This populates req.appSession.user with full userInfo
             };
         } catch (e) {
-            // Even though it throws here, we return the session to avoid breaking the OIDC flow
-            logger.warn('Warning in afterCallback:', e);
+            // Re-throw auth errors (e.g. student not authorized) so OIDC middleware rejects the user
+            if (e instanceof AuthError) {
+                throw e;
+            }
 
-            // Return session as-is on error
+            // For other errors, log and return session to avoid breaking the OIDC flow
+            logger.warn('Warning in afterCallback:', e);
             return {
                 ...session,
             };

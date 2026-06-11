@@ -245,6 +245,9 @@ Most of the checks are done by the OIDC library, but we add some little extra ch
 <dt><a href="#getOidcDiscovery">getOidcDiscovery()</a> ⇒ <code>Promise.&lt;Object&gt;</code></dt>
 <dd><p>Fetches and caches the OIDC discovery configuration</p>
 </dd>
+<dt><a href="#hasStudentAffiliation">hasStudentAffiliation(oidcUser)</a> ⇒ <code>boolean</code></dt>
+<dd><p>Validates that whether the OIDC user is student.</p>
+</dd>
 <dt><a href="#identifyUser">identifyUser(identifier, options)</a> ⇒ <code>Promise.&lt;Object&gt;</code></dt>
 <dd><p>Gets a user by either user_id or oauth_id</p>
 </dd>
@@ -1275,7 +1278,7 @@ All functions validate input and handle errors using custom error types.
     * [~blockSteveUser(user, [reason], [expiredDate])](#module_services/steve_user..blockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~unblockSteveUser(user, reason)](#module_services/steve_user..unblockSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
     * [~deleteSteveUser(user)](#module_services/steve_user..deleteSteveUser) ⇒ <code>Promise.&lt;void&gt;</code>
-    * [~changeRFIDofSteveUser(user, old_rfid)](#module_services/steve_user..changeRFIDofSteveUser)
+    * [~changeRFIDofSteveUser(user, old_rfid, new_rfid)](#module_services/steve_user..changeRFIDofSteveUser)
 
 <a name="module_services/steve_user..createSteveUser"></a>
 
@@ -1340,7 +1343,7 @@ Validates input, deletes the user, and logs the action.
 
 <a name="module_services/steve_user..changeRFIDofSteveUser"></a>
 
-### services/steve_user~changeRFIDofSteveUser(user, old_rfid)
+### services/steve_user~changeRFIDofSteveUser(user, old_rfid, new_rfid)
 Changes the RFID of an existing SteVe user.
 Should run after the RFID is changed in the local DB.
 
@@ -1349,6 +1352,12 @@ Should run after the RFID is changed in the local DB.
 
 ## services/user\_operations
 Service for checking overall user integrity and creating users with proper links to external systems.
+
+
+* [services/user_operations](#module_services/user_operations)
+    * [~userOperations(oidc_user, [createUserIfNotExists])](#module_services/user_operations..userOperations) ⇒ <code>Promise.&lt;Object&gt;</code>
+    * [~createUserInExternalSystems(user)](#module_services/user_operations..createUserInExternalSystems) ⇒ <code>Promise.&lt;void&gt;</code>
+    * [~updateRFID(user, oidc_user)](#module_services/user_operations..updateRFID) ⇒ <code>Promise.&lt;void&gt;</code>
 
 <a name="module_services/user_operations..userOperations"></a>
 
@@ -1365,6 +1374,27 @@ Handles user creation and linking with external systems.
 
 **Kind**: inner method of [<code>services/user\_operations</code>](#module_services/user_operations)  
 **Returns**: <code>Promise.&lt;Object&gt;</code> - User object from the database.  
+<a name="module_services/user_operations..createUserInExternalSystems"></a>
+
+### services/user_operations~createUserInExternalSystems(user) ⇒ <code>Promise.&lt;void&gt;</code>
+Ensures the given user exists in required external systems.
+
+Creates missing links lazily:
+- Odoo user when `odoo_user_id` is absent
+- Steve user when `steve_id` is absent
+
+**Kind**: inner method of [<code>services/user\_operations</code>](#module_services/user_operations)  
+<a name="module_services/user_operations..updateRFID"></a>
+
+### services/user_operations~updateRFID(user, oidc_user) ⇒ <code>Promise.&lt;void&gt;</code>
+If necessary, updates a user's RFID when OIDC provides a different card serial.
+
+Notes:
+- Throws if required inputs are missing.
+- Skips updates when the local user has no RFID to compare against.
+- Uses normalized OIDC RFID for comparison to reduce formatting-only diffs.
+
+**Kind**: inner method of [<code>services/user\_operations</code>](#module_services/user_operations)  
 <a name="module_utils/env-validator"></a>
 
 ## utils/env-validator
@@ -1856,7 +1886,8 @@ Type definitions
 | sub | <code>string</code> | The subject (unique identifier) of the user |
 | name | <code>string</code> | The name of the user |
 | email | <code>string</code> | The email of the user |
-| [hmMifareSerial] | <code>string</code> | The HM Mifare Serial (RFID) of the user (optional yet in the beta) |
+| [hmMifareSerial] | <code>string</code> | The HM Mifare Serial (RFID) of the user |
+| [eduPersonScopedAffiliation] | <code>array</code> | The affiliations of the user. |
 | [preferred_username] | <code>string</code> | The preferred username of the user |
 | [given_name] | <code>string</code> | The given name of the user |
 | [family_name] | <code>string</code> | The family name of the user |
@@ -2173,6 +2204,13 @@ Fetches and caches the OIDC discovery configuration
 
 - <code>SystemError</code> If fetch fails
 
+<a name="hasStudentAffiliation"></a>
+
+## hasStudentAffiliation(oidcUser) ⇒ <code>boolean</code>
+Validates that whether the OIDC user is student.
+
+**Kind**: global function  
+**Returns**: <code>boolean</code> - - True if user has student@hm.edu affiliation, false otherwise  
 <a name="identifyUser"></a>
 
 ## identifyUser(identifier, options) ⇒ <code>Promise.&lt;Object&gt;</code>

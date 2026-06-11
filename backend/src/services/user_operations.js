@@ -12,8 +12,8 @@ const {createSteveUser} = require('./steve_user');
 const logger = require('#services/logger');
 const {AuthError, ErrorCodes, ValidationError} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
-const {GLOBAL_CONFIG} = require("#config");
 const {changeRFIDofSteveUser} = require('#services/steve_user');
+const {hasStudentAffiliation} = require('#helpers/auth');
 
 /**
  * Handles user creation and linking with external systems.
@@ -43,19 +43,20 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
         return null;
     }
 
+    if (hasStudentAffiliation(oidc_user)) {
+        logger.warn(`User ${oidc_user.sub} (${oidc_user.email}) is student`);
+        throw new AuthError(
+            ErrorCodes.AUTH.USER_NOT_AUTHORIZED,
+            'Sie müssen Mitarbeiter sein, um Ladestationen nutzen zu können. Wenn Sie Mitarbeiter sind, aber diese Meldung erhalten, kontaktieren Sie bitte den Support.',
+        );
+    }
+
+
     if (!user) {
         // New user
-        let rfid = null;
-        if (GLOBAL_CONFIG.ENV.IS_PRODUCTION) {
-            if (oidc_user.hmMifareSerial) {
-                rfid = oidc_user.hmMifareSerial;
-            } else {
-                logger.error('RFID couldnt be found in OIDC for email: ' + oidc_user.email);
-                throw new AuthError(ErrorCodes.AUTH.RFID_NOT_FOUND);
-            }
-        } else {
-            rfid = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
-        }
+
+        // RFID is already validated with oidcUserSchema
+        const rfid = oidc_user.hmMifareSerial;
 
         const createdUser = await db.createUser(
             oidc_user.sub,

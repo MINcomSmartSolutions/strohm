@@ -137,9 +137,40 @@ async function getOidcDiscovery() {
     }
 }
 
+/**
+ * Validates that whether the OIDC user is student.
+ *
+ * @param {Object<OIDCUser>} oidcUser - OIDC user object
+ * @param {Array<string>} [oidcUser.eduPersonScopedAffiliation] - Array of affiliations
+ * @returns {boolean} - True if user has student@hm.edu affiliation, false otherwise
+ */
+function hasStudentAffiliation(oidcUser) {
+    if (!oidcUser) {
+        logger.warn('OIDC user object is missing in affiliation check');
+        return false;
+    }
+
+    const affiliations = oidcUser.eduPersonScopedAffiliation;
+
+    if (!Array.isArray(affiliations)) {
+        logger.debug(`User ${oidcUser.sub} has no eduPersonScopedAffiliation array`);
+        return false;
+    }
+
+    const hasStudentAffiliation = affiliations.includes('student@hm.edu');
+
+    if (hasStudentAffiliation) {
+        logger.debug(`User ${oidcUser.sub} have student@hm.edu affiliation. Affiliations: ${affiliations.join(', ')}`);
+    }
+
+    return hasStudentAffiliation;
+}
+
+
 module.exports = {
     generateOdooHash,
     generateSalt,
     validateOIDCProperties,
     getOidcDiscovery,
+    hasStudentAffiliation,
 };
