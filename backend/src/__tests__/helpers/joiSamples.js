@@ -28,7 +28,7 @@ const buildOidcUser = (overrides = {}) => ({
     sub: 'sub-123',
     name: 'OIDC User',
     email: 'oidc@example.com',
-    hmMifareSerial: null,
+    hmMifareSerial: 'DEV-01000',
     ...overrides,
 });
 

@@ -172,10 +172,11 @@ describe('Joi Validation Schemas', () => {
             expect(error.message).toContain('email');
         });
 
-        it('should allow null hmMifareSerial', () => {
+        it('should reject null hmMifareSerial', () => {
             const nullSerialUser = buildOidcUser({hmMifareSerial: null});
             const {error} = oidcUserSchema.validate(nullSerialUser);
-            expect(error).toBeUndefined();
+            expect(error).toBeDefined();
+            expect(error.message).toContain('hmMifareSerial');
         });
     });
 

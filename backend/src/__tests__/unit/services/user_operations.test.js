@@ -4,7 +4,7 @@
 const {userOperations} = require('#services/user_operations');
 const {createOdooUser} = require('#services/odoo');
 const {db} = require('#utils/queries');
-const {createSteveUser, blockSteveUser} = require('#services/steve_user');
+const {createSteveUser, blockSteveUser, changeRFIDofSteveUser} = require('#services/steve_user');
 const logger = require('#services/logger');
 const {AuthError, ValidationError, SystemError, ErrorCodes} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
@@ -20,11 +20,13 @@ jest.mock('#utils/queries', () => ({
         createUser: jest.fn(),
         updateUser: jest.fn(),
     },
+    normalizeRFID: jest.requireActual('#utils/queries').normalizeRFID,
 }));
 
 jest.mock('#services/steve_user', () => ({
     createSteveUser: jest.fn(),
     blockSteveUser: jest.fn(),
+    changeRFIDofSteveUser: jest.fn(),
 }));
 
 jest.mock('#services/logger', () => ({
@@ -47,6 +49,9 @@ jest.mock('#config', () => ({
             IS_DEVELOPMENT: true,
             IS_TEST: false,
         },
+        OIDC: {
+            DISCOVERY_CACHE_TTL: 24 * 60 * 60 * 1000,
+        },
     },
 }));
 
@@ -56,6 +61,7 @@ describe('User Operations Service', () => {
         sub: 'oauth_123',
         name: 'Test User',
         email: 'test@example.com',
+        hmMifareSerial: 'DEV-01000',
     };
 
     const mockOidcUserMinimal = {
@@ -69,7 +75,7 @@ describe('User Operations Service', () => {
         oauth_id: 'oauth_123',
         name: 'Test User',
         email: 'test@example.com',
-        rfid: 'random123',
+        rfid: 'DEV-01000',
         steve_id: null,
         odoo_user_id: null,
         odoo_partner_id: null,
@@ -83,7 +89,7 @@ describe('User Operations Service', () => {
         oauth_id: 'oauth_123',
         name: 'Test User',
         email: 'test@example.com',
-        rfid: 'random123',
+        rfid: 'DEV-01000',
         steve_id: 999,
         odoo_user_id: 789,
         odoo_partner_id: 456,
@@ -98,7 +104,7 @@ describe('User Operations Service', () => {
     };
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        jest.resetAllMocks();
         // Reset Math.random for consistent testing
         jest.spyOn(Math, 'random').mockReturnValue(0.123456789);
     });
@@ -141,7 +147,7 @@ describe('User Operations Service', () => {
 
             // Verify logger was called
             expect(logger.debug).toHaveBeenCalledWith(
-                expect.stringContaining('User is created in DB')
+                expect.stringContaining('User is created in DB'),
             );
 
             // Verify external systems were called
@@ -190,6 +196,7 @@ describe('User Operations Service', () => {
                 sub: 'oauth_full',
                 name: 'Full Name Test',
                 email: 'fulltest@example.com',
+                hmMifareSerial: 'DEV-02000',
             };
 
             db.getUserUnique.mockResolvedValueOnce(null);
@@ -469,7 +476,7 @@ describe('User Operations Service', () => {
 
             const validationError = new ValidationError(
                 ErrorCodes.VALIDATION.INVALID_FORMAT,
-                'Invalid user: rfid is required'
+                'Invalid user: rfid is required',
             );
             validateUser.mockImplementation(() => {
                 throw validationError;
@@ -522,7 +529,7 @@ describe('User Operations Service', () => {
 
             const validationError = new ValidationError(
                 ErrorCodes.VALIDATION.INVALID_PARAMETERS,
-                'User validation failed'
+                'User validation failed',
             );
             validateUser.mockImplementation(() => {
                 throw validationError;
@@ -563,7 +570,7 @@ describe('User Operations Service', () => {
 
             const odooError = new SystemError(
                 ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE,
-                'Odoo service unavailable'
+                'Odoo service unavailable',
             );
             createOdooUser.mockRejectedValue(odooError);
 
@@ -582,7 +589,7 @@ describe('User Operations Service', () => {
 
             const steveError = new SystemError(
                 ErrorCodes.SYSTEM.SERVICE_UNAVAILABLE,
-                'Steve service unavailable'
+                'Steve service unavailable',
             );
             createSteveUser.mockRejectedValue(steveError);
 
@@ -707,13 +714,13 @@ describe('User Operations Service', () => {
             await userOperations(mockOidcUser);
 
             expect(logger.debug).toHaveBeenCalledWith(
-                expect.stringContaining('newuser@example.com')
+                expect.stringContaining('newuser@example.com'),
             );
             expect(logger.debug).toHaveBeenCalledWith(
-                expect.stringContaining('oauth_new_123')
+                expect.stringContaining('oauth_new_123'),
             );
             expect(logger.debug).toHaveBeenCalledWith(
-                expect.stringContaining('abc12345')
+                expect.stringContaining('abc12345'),
             );
         });
 
@@ -727,7 +734,7 @@ describe('User Operations Service', () => {
 
             // Debug log should not contain user creation message
             expect(logger.debug).not.toHaveBeenCalledWith(
-                expect.stringContaining('User is created in DB')
+                expect.stringContaining('User is created in DB'),
             );
         });
     });
@@ -801,7 +808,12 @@ describe('User Operations Service', () => {
             createSteveUser.mockResolvedValue(undefined);
             validateUser.mockReturnValue(undefined);
 
-            await userOperations({sub: 'oauth_specific', name: 'Specific User', email: 'specific@example.com'});
+            await userOperations({
+                sub: 'oauth_specific',
+                name: 'Specific User',
+                email: 'specific@example.com',
+                hmMifareSerial: 'DEV-03000',
+            });
 
             expect(createOdooUser).toHaveBeenCalledWith(specificUser);
             expect(createSteveUser).toHaveBeenCalledWith(specificUser);
