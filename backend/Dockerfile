@@ -1,11 +1,11 @@
-FROM node:lts-bookworm-slim as base
+FROM node:lts-bookworm-slim AS base
 WORKDIR /usr/src/app
 RUN apt-get -y update && apt-get install -y python3 build-essential gcc \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 
-FROM base as dev
+FROM base AS dev
 # Copy package files first for better caching
 COPY package*.json ./
 RUN npm ci --include=dev
@@ -15,7 +15,7 @@ USER node
 COPY --chown=node:node . .
 CMD ["node", "./server.js"]
 
-FROM base as production
+FROM base AS production
 # Copy package files first for better caching
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
@@ -25,7 +25,7 @@ USER node
 COPY --chown=node:node . .
 CMD ["node", "./server.js"]
 
-FROM base as test
+FROM base AS test
 ENV NODE_ENV=test
 # Copy package files first for better caching
 COPY package*.json ./

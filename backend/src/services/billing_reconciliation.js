@@ -57,7 +57,8 @@ async function processSingleUnbilledTransaction(txn) {
                 txn.user_id = user_id;
             } else {
                 result.error = 'No user found for transaction RFID';
-                logger.warn(`Cannot bill transaction ${txn.id}: No user found for RFID ${txn.ocpp_id_tag}`);
+                // Below can be logger.warn as well
+                logger.verbose(`Cannot bill transaction ${txn.id}: No user found for RFID ${txn.ocpp_id_tag}`);
                 return result;
             }
         }
@@ -66,7 +67,7 @@ async function processSingleUnbilledTransaction(txn) {
         const {error} = qualifiedTransactionSchema.validate(txn);
         if (error) {
             result.error = `Transaction is not billable: ${error.message}`;
-            logger.warn(`Cannot bill transaction ${txn.id}: ${result.error}`);
+            logger.verbose(`Cannot bill transaction ${txn.id}: ${result.error}`);
             return result;
         }
 

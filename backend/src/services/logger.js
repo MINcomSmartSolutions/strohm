@@ -131,9 +131,19 @@ function prettyPrint(value) {
     if (value === undefined) return 'undefined';
     if (value === null) return 'null';
     if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
 
     try {
-        return safeStringify(value);
+        return JSON.stringify(value, (() => {
+            const seen = new WeakSet();
+            return (key, val) => {
+                if (typeof val === 'object' && val !== null) {
+                    if (seen.has(val)) return '[Circular]';
+                    seen.add(val);
+                }
+                return val;
+            };
+        })(), 2);
     } catch (err) {
         return `[Unserializable: ${err.message}]`;
     }

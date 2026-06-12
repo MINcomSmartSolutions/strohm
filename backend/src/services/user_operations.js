@@ -14,6 +14,7 @@ const {AuthError, ErrorCodes, ValidationError} = require('#utils/errors');
 const {validateUser, oidcUserSchema} = require('#utils/joi');
 const {changeRFIDofSteveUser} = require('#services/steve_user');
 const {hasStudentAffiliation} = require('#helpers/auth');
+const {prettyPrint} = require('#services/logger');
 
 /**
  * Handles user creation and linking with external systems.
@@ -34,6 +35,7 @@ const {hasStudentAffiliation} = require('#helpers/auth');
 const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     const {error} = oidcUserSchema.validate(oidc_user);
     if (error) {
+        logger.error('OIDC user validation failed: for user' + prettyPrint(oidc_user));
         throw new AuthError(ErrorCodes.AUTH.USER_INVALID, error.message, error);
     }
 
