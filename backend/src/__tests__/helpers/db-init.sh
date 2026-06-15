@@ -9,10 +9,32 @@ DB_PORT="5433"
 DB_USER="${STROHM_DB_USER:-testuser}"
 DB_PASSWORD="${STROHM_DB_PASSWORD:-testpassword}"
 DB_NAME="${STROHM_DB_NAME:-testdb}"
+CONTAINER_STARTED=false
 
-# Check if we need to start Docker container (local dev only)
-# Use docker ps instead of pg_isready so no local PostgreSQL client is required
-if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"; then
+# Check if the database port is already accepting connections (CI service container,
+# or a locally running instance). Uses only bash built-ins — no psql/pg_isready needed.
+db_port_open() {
+  (echo > /dev/tcp/${DB_HOST}/${DB_PORT}) 2>/dev/null
+}
+
+# Run a psql command either inside our Docker container (local dev)
+# or via the host psql binary (CI, where it is pre-installed on ubuntu-latest).
+# Usage: run_psql [extra psql args...]
+run_psql() {
+  if [ "${CONTAINER_STARTED}" = "true" ]; then
+    docker exec -i ${CONTAINER_NAME} \
+      env PGPASSWORD="${DB_PASSWORD}" \
+      psql -U "${DB_USER}" -d "${DB_NAME}" "$@"
+  else
+    PGPASSWORD="${DB_PASSWORD}" psql \
+      -h "${DB_HOST}" -p "${DB_PORT}" \
+      -U "${DB_USER}" -d "${DB_NAME}" "$@"
+  fi
+}
+
+if db_port_open; then
+    echo "Database is already available on ${DB_HOST}:${DB_PORT} — skipping container start."
+else
     echo "Starting test database container..."
     docker run --rm --name ${CONTAINER_NAME} \
         -e POSTGRES_USER="${DB_USER}" \
@@ -21,8 +43,10 @@ if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
         -p ${DB_PORT}:5432 \
         -d postgres:16.6
 
-    # Wait for database to be ready by running pg_isready inside the container
-    # This avoids needing PostgreSQL client tools installed on the host
+    CONTAINER_STARTED=true
+
+    # Wait for the DB inside the container to be ready.
+    # Uses docker exec so no local PostgreSQL client tools are required.
     echo "Waiting for database to be ready..."
     attempt=0
     max_attempts=30
@@ -35,17 +59,13 @@ if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"
       echo "Waiting for database to be ready... (attempt $attempt/$max_attempts)"
       sleep 2
     done
-else
-    echo "Database is already running."
 fi
 
 echo "Database is ready."
 
 # Apply global database objects (roles, etc.)
 echo "Applying global database objects from db-etc.sql..."
-docker exec -i ${CONTAINER_NAME} \
-  env PGPASSWORD="${DB_PASSWORD}" \
-  psql -U "${DB_USER}" -d "${DB_NAME}" < ./database/db-etc.sql
+run_psql < ./database/db-etc.sql
 if [ $? -ne 0 ]; then
   echo "Failed to create database roles. Exiting."
   exit 1
@@ -71,9 +91,7 @@ fi
 
 # Grant ownership of tables to strohm_admin
 echo "Setting ownership of database objects to strohm_admin..."
-docker exec -i ${CONTAINER_NAME} \
-  env PGPASSWORD="${DB_PASSWORD}" \
-  psql -U "${DB_USER}" -d "${DB_NAME}" -c "
+run_psql -c "
   DO
   \$\$
   DECLARE
