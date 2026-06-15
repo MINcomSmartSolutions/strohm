@@ -494,6 +494,7 @@ describe('Steve User Service', () => {
                     ocppTagPk: 999,
                     idTag: 'test_rfid',
                     maxActiveTransactionCount: 1,
+                    note: "",
                     blocked: false,
                 },
             });
@@ -503,6 +504,7 @@ describe('Steve User Service', () => {
                 {
                     idTag: fullQualifiedUser.rfid,
                     maxActiveTransactionCount: 1,
+                    note: "",
                 },
             );
             expect(db.recordActivityLog).toHaveBeenCalledWith(
@@ -521,6 +523,7 @@ describe('Steve User Service', () => {
                     ocppTagPk: 999,
                     idTag: 'test_rfid',
                     maxActiveTransactionCount: 1,
+                    note: expect.any(String),
                     blocked: false,
                 },
             });
@@ -531,6 +534,7 @@ describe('Steve User Service', () => {
                 {
                     idTag: fullQualifiedUser.rfid,
                     maxActiveTransactionCount: 1,
+                    note: expect.stringContaining(reason),
                 },
             );
             expect(db.recordActivityLog).toHaveBeenCalledWith(
