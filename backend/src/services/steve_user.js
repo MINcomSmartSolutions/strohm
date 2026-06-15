@@ -223,7 +223,7 @@ const unblockSteveUser = async (user, reason = null) => {
     const response = await steveAxios.put(STEVE_CONFIG.OCPP_TAGS_URI + `/${user.steve_id}`, {
         idTag: user.rfid,
         maxActiveTransactionCount: 1,
-        // Maybe also add a note of the reason for blocking
+        note: reason ? reason : '',
     });
 
     if (!response) {
@@ -303,24 +303,25 @@ async function changeRFIDofSteveUser(user, old_rfid, new_rfid) {
         throw new SystemError(ErrorCodes.STEVE.USER_NOT_FOUND, `User with RFID ${old_rfid} not found in SteVe for RFID change`);
     }
 
-    // Create a user object with the old RFID for blocking
     const user_with_old_rfid = {...user, rfid: old_rfid};
-    await blockSteveUser(user_with_old_rfid, `Blocked in favor of ${new_rfid}`, DateTime.now());
-
-    // Create a user object with the new RFID for creation
     const user_with_new_rfid = {...user, rfid: new_rfid};
+    const datetime = DateTime.now().toISO({precision: 'minute'}).toString();
 
     try {
+
         //
         // CAUTION!!!
         //
         // If failIfExists is not set and new RFID matches someone else's RFID, it will replace the existing user with someone else's RFID.
-        await createSteveUser(user_with_new_rfid, user.deactivated_at, `Created as replacement for ${old_rfid}`, true);
+        await createSteveUser(user_with_new_rfid, user.deactivated_at, `Created as replacement for ${old_rfid} at ${datetime}`, true);
+
+        // only block when the new RFID is successfully created
+        await blockSteveUser(user_with_old_rfid, `Blocked in favor of ${new_rfid} at ${datetime}`,);
     } catch (error) {
         // Rollback: unblock the old RFID if creating the new one failed
         logger.error(`Failed to create new RFID ${new_rfid}, rolling back block on ${old_rfid}`, error);
         try {
-            await unblockSteveUser(user_with_old_rfid);
+            await unblockSteveUser(user_with_old_rfid, `Rollback block after failed RFID change to ${new_rfid} at ${datetime}`);
             logger.info(`Successfully rolled back block on old RFID ${old_rfid}`);
         } catch (rollbackError) {
             logger.error(`Failed to rollback block on old RFID ${old_rfid}`, rollbackError);
