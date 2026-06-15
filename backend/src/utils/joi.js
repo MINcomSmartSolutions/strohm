@@ -217,8 +217,8 @@ const saleOrderStateChangeEventSchema = Joi.object({
         invoice_ids: Joi.array().items(Joi.any()).allow(null),
         // Related invoice names/references
         invoice_names: Joi.array().items(Joi.any()).allow(null),
-        // Session backend references
-        session_backend_refs: Joi.array().items(Joi.number().integer().positive()),
+        // Session backend reference
+        session_backend_ref: Joi.number().integer().positive(),
     }).unknown(true)
 }).unknown(true); // Allow additional fields
 

@@ -393,7 +393,7 @@ async function handleInvoiceSync(req, res) {
  * @param {number} req.body.sale_order.amount_total - Total order amount
  * @param {string} req.body.sale_order.state - Order state (draft, sale, done, cancel)
  * @param {string} req.body.sale_order.invoice_status - Invoice status (upsell, invoiced, to invoice)
- * @param {Array<string>} [req.body.sale_order.session_backend_refs] - Steve transaction IDs
+ * @param {Array<string>} [req.body.sale_order.session_backend_ref] - Steve transaction ID
  * @param {Object} res - Express response object
  * @returns {Object} JSON response with success status
  * @throws {400} Invalid sale order data
