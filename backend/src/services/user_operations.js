@@ -36,6 +36,14 @@ const userOperations = async (oidc_user, createUserIfNotExists = true) => {
     const {error} = oidcUserSchema.validate(oidc_user);
     if (error) {
         logger.error('OIDC user validation failed: for user' + prettyPrint(oidc_user));
+
+        if (error.message.includes('hmMifareSerial')) {
+            throw new AuthError(
+                ErrorCodes.AUTH.USER_INVALID,
+                'Es ist keine Token für sie hinterlegt. Laden ist erst möglich, wenn Sie im Besitz einer Token sind. ' +
+                'Bitte beantragen Sie eine Token bei der Hochschulverwaltung und loggen Sie sich dann erneut ein.',
+            );
+        }
         throw new AuthError(ErrorCodes.AUTH.USER_INVALID, error.message, error);
     }
 
