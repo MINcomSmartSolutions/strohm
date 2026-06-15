@@ -12,7 +12,7 @@ const {GLOBAL_CONFIG} = require("#config");
 
 
 const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || 'silly',
+    level: process.env.LOG_LEVEL || 'info',
     levels: winston.config.npm.levels,
     format: format.combine(
         format.timestamp(),
@@ -31,7 +31,7 @@ const logger = winston.createLogger({
         new DailyRotateFile({
             filename: 'logs/combined-%DATE%.log',
             datePattern: 'YYYY-MM-DD',
-            level: process.env.LOG_LEVEL || 'silly',
+            level: 'silly',
             maxFiles: '14d',
             zippedArchive: true,
         }),

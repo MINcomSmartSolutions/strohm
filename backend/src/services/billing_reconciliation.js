@@ -116,7 +116,7 @@ async function processSingleUnbilledTransaction(txn) {
 async function runBillingReconciliation(options = {}) {
     const {limit = 100} = options;
 
-    logger.info(`Starting billing reconciliation (limit: ${limit})`);
+    logger.verbose(`Starting billing reconciliation (limit: ${limit})`);
 
     const stats = {
         processed: 0,

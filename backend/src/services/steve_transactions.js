@@ -188,7 +188,8 @@ async function processTxns(txns) {
 }
 
 /**
- * Run incremental fetch: fetch all transactions and upsert them.
+ * Not incremental.
+ * Fetch all transactions and upsert them.
  * Re-fetching duplicates is safe due to upsert in recordTransaction.
  * For low-volume systems this is simpler and more reliable than time-windowed fetching,
  * since the Steve API filters by start time (not stop time), which would miss
@@ -210,7 +211,7 @@ async function runIncremental() {
         completedCount = completed;
     }
 
-    logger.info(`Incremental run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} completed, ${processedCount - completedCount} active.`);
+    logger.info(`Run completed: ${fetchedCount} transactions fetched, ${processedCount} processed, ${completedCount} completed, ${processedCount - completedCount} active.`);
 
     return {
         fetchedTxnCount: fetchedCount,

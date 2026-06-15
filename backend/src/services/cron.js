@@ -47,7 +47,7 @@ const transactionFetchLoop = new CronJob(cronExpression, async () => {
                 });
 
                 if (billingResult.processed > 0) {
-                    logger.info(`Immediate sending for processing to odoo: ${billingResult.orders_created} orders created, ${billingResult.invoices_created} invoices created, ${billingResult.failed} failed`);
+                    logger.verbose(`Immediate sending for processing to odoo: ${billingResult.orders_created} orders created, ${billingResult.invoices_created} invoices created, ${billingResult.failed} failed`);
                 }
             }
         } catch (error) {
@@ -78,11 +78,9 @@ const billingReconciliationJob = new CronJob(
 
         logger.info('Running scheduled billing reconciliation...');
         try {
-            // Get stats first
             const stats = await getUnbilledTransactionStats();
 
             if (stats.total_unbilled > 0) {
-                // Process up to 100 transactions that are at least 1 hour old
                 await runBillingReconciliation();
                 logger.info(`Unbilled transactions: ${stats.total_unbilled} total (${stats.unbilled_with_user} with user, ${stats.unbilled_without_user} without user)`);
             } else {
